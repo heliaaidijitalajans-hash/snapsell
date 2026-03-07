@@ -1,5 +1,9 @@
+/**
+ * SnapSell Backend API
+ * Frontend ayrı bir sunucuda çalışır (Vite, static host vb.).
+ * Bu sunucu sadece /api/* ve /admin/* endpoint'lerini sunar.
+ */
 const express = require("express");
-const cors = require("cors");
 const dotenv = require("dotenv");
 const path = require("path");
 const fs = require("fs");
@@ -7,9 +11,7 @@ const { randomUUID } = require("crypto");
 const FormDataPkg = (function () { try { return require("form-data"); } catch (_) { return null; } })();
 
 if (typeof globalThis.File === "undefined") {
-  try {
-    globalThis.File = require("node:buffer").File;
-  } catch (_) {}
+  try { globalThis.File = require("node:buffer").File; } catch (_) {}
 }
 
 dotenv.config();
@@ -22,13 +24,12 @@ process.on("unhandledRejection", function (reason, p) {
 });
 
 const CREDITS_PER_CONVERSION = 10;
-const FREE_CREDITS = 100;
+const FREE_CREDITS = 30;
 const DEMO_REFILL_CREDITS = 100;
 const USERS_COLLECTION = "users";
 
-const PRO_PLANS = ["monthly_pro", "yearly_pro", "enterprise"];
-/** Gorsel duzenleme (Replicate) planlari - kullanici bu planin ucretini oderse Replicate kullanir. */
-const EDITOR_PLANS = ["monthly_editor", "yearly_editor", "enterprise_editor"];
+const PRO_PLANS = ["monthly_plan", "monthly_plan_pro", "yearly_plan", "enterprise"];
+const EDITOR_PLANS = ["addon"];
 const PRO_PLAN_DEMO = process.env.PRO_PLAN_DEMO === "true" || process.env.PRO_PLAN_DEMO === "1";
 const DATA_DIR = path.join(__dirname, "data");
 
@@ -51,25 +52,34 @@ function saveJsonFile(filename, data) {
   }
 }
 
-let planPrices = loadJsonFile("plan-prices.json", { free: 0, monthly_normal: 99, monthly_pro: 199, yearly_normal: 899, yearly_pro: 1799, monthly_editor: 149, yearly_editor: 1490, enterprise: 0, enterprise_editor: 0 });
+let planPrices = loadJsonFile("plan-prices.json", { free: 0, monthly_plan: 40, monthly_plan_pro: 65, yearly_plan: 440, enterprise: 0, addon: 15 });
 let enterprisePlans = loadJsonFile("enterprise-plans.json", []);
 const DEFAULT_SITE_PLANS = [
-  { id: "free", name: "Ücretsiz", price: "0", period: "ay", description: "Denemek için ideal", features: ["3 dönüşüm", "Temel düzenleme", "5 MB dosya limiti", "SnapSell filigranı"], cta: "Ücretsiz başla", href: "/register", highlighted: false, planType: "conversion" },
-  { id: "monthly_pro", name: "Aylık Plan", price: "99", period: "ay", description: "Bireysel satıcılar için", features: ["200 dönüşüm hakkı", "Pixian AI", "Tüm özellikler", "SEO araçları", "Öncelikli destek"], cta: "Pro'ya geç", href: "/register?plan=monthly_pro", highlighted: true, planType: "conversion" },
-  { id: "yearly_pro", name: "Yıllık Plan", price: "899", period: "yıl", description: "2 ay bedava", features: ["3000 dönüşüm", "Pixian AI", "Tüm Pro özellikler", "%25 tasarruf", "Öncelikli destek"], cta: "Yıllık seç", href: "/register?plan=yearly_pro", highlighted: false, planType: "conversion" },
-  { id: "monthly_editor", name: "Görsel Düzenleme Aylık", price: "149", period: "ay", description: "PhotoRoom ile arka plan silme ve yeni arka plan", features: ["Arka plan silme + yeni arka plan", "Ürün stüdyo görseli", "Fiyat analizi", "SEO açıklaması", "Yüksek kalite çıktı", "Aylık kota"], cta: "Başla", href: "/register?plan=monthly_editor", highlighted: true, planType: "editor" },
-  { id: "yearly_editor", name: "Görsel Düzenleme Yıllık", price: "1490", period: "yıl", description: "2 ay bedava", features: ["PhotoRoom: arka plan sil + yeni arka plan", "Fiyat analizi + SEO", "Tüm Görsel Düzenleme özellikleri", "%17 tasarruf", "Yıllık kota"], cta: "Yıllık seç", href: "/register?plan=yearly_editor", highlighted: false, planType: "editor" }
+  { id: "free", name: "Ücretsiz", price: "0", period: "ay", description: "3 dönüşüm, temel özellikler", features: ["3 dönüşüm", "Temel özellikler"], cta: "Ücretsiz başla", href: "/register", highlighted: false, planType: "conversion", credits: 30 },
+  { id: "monthly_plan", name: "Aylık plan", price: "40", period: "ay", description: "30 dönüşüm", features: ["30 dönüşüm", "Tüm özellikler", "SEO açıklama", "Fiyat analizi"], cta: "Başla", href: "/register?plan=monthly_plan", highlighted: true, planType: "conversion", credits: 300 },
+  { id: "monthly_plan_pro", name: "Aylık plan Pro", price: "65", period: "ay", description: "80 dönüşüm", features: ["80 dönüşüm", "Tüm özellikler", "SEO açıklama", "Fiyat analizi"], cta: "Pro'ya geç", href: "/register?plan=monthly_plan_pro", highlighted: false, planType: "conversion", credits: 800 },
+  { id: "yearly_plan", name: "Yıllık plan", price: "440", period: "yıl", description: "1200 dönüşüm, aylık 100 yüklenecek", features: ["1200 dönüşüm", "Aylık 100 dönüşüm yüklenecek", "Tüm özellikler", "SEO açıklama", "Fiyat analizi", "Özellik gelişmeleri dahil"], cta: "Yıllık seç", href: "/register?plan=yearly_plan", highlighted: false, planType: "conversion", credits: 12000 },
+  { id: "enterprise", name: "Kurumsal", price: "—", period: "yıl", description: "Bize ulaşın", features: ["Ekibiniz ile takım kurma ayrıcalığı", "Tüm özellikler", "SEO açıklama", "Fiyat analizi", "Yüklenecek özellik gelişmeleri dahil", "Yıllık faturalandırma"], cta: "Bize ulaşın", href: "/destek", highlighted: false, planType: "conversion", credits: 0 },
+  { id: "addon", name: "Ek paket", price: "15", period: "ay", description: "25 dönüşüm", features: ["25 dönüşüm", "Tüm özellikler dahil"], cta: "Ek paket al", href: "/register?plan=addon", highlighted: false, planType: "addon", credits: 250 }
 ];
 function loadSitePlans() {
   const loaded = loadJsonFile("site-plans.json", null);
   const plans = Array.isArray(loaded) && loaded.length > 0 ? loaded : DEFAULT_SITE_PLANS;
   return plans.map(function (p) {
     const id = (p.id || "").toString();
-    const planType = p.planType || (EDITOR_PLANS.some(function (e) { return id === e || id.startsWith("enterprise_editor"); }) ? "editor" : "conversion");
+    const planType = p.planType || (EDITOR_PLANS.some(function (e) { return id === e; }) ? "editor" : id === "addon" ? "addon" : "conversion");
     return { ...p, planType };
   });
 }
 let sitePlans = loadSitePlans();
+
+/** Plan satın alındığında atanacak kredi. sitePlans'tan okunur; addon için ek paket kredisi. */
+function getCreditsForPlan(planId) {
+  const plans = loadSitePlans();
+  const p = plans.find(function (x) { return (x.id || x.name) === planId; });
+  if (p && typeof p.credits === "number") return p.credits;
+  return 0;
+}
 
 function getTodayKey() {
   return new Date().toISOString().slice(0, 10);
@@ -120,7 +130,7 @@ function isEditorPlan(plan) {
   return false;
 }
 function resolvePlan(plan) {
-  if (PRO_PLAN_DEMO) return "monthly_pro";
+  if (PRO_PLAN_DEMO) return "monthly_plan_pro";
   return plan || "free";
 }
 
@@ -204,7 +214,6 @@ async function getOrCreateUser(sessionIdOrUid, opts) {
   };
 }
 
-/** Oturum: Authorization Bearer (Firebase idToken) veya X-Session-Id. */
 async function getRequestUser(req) {
   const authHeader = req.headers.authorization;
   if (authHeader && typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
@@ -229,21 +238,33 @@ async function getRequestUser(req) {
 }
 
 const APP_DOMAIN = (process.env.APP_DOMAIN || "").trim();
-const ALLOWED_ORIGINS_STR = (process.env.ALLOWED_ORIGINS || "").trim();
-const allowedOrigins = ALLOWED_ORIGINS_STR
-  ? ALLOWED_ORIGINS_STR.split(",").map(function (s) { return s.trim(); }).filter(Boolean)
-  : [];
+const envOrigins = (process.env.ALLOWED_ORIGINS || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+const allowedOrigins = envOrigins.length > 0 ? envOrigins : ["https://snapsell.website", "https://www.snapsell.website", "https://snapsellapp-6649a.web.app"];
 
-function corsOptions(req, callback) {
+function setCorsHeaders(req, res, origin) {
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+}
+
+function corsMiddleware(req, res, next) {
   const origin = req.headers.origin;
-  if (!allowedOrigins.length) return callback(null, true);
-  if (origin && allowedOrigins.indexOf(origin) !== -1) return callback(null, { origin: true });
-  if (!origin) return callback(null, true);
-  callback(null, { origin: false });
+  const allowed = origin && allowedOrigins.indexOf(origin) !== -1;
+
+  if (req.method === "OPTIONS") {
+    if (allowed) setCorsHeaders(req, res, origin);
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Session-Id");
+    res.setHeader("Access-Control-Max-Age", "86400");
+    return res.status(204).end();
+  }
+
+  if (allowed) setCorsHeaders(req, res, origin);
+  next();
 }
 
 const app = express();
-app.use(cors(corsOptions));
+app.disable("x-powered-by");
+app.use(corsMiddleware);
 app.use(express.json({ limit: "50mb" }));
 
 app.get("/favicon.ico", function (req, res) {
@@ -257,17 +278,11 @@ app.get("/api/track-visit", function (req, res) {
   res.status(204).end();
 });
 app.get("/api/snapserver", function (req, res) {
-  res.json({ ok: true, msg: "SnapSell sunucusu calisiyor", dashboard: "/dashboard" });
+  res.json({ ok: true, msg: "SnapSell API calisiyor" });
 });
-app.get("/.well-known/appspecific/com.chrome.devtools.json", function (req, res) {
-  res.setHeader("Content-Security-Policy", "default-src 'self'; connect-src 'self' http://localhost:3001");
-  res.status(200).json({});
-});
-const CSP_HTML = "default-src 'self'; style-src 'self' 'unsafe-inline' https://www.gstatic.com https://fonts.googleapis.com https://cdn.tailwindcss.com; style-src-elem 'self' 'unsafe-inline' https://www.gstatic.com https://*.gstatic.com https://fonts.googleapis.com https://cdn.tailwindcss.com; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://cdn.tailwindcss.com; connect-src 'self' http://localhost:3001 http://127.0.0.1:3001 http://localhost:3004 http://127.0.0.1:3004 http://localhost:3006 http://127.0.0.1:3006 https://www.gstatic.com https://firebasestorage.googleapis.com https://*.googleapis.com https://cdn.tailwindcss.com; img-src 'self' data: https: blob:; font-src 'self' https://www.gstatic.com https://fonts.gstatic.com https://fonts.googleapis.com";
 
 const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || "").trim();
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "Helai.ai.dijital.ajans@gmail.com").trim().toLowerCase();
-/** Replicate (Gorsel duzenleme) erisim izni verilen e-postalar - plan veya admin olmasa da kullanabilir. */
 const REPLICATE_ALLOWED_EMAILS = (process.env.REPLICATE_ALLOWED_EMAILS || "helyora349@gmail.com")
   .split(",")
   .map(function (e) { return e.trim().toLowerCase(); })
@@ -281,14 +296,12 @@ function canUseReplicate(user) {
   if (REPLICATE_ALLOWED_EMAILS.indexOf(email) >= 0) return true;
   return isEditorPlan(user.plan || "free") || isAdminUser(user);
 }
-/** Sadece normal abonelik (Aylık/Yıllık Plan): Pixian AI. Görsel Düzenleme planında sadece PhotoRoom kullanılır. */
 function canUsePixian(user) {
   if (!user) return false;
   const plan = user.plan || "free";
   if (isEditorPlan(plan)) return false;
   return isProPlan(plan) || isAdminUser(user);
 }
-/** Pro model (Görsel Düzenleme planı): PhotoRoom — arka plan silme + yeni arka plan. */
 function canUsePhotoRoom(user) {
   if (!user) return false;
   const email = (user.email || "").trim().toLowerCase();
@@ -312,7 +325,6 @@ async function requireAdmin(req, res, next) {
   const bearerToken = (req.headers.authorization && req.headers.authorization.startsWith("Bearer "))
     ? req.headers.authorization.slice(7).trim()
     : "";
-  // Sifre ile giris (cookie) oncelikli; Firebase ile giris yapmis kullanici admin sayfasinda sifre girdiyse cookie kullanilir
   const token = cookieToken || bearerToken;
   if (token === ADMIN_PASSWORD) return next();
   if (bearerToken && bearerToken !== ADMIN_PASSWORD) {
@@ -328,8 +340,6 @@ async function requireAdmin(req, res, next) {
   if (!ADMIN_PASSWORD) return res.status(403).json({ error: "Admin sifresi .env icinde ADMIN_PASSWORD olarak ayarlanmali." });
   return res.status(401).json({ error: "Yetkisiz" });
 }
-
-app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/api/config", function (req, res) {
   res.json({
@@ -357,7 +367,7 @@ app.post("/admin/login", function (req, res) {
     return res.status(401).json({ error: "Yanlis sifre." });
   }
   res.cookie("snapsell_admin", ADMIN_PASSWORD, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000, path: "/", sameSite: "lax" });
-  res.json({ ok: true });
+  res.json({ ok: true, token: ADMIN_PASSWORD });
 });
 
 app.get("/admin/me", requireAdmin, function (req, res) {
@@ -412,6 +422,16 @@ app.get("/admin/plans", requireAdmin, function (req, res) {
   res.json({ planPrices, enterprisePlans, sitePlans });
 });
 
+/** Fiyat ve planları kod içi varsayılana sıfırlar. data/*.json eski kaldığında fiyatlar güncellenmez; bu endpoint dosyaları varsayılanla yazar. */
+app.post("/admin/plans/reset", requireAdmin, function (req, res) {
+  const defaultPrices = { free: 0, monthly_plan: 40, monthly_plan_pro: 65, yearly_plan: 440, enterprise: 0, addon: 15 };
+  saveJsonFile("plan-prices.json", defaultPrices);
+  saveJsonFile("site-plans.json", DEFAULT_SITE_PLANS);
+  planPrices = loadJsonFile("plan-prices.json", defaultPrices);
+  sitePlans = loadSitePlans();
+  res.json({ ok: true, message: "Planlar varsayilana sifirlandi.", planPrices, sitePlans });
+});
+
 app.put("/admin/plans", requireAdmin, function (req, res) {
   const body = req.body || {};
   if (body.planPrices && typeof body.planPrices === "object") {
@@ -433,18 +453,26 @@ app.post("/admin/users/:id/plan", requireAdmin, async function (req, res) {
   const sessionId = req.params.id;
   const plan = (req.body && req.body.plan) != null ? String(req.body.plan) : "";
   if (!sessionId || !plan) return res.status(400).json({ error: "id ve plan gerekli" });
+  const planCredits = getCreditsForPlan(plan);
+  const isAddon = plan === "addon";
   initFirestore();
   if (db) {
     const ref = db.collection(USERS_COLLECTION).doc(sessionId);
     const snap = await ref.get();
     if (snap.exists) {
-      await ref.update({ plan });
-      return res.json({ ok: true, plan });
+      const data = snap.data();
+      const currentCredits = data.credits ?? FREE_CREDITS;
+      const newCredits = isAddon ? currentCredits + planCredits : planCredits;
+      await ref.update({ plan, credits: newCredits });
+      return res.json({ ok: true, plan, credits: newCredits });
     }
   }
   if (memoryUsers.has(sessionId)) {
-    memoryUsers.get(sessionId).plan = plan;
-    return res.json({ ok: true, plan });
+    const u = memoryUsers.get(sessionId);
+    const currentCredits = u.credits ?? FREE_CREDITS;
+    u.plan = plan;
+    u.credits = isAddon ? currentCredits + planCredits : planCredits;
+    return res.json({ ok: true, plan, credits: u.credits });
   }
   return res.status(404).json({ error: "Kullanici bulunamadi" });
 });
@@ -507,11 +535,11 @@ app.get("/admin/subscribers", requireAdmin, async function (req, res) {
   });
   const monthly = list.filter(function (u) {
     const p = (u.plan || "").toString();
-    return p.startsWith("monthly_") || p === "monthly_normal" || p === "monthly_pro";
+    return p.startsWith("monthly_");
   });
   const yearly = list.filter(function (u) {
     const p = (u.plan || "").toString();
-    return p.startsWith("yearly_") || p === "yearly_normal" || p === "yearly_pro";
+    return p.startsWith("yearly_");
   });
   res.json({ monthly, yearly, all: list });
 });
@@ -895,6 +923,43 @@ app.get("/api/account", async (req, res) => {
     planPeriod: planInfo.period,
     createdAt: createdAt ? new Date(createdAt).toISOString() : null
   });
+});
+
+/** Ödeme tamamlandığında çağrılır: plan + kredi otomatik atanır. Body: { plan, userId? } veya { plan, email? }. Header: X-Webhook-Secret = SUBSCRIPTION_WEBHOOK_SECRET */
+app.post("/api/subscription-webhook", async (req, res) => {
+  const secret = (req.headers["x-webhook-secret"] || req.body?.secret || "").trim();
+  const expected = (process.env.SUBSCRIPTION_WEBHOOK_SECRET || "").trim();
+  if (!expected || secret !== expected) return res.status(401).json({ error: "Yetkisiz" });
+  const plan = (req.body?.plan || "").toString().trim();
+  if (!plan) return res.status(400).json({ error: "plan gerekli" });
+  const planCredits = getCreditsForPlan(plan);
+  const isAddon = plan === "addon";
+  let userId = (req.body?.userId || req.body?.uid || "").toString().trim();
+  const email = (req.body?.email || "").toString().trim().toLowerCase();
+  if (!userId && email) {
+    initFirestore();
+    if (db) {
+      const snap = await db.collection(USERS_COLLECTION).where("email", "==", email).limit(1).get();
+      if (!snap.empty) userId = snap.docs[0].id;
+    }
+    if (!userId) {
+      for (const [id, u] of memoryUsers) {
+        if ((u.email || "").toLowerCase() === email) { userId = id; break; }
+      }
+    }
+  }
+  if (!userId) return res.status(404).json({ error: "Kullanici bulunamadi (email veya userId gerekli)" });
+  const user = await getOrCreateUser(userId);
+  const currentCredits = user.credits ?? FREE_CREDITS;
+  const newCredits = isAddon ? currentCredits + planCredits : planCredits;
+  if (user._memory) {
+    const u = memoryUsers.get(user.id);
+    u.plan = plan;
+    u.credits = newCredits;
+  } else {
+    await user.ref.update({ plan, credits: newCredits });
+  }
+  res.json({ ok: true, plan, credits: newCredits });
 });
 
 app.post("/api/refill-demo", async (req, res) => {
@@ -2226,8 +2291,7 @@ var server;
 function startServer(port) {
   server = app.listen(port, "0.0.0.0", function () {
     PORT = port;
-    console.log("SERVER OK - Tarayicida ac: http://localhost:" + PORT + "/dashboard");
-    console.log("(Sunucu acik kalsin diye bu terminali kapatmayin; durdurmak icin Ctrl+C)");
+    console.log("SnapSell API: http://localhost:" + PORT);
   });
   server.on("error", function (err) {
     if (err.code === "EADDRINUSE" && port < 3010) {

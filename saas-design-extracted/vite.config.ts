@@ -3,12 +3,14 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
-  base: "/dashboard/",
+  base: "/",
   server: { port: 5173 },
   optimizeDeps: {
     include: ["firebase/app", "firebase/auth"],
   },
   build: {
+    outDir: "../dist",
+    emptyOutDir: true,
     commonjsOptions: {
       include: [/firebase/, /node_modules/],
     },

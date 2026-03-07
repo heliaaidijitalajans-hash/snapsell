@@ -1,5 +1,21 @@
 # SnapSell – Yayına Alma Rehberi
 
+**Firebase Hosting + Railway kullanıyorsanız:** Adım adım kurulum için **[KURULUM.md](./KURULUM.md)** dosyasını takip edin.
+
+---
+
+## Frontend / Backend ayrımı
+
+- **Backend (server.js)** sadece API sunar (`/api/*`, `/admin/*`). HTML veya statik dosya sunmaz.
+- **Frontend** ayrı sunucuda çalışır (Vite, Firebase Hosting, Vercel vb.). API istekleri backend URL'ine gider. CORS için backend'de `ALLOWED_ORIGINS` ile frontend origin ekleyin.
+
+**Firebase Hosting’e frontend deploy ediyorsanız:** Build sırasında backend adresini verin; yoksa istekler Firebase’e gider ve "JSON değil HTML" hatası alırsınız:
+- `saas-design-extracted/.env` içine `VITE_API_URL=https://your-backend-url.com` yazın (sondaki `/` olmadan)
+- veya build komutu: `VITE_API_URL=https://your-backend-url.com npm run build`
+- Backend’i Railway/Render’da çalıştırıp bu URL’i kullanın.
+
+---
+
 ## Önemli: Firebase Hosting API çalıştırmaz
 
 **Firebase Hosting** yalnızca **statik dosyaları** (HTML, JS, CSS, resim) sunar. **Node.js / Express çalıştıramaz.**
@@ -27,7 +43,7 @@ Railway’de Node çalışır; hem API hem de `public/` ve dashboard build’i a
 1. [railway.app](https://railway.app) → GitHub ile giriş.
 2. **New Project** → **Deploy from GitHub repo** → `snapsell-app` reposunu seçin.
 3. Projeyi seçin → **Settings**:
-   - **Build Command:** `npm install && npm run build`
+   - **Build Command:** `npm install`
    - **Start Command:** `npm start`
    - **Root Directory:** boş (kök)
 4. **Variables** sekmesinde `.env` içeriğinizi ekleyin (OPENAI_API_KEY, FIREBASE_SERVICE_ACCOUNT_JSON veya GOOGLE_APPLICATION_CREDENTIALS, ALLOWED_ORIGINS, PUBLIC_APP_URL vb.).
@@ -58,8 +74,8 @@ En az şunlar olmalı:
 
 ### 5. Sonuç
 
-- Site: `https://snapsell.website` → Railway’deki Node (server.js).
-- Aynı sunucu hem `/api/*` hem de `/`, `/login`, `/auth`, `/dashboard` sayfalarını sunar.
+- Backend API: `https://snapsell.website` → Railway’deki Node (server.js).
+- Frontend ayrı deploy edilir; CORS için `ALLOWED_ORIGINS` gerekli.
 - Firebase sadece Auth (ve gerekirse Firestore) için kullanılır; hosting Firebase’de değildir.
 
 ---
@@ -68,8 +84,8 @@ En az şunlar olmalı:
 
 1. [render.com](https://render.com) → **New** → **Web Service**.
 2. Repo’yu bağlayın.
-3. **Build Command:** `npm install && npm run build`
-4. **Start Command:** `npm start`
+3. **Build Command:** `npm install`
+4. **Start Command:** `npm start` veya `node server.js`
 5. **Environment** içine `.env` değişkenlerini ekleyin.
 6. **Custom Domain** ile `snapsell.website` ekleyin ve DNS’te CNAME’i Render’ın verdiği adrese yönlendirin.
 

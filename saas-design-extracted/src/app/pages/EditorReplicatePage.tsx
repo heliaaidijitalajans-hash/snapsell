@@ -4,7 +4,7 @@ import { useLanguage } from "../contexts/LanguageContext";
 import { Upload, Sparkles, ImageIcon, Check, Store } from "lucide-react";
 import { Link } from "react-router";
 
-const API = typeof window !== "undefined" ? window.location.origin : "";
+import { getApiBase } from "../config";
 
 const MARKETPLACES = [
   { id: "trendyol", name: "Trendyol" },
@@ -52,7 +52,7 @@ export function EditorReplicatePage() {
   useEffect(() => {
     let cancelled = false;
     getAuthHeaders()
-      .then((headers) => fetch(API + "/api/replicate/status", { headers }))
+      .then((headers) => fetch(getApiBase() + "/api/replicate/status", { headers }))
       .then((r) => r.json())
       .then((data) => {
         if (!cancelled) {
@@ -100,7 +100,7 @@ export function EditorReplicatePage() {
       });
       const controller = new AbortController();
       const timeoutId = window.setTimeout(() => controller.abort(), 100000);
-      const res = await fetch(API + "/api/photoroom/pipeline", {
+      const res = await fetch(getApiBase() + "/api/photoroom/pipeline", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({
@@ -184,7 +184,7 @@ export function EditorReplicatePage() {
           <h2 className="text-xl font-bold text-gray-900 mb-2">{t("editor.proPlanRequired")}</h2>
           <p className="text-gray-600 mb-6">{t("editor.proPlanDesc")}</p>
           <Link
-            to="/dashboard/fiyatlandirma"
+            to="/fiyatlandirma"
             className="inline-flex items-center justify-center px-6 py-3 rounded-lg font-medium text-white bg-[#FF5A5F] hover:bg-[#FF5A5F]/90"
           >
             {t("editor.goPricing")}

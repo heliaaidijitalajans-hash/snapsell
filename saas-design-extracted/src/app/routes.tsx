@@ -1,7 +1,13 @@
 import { lazy, Suspense } from "react";
-import { createBrowserRouter, Navigate } from "react-router";
+import { createBrowserRouter, Navigate, useLocation } from "react-router";
 import { Layout } from "./components/Layout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+
+function RedirectDashboardToRoot() {
+  const loc = useLocation();
+  const to = loc.pathname.replace(/^\/dashboard\/?/, "") || "/";
+  return <Navigate to={to + loc.search} replace />;
+}
 
 const HomePage = lazy(() => import("./pages/HomePage").then((m) => ({ default: m.HomePage })));
 const PricingPage = lazy(() => import("./pages/PricingPage").then((m) => ({ default: m.PricingPage })));
@@ -20,6 +26,7 @@ const EditorReplicatePage = lazy(() => import("./pages/EditorReplicatePage").the
 const LibraryPage = lazy(() => import("./pages/LibraryPage").then((m) => ({ default: m.LibraryPage })));
 const AccountPage = lazy(() => import("./pages/AccountPage").then((m) => ({ default: m.AccountPage })));
 const AdminPage = lazy(() => import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })));
+const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
 
 function PageFallback() {
   return (
@@ -31,12 +38,16 @@ function PageFallback() {
 
 export const router = createBrowserRouter(
   [
+    { path: "/dashboard", element: <Navigate to="/" replace /> },
+    { path: "/dashboard/*", element: <RedirectDashboardToRoot /> },
+    { path: "/register", element: <Navigate to="/login" replace /> },
     {
       path: "/",
       Component: Layout,
       errorElement: <ErrorBoundary />,
       children: [
         { index: true, element: <Suspense fallback={<PageFallback />}><HomePage /></Suspense> },
+        { path: "login", element: <Suspense fallback={<PageFallback />}><LoginPage /></Suspense> },
         { path: "admin", element: <Suspense fallback={<PageFallback />}><AdminPage /></Suspense> },
         { path: "ornekler", element: <Suspense fallback={<PageFallback />}><ExamplesPage /></Suspense> },
         { path: "fiyatlandirma", element: <Suspense fallback={<PageFallback />}><PricingPage /></Suspense> },

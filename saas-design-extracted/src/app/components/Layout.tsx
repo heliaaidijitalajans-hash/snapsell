@@ -6,7 +6,7 @@ import { useLanguage } from "../contexts/LanguageContext";
 import { LanguageSelector } from "./LanguageSelector";
 import { CookieBanner, hasAnalyticsConsent } from "./CookieBanner";
 
-const API = typeof window !== "undefined" ? window.location.origin : "";
+import { getApiBase } from "../config";
 
 export function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -19,7 +19,7 @@ export function Layout() {
     if (sessionStorage.getItem("snapsell_visit_sent")) return;
     if (!hasAnalyticsConsent()) return;
     sessionStorage.setItem("snapsell_visit_sent", "1");
-    fetch(API + "/api/track-visit", { method: "GET" }).catch(() => {});
+    fetch(getApiBase() + "/api/track-visit", { method: "GET" }).catch(() => {});
   }, []);
 
   const navigation = [
@@ -88,8 +88,8 @@ export function Layout() {
                 </div>
               ) : (
                 <>
-                  <a href={`${typeof window !== "undefined" ? window.location.origin : ""}/login`} className="text-gray-700 hover:text-[#FF5A5F] transition-colors font-medium">{t("nav.login")}</a>
-                  <a href={`${typeof window !== "undefined" ? window.location.origin : ""}/register`} className="px-4 py-2 bg-[#FF5A5F] text-white rounded-lg hover:bg-[#FF5A5F]/90 transition-colors font-medium">{t("nav.register")}</a>
+                  <Link to="/login" className="text-gray-700 hover:text-[#FF5A5F] transition-colors font-medium">{t("nav.login")}</Link>
+                  <Link to="/register" className="px-4 py-2 bg-[#FF5A5F] text-white rounded-lg hover:bg-[#FF5A5F]/90 transition-colors font-medium">{t("nav.register")}</Link>
                   <div className="relative group">
                     <button type="button" className="flex items-center space-x-2 text-gray-700 hover:text-[#FF5A5F] transition-colors">
                       <User className="w-6 h-6" />
@@ -131,8 +131,8 @@ export function Layout() {
                 <div className="w-full px-3 py-2">
                   <LanguageSelector />
                 </div>
-                <a href={`${typeof window !== "undefined" ? window.location.origin : ""}/login`} className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100" onClick={() => setMobileMenuOpen(false)}>{t("nav.login")}</a>
-                <a href={`${typeof window !== "undefined" ? window.location.origin : ""}/register`} className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100" onClick={() => setMobileMenuOpen(false)}>{t("nav.register")}</a>
+                <Link to="/login" className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100" onClick={() => setMobileMenuOpen(false)}>{t("nav.login")}</Link>
+                <Link to="/register" className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100" onClick={() => setMobileMenuOpen(false)}>{t("nav.register")}</Link>
                 {userNavigation.map((item) =>
                   item.external ? (
                     <a key={item.nameKey} href={item.href} onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100">

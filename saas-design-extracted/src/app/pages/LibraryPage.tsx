@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLanguage } from "../contexts/LanguageContext";
 
-const API = typeof window !== "undefined" ? window.location.origin : "";
+import { getApiBase } from "../config";
 const PRODUCTS_KEY = "snapsell_products";
 const MAX_LIBRARY_ITEMS = 20;
 
@@ -53,7 +53,7 @@ export function LibraryPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {products.map((p, i) => {
             const imgSrc = p.enhancedImageUrl
-              ? API + p.enhancedImageUrl
+              ? getApiBase() + p.enhancedImageUrl
               : p.imageUrl || "";
             return (
               <div

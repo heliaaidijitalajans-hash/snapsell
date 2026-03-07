@@ -16,9 +16,7 @@ import {
   Trash2,
   ImageIcon,
 } from "lucide-react";
-import { useAuth } from "../contexts/AuthContext";
-
-const API = typeof window !== "undefined" ? window.location.origin : "";
+import { getApiBase } from "../config";
 
 type User = {
   id: string;
@@ -62,8 +60,19 @@ type Team = { id: string; name: string; memberIds: string[]; enterprisePlanId?: 
 type DailyStats = { today: { visitors: number; conversions: number; signups: number }; last7Days: Array<{ date: string; visitors: number; conversions: number; signups: number }> };
 type ImageEditEntry = { userId: string; email?: string | null; displayName?: string | null; outputUrl: string; createdAt: number };
 
+const ADMIN_TOKEN_KEY = "snapsell_admin_token";
+
+function getStoredAdminToken(): string | null {
+  try {
+    const t = sessionStorage.getItem(ADMIN_TOKEN_KEY);
+    return t && t.trim() ? t : null;
+  } catch {
+    return null;
+  }
+}
+
 export function AdminPage() {
-  const { getAuthHeaders } = useAuth();
+  const [adminToken, setAdminToken] = useState<string | null>(() => getStoredAdminToken());
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -78,6 +87,7 @@ export function AdminPage() {
   const [sitePlansEdit, setSitePlansEdit] = useState<SitePlan[]>([]);
   const [enterprisePlansEdit, setEnterprisePlansEdit] = useState("");
   const [savingPlans, setSavingPlans] = useState(false);
+  const [resettingPlans, setResettingPlans] = useState(false);
   const [plansSaveMessage, setPlansSaveMessage] = useState("");
   const [dailyStats, setDailyStats] = useState<DailyStats | null>(null);
   const [subscribersMonthly, setSubscribersMonthly] = useState<Subscriber[]>([]);
@@ -88,15 +98,17 @@ export function AdminPage() {
   const [imageEdits, setImageEdits] = useState<ImageEditEntry[]>([]);
 
   const adminFetch = useCallback(
-    async (url: string, opts: RequestInit = {}) => {
-      const headers = await getAuthHeaders();
-      return fetch(API + url, {
+    async (url: string, opts: RequestInit = {}, overrideToken?: string | null) => {
+      const headers: Record<string, string> = { ...(opts.headers as Record<string, string>) };
+      const token = overrideToken !== undefined ? overrideToken : adminToken;
+      if (token) headers.Authorization = "Bearer " + token;
+      return fetch(getApiBase() + url, {
         ...opts,
-        credentials: "include",
-        headers: { ...opts.headers, ...headers },
+        credentials: "omit",
+        headers,
       });
     },
-    [getAuthHeaders]
+    [adminToken]
   );
 
   const checkAuth = useCallback(async () => {
@@ -108,71 +120,98 @@ export function AdminPage() {
     }
   }, [adminFetch]);
 
-  const loadUsers = useCallback(async () => {
-    const r = await adminFetch("/admin/users");
-    if (r.status === 401) {
-      setAuthenticated(false);
-      return;
-    }
-    const data = await r.json().catch(() => ({}));
-    setUsers(data.users || []);
-  }, [adminFetch]);
+  const loadUsers = useCallback(
+    async (overrideToken?: string | null) => {
+      const r = await adminFetch("/admin/users", {}, overrideToken);
+      if (r.status === 401) {
+        setAuthenticated(false);
+        return;
+      }
+      const data = await r.json().catch(() => ({}));
+      setUsers(data.users || []);
+    },
+    [adminFetch]
+  );
 
-  const loadPlans = useCallback(async () => {
-    const r = await adminFetch("/admin/plans");
-    if (!r.ok) return;
-    const data = await r.json().catch(() => ({}));
-    const prices = data.planPrices || {};
-    setPlanPrices(prices);
-    setPlansEdit(prices);
-    setEnterprisePlans(Array.isArray(data.enterprisePlans) ? data.enterprisePlans : []);
-    setEnterprisePlansEdit(
-      Array.isArray(data.enterprisePlans) ? JSON.stringify(data.enterprisePlans, null, 2) : "[]"
-    );
-    const site = Array.isArray(data.sitePlans) ? data.sitePlans : [];
-    setSitePlans(site);
-    setSitePlansEdit(
-      site.length
-        ? site.map((p: SitePlan) => ({
-            ...p,
-            features: p.features || [],
-            credits: typeof p.credits === "number" ? p.credits : (p.id === "free" ? 100 : p.id === "monthly_plan" ? 1000 : p.id === "monthly_plan_pro" ? 2000 : p.id === "yearly_plan" ? 3000 : 5000),
-          }))
-        : []
-    );
-  }, [adminFetch]);
+  const loadPlans = useCallback(
+    async (overrideToken?: string | null) => {
+      const r = await adminFetch("/admin/plans", {}, overrideToken);
+      if (!r.ok) return;
+      const data = await r.json().catch(() => ({}));
+      const prices = data.planPrices || {};
+      setPlanPrices(prices);
+      setPlansEdit(prices);
+      setEnterprisePlans(Array.isArray(data.enterprisePlans) ? data.enterprisePlans : []);
+      setEnterprisePlansEdit(
+        Array.isArray(data.enterprisePlans) ? JSON.stringify(data.enterprisePlans, null, 2) : "[]"
+      );
+      const site = Array.isArray(data.sitePlans) ? data.sitePlans : [];
+      setSitePlans(site);
+      const defaultCredits: Record<string, number> = {
+        free: 30,
+        monthly_plan: 300,
+        monthly_plan_pro: 800,
+        yearly_plan: 12000,
+        enterprise: 0,
+        addon: 250,
+      };
+      setSitePlansEdit(
+        site.length
+          ? site.map((p: SitePlan) => ({
+              ...p,
+              features: p.features || [],
+              credits:
+                typeof p.credits === "number" ? p.credits : defaultCredits[p.id || ""] ?? 100,
+            }))
+          : []
+      );
+    },
+    [adminFetch]
+  );
 
-  const loadStats = useCallback(async () => {
-    const r = await adminFetch("/admin/stats");
-    if (!r.ok) return;
-    const data = await r.json().catch(() => ({}));
-    setDailyStats({
-      today: data.today || { visitors: 0, conversions: 0, signups: 0 },
-      last7Days: data.last7Days || [],
-    });
-  }, [adminFetch]);
+  const loadStats = useCallback(
+    async (overrideToken?: string | null) => {
+      const r = await adminFetch("/admin/stats", {}, overrideToken);
+      if (!r.ok) return;
+      const data = await r.json().catch(() => ({}));
+      setDailyStats({
+        today: data.today || { visitors: 0, conversions: 0, signups: 0 },
+        last7Days: data.last7Days || [],
+      });
+    },
+    [adminFetch]
+  );
 
-  const loadSubscribers = useCallback(async () => {
-    const r = await adminFetch("/admin/subscribers");
-    if (!r.ok) return;
-    const data = await r.json().catch(() => ({}));
-    setSubscribersMonthly(data.monthly || []);
-    setSubscribersYearly(data.yearly || []);
-  }, [adminFetch]);
+  const loadSubscribers = useCallback(
+    async (overrideToken?: string | null) => {
+      const r = await adminFetch("/admin/subscribers", {}, overrideToken);
+      if (!r.ok) return;
+      const data = await r.json().catch(() => ({}));
+      setSubscribersMonthly(data.monthly || []);
+      setSubscribersYearly(data.yearly || []);
+    },
+    [adminFetch]
+  );
 
-  const loadTeams = useCallback(async () => {
-    const r = await adminFetch("/admin/teams");
-    if (!r.ok) return;
-    const data = await r.json().catch(() => ({}));
-    setTeams(data.teams || []);
-  }, [adminFetch]);
+  const loadTeams = useCallback(
+    async (overrideToken?: string | null) => {
+      const r = await adminFetch("/admin/teams", {}, overrideToken);
+      if (!r.ok) return;
+      const data = await r.json().catch(() => ({}));
+      setTeams(data.teams || []);
+    },
+    [adminFetch]
+  );
 
-  const loadImageEdits = useCallback(async () => {
-    const r = await adminFetch("/admin/image-edits");
-    if (!r.ok) return;
-    const data = await r.json().catch(() => ({}));
-    setImageEdits(Array.isArray(data.edits) ? data.edits : []);
-  }, [adminFetch]);
+  const loadImageEdits = useCallback(
+    async (overrideToken?: string | null) => {
+      const r = await adminFetch("/admin/image-edits", {}, overrideToken);
+      if (!r.ok) return;
+      const data = await r.json().catch(() => ({}));
+      setImageEdits(Array.isArray(data.edits) ? data.edits : []);
+    },
+    [adminFetch]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -199,26 +238,47 @@ export function AdminPage() {
     e.preventDefault();
     setLoginError("");
     try {
-      const r = await fetch(API + "/admin/login", {
+      const r = await fetch(getApiBase() + "/admin/login", {
         method: "POST",
-        credentials: "include",
+        credentials: "omit",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password }),
       });
-      const data = await r.json();
+      const data = await r.json().catch(() => ({}));
       if (data.error) {
         setLoginError(data.error);
         return;
       }
+      const token =
+        (data.token && String(data.token).trim()) || (password && String(password).trim()) || "";
+      if (token) {
+        try {
+          sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+        } catch (_) {}
+        setAdminToken(token);
+      }
       setAuthenticated(true);
-      await Promise.all([loadUsers(), loadPlans()]);
+      await Promise.all([
+        loadUsers(token || undefined),
+        loadPlans(token || undefined),
+        loadStats(token || undefined),
+        loadSubscribers(token || undefined),
+        loadTeams(token || undefined),
+        loadImageEdits(token || undefined),
+      ]);
     } catch {
       setLoginError("Bağlantı hatası");
     }
   };
 
   const handleLogout = async () => {
-    await adminFetch("/admin/logout", { method: "POST" });
+    try {
+      await adminFetch("/admin/logout", { method: "POST" });
+    } catch (_) {}
+    try {
+      sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+    } catch (_) {}
+    setAdminToken(null);
     setAuthenticated(false);
   };
 
@@ -254,9 +314,8 @@ export function AdminPage() {
         setSavingPlans(false);
         return;
       }
-      const r = await fetch(API + "/admin/plans", {
+      const r = await adminFetch("/admin/plans", {
         method: "PUT",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           planPrices: plansEdit,
@@ -284,6 +343,31 @@ export function AdminPage() {
       setPlansSaveMessage("Bağlantı hatası.");
     } finally {
       setSavingPlans(false);
+    }
+  };
+
+  const handleResetPlansToDefault = async () => {
+    if (!confirm("Planlar ve fiyatlar kod içi varsayılana sıfırlanacak. Devam?")) return;
+    setPlansSaveMessage("");
+    setResettingPlans(true);
+    try {
+      const r = await adminFetch("/admin/plans/reset", { method: "POST" });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data.ok) {
+        if (data.planPrices) setPlanPrices(data.planPrices);
+        if (data.planPrices) setPlansEdit(data.planPrices);
+        if (Array.isArray(data.sitePlans)) {
+          setSitePlans(data.sitePlans);
+          setSitePlansEdit(data.sitePlans);
+        }
+        setPlansSaveMessage("Planlar varsayılana sıfırlandı. Fiyatlandırma sayfası güncel.");
+      } else {
+        setPlansSaveMessage("Sıfırlama hatası.");
+      }
+    } catch {
+      setPlansSaveMessage("Bağlantı hatası.");
+    } finally {
+      setResettingPlans(false);
     }
   };
 
@@ -322,7 +406,7 @@ export function AdminPage() {
     });
   };
 
-  const planOptions = ["free", "monthly_plan", "monthly_plan_pro", "yearly_plan", "enterprise"];
+  const planOptions = ["free", "monthly_plan", "monthly_plan_pro", "yearly_plan", "enterprise", "addon"];
   const totalConversions = users.reduce((s, u) => s + (u.totalConversions ?? 0), 0);
   const uniquePlans = new Set(users.map((u) => u.plan).filter(Boolean)).size;
 
@@ -790,15 +874,24 @@ export function AdminPage() {
             />
           </div>
 
-          <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+          <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-100">
             <button
               type="button"
               onClick={handleSaveAllPlans}
-              disabled={savingPlans}
+              disabled={savingPlans || resettingPlans}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#FF5A5F] hover:bg-[#FF5A5F]/90 disabled:opacity-50"
             >
               {savingPlans ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Tüm fiyat planını kaydet
+            </button>
+            <button
+              type="button"
+              onClick={handleResetPlansToDefault}
+              disabled={savingPlans || resettingPlans}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+            >
+              {resettingPlans ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              Planları varsayılana sıfırla
             </button>
             {plansSaveMessage && (
               <span
