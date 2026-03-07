@@ -383,6 +383,11 @@ app.get("/api/site-plans", function (req, res) {
   res.json({ plans: sitePlans });
 });
 
+/** Railway/deploy doğrulama: bu endpoint 200 dönerse admin route'ları yüklü demektir. */
+app.get("/admin/ping", function (req, res) {
+  res.json({ ok: true, msg: "admin routes loaded", hasPlans: true, hasImageEdits: true });
+});
+
 app.post("/admin/login", function (req, res) {
   const password = (req.body && req.body.password) || "";
   if (!ADMIN_PASSWORD) {
@@ -2318,6 +2323,11 @@ app.post("/price", async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "PRICE ERROR" });
   }
+});
+
+app.use(function (req, res) {
+  console.warn("404:", req.method, req.path);
+  res.status(404).json({ error: "Not Found", path: req.path, method: req.method });
 });
 
 var PORT = parseInt(process.env.PORT, 10) || 3006;
