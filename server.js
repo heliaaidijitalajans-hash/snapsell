@@ -329,170 +329,6 @@ async function requireAdmin(req, res, next) {
   return res.status(401).json({ error: "Yetkisiz" });
 }
 
-const htmlCache = {};
-["index.html", "dashboard.html", "pricing.html", "admin.html", "auth.html"].forEach(function (name) {
-  const p = path.join(__dirname, name);
-  try {
-    htmlCache[name] = fs.readFileSync(p, "utf8");
-    console.log("OK:", name);
-  } catch (e) {
-    if (name !== "admin.html") console.warn(name + " okunamadi:", e.message, "path:", p);
-  }
-});
-
-function sendHtml(res, filename) {
-  let body = null;
-  try {
-    body = fs.readFileSync(path.join(__dirname, filename), "utf8");
-  } catch (e) {}
-  if (body) {
-    res.setHeader("Content-Security-Policy", CSP_HTML);
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.setHeader("Cache-Control", "no-store");
-    res.send(body);
-    return;
-  }
-  body = htmlCache[filename];
-  if (body) {
-    res.setHeader("Content-Security-Policy", CSP_HTML);
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.setHeader("Cache-Control", "no-store");
-    res.send(body);
-    return;
-  }
-  res.setHeader("Content-Security-Policy", CSP_HTML);
-  res.status(404).send("Sayfa bulunamadi: " + filename + ". server.js ile ayni klasorde " + filename + " olmali.");
-}
-
-function sendPublicHtml(res, filename) {
-  const publicPath = path.join(__dirname, "public", filename);
-  try {
-    if (fs.existsSync(publicPath)) {
-      const body = fs.readFileSync(publicPath, "utf8");
-      res.setHeader("Content-Security-Policy", CSP_HTML);
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.setHeader("Cache-Control", "no-store");
-      res.send(body);
-      return;
-    }
-  } catch (e) {}
-  res.status(404).send("Sayfa bulunamadi: public/" + filename);
-}
-
-// Yeni tasarim (React) - tek arayuz; eski panel kaldirildi
-const designDist = path.join(__dirname, "saas-design-extracted", "dist");
-const designIndexPath = path.join(designDist, "index.html");
-
-function designAppExists() {
-  return fs.existsSync(designDist) && fs.existsSync(designIndexPath);
-}
-
-app.get("/", function (req, res) {
-  if (designAppExists()) {
-    res.setHeader("Content-Security-Policy", CSP_HTML);
-    return res.sendFile(designIndexPath);
-  }
-  res.redirect(302, "/login");
-});
-app.get("/panel", function (req, res) { res.redirect(302, "/dashboard"); });
-app.get("/panel/", function (req, res) { res.redirect(302, "/dashboard/"); });
-app.get("/panel/*path", function (req, res) { res.redirect(302, "/dashboard"); });
-app.get("/login", function (req, res) {
-  sendPublicHtml(res, "login.html");
-});
-app.get("/register", function (req, res) {
-  sendPublicHtml(res, "register.html");
-});
-app.get("/pricing", function (req, res) {
-  sendPublicHtml(res, "pricing.html");
-});
-app.get("/pricing/", function (req, res) {
-  sendPublicHtml(res, "pricing.html");
-});
-app.get("/landing", function (req, res) {
-  sendPublicHtml(res, "landing.html");
-});
-app.get("/landing/", function (req, res) {
-  sendPublicHtml(res, "landing.html");
-});
-app.get("/dashboard.html", function (req, res) {
-  sendPublicHtml(res, "index.html");
-});
-app.get("/auth", function (req, res) {
-  res.setHeader("Cross-Origin-Opener-Policy", "unsafe-none");
-  res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
-  sendHtml(res, "auth.html");
-});
-app.get("/auth/", function (req, res) {
-  res.setHeader("Cross-Origin-Opener-Policy", "unsafe-none");
-  res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
-  sendHtml(res, "auth.html");
-});
-app.get("/auth.html", function (req, res) {
-  res.setHeader("Cross-Origin-Opener-Policy", "unsafe-none");
-  res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
-  sendHtml(res, "auth.html");
-});
-
-app.get("/dashboard", function (req, res) {
-  if (designAppExists()) {
-    res.setHeader("Content-Security-Policy", CSP_HTML);
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-    return res.sendFile(designIndexPath);
-  }
-  res.redirect(302, "/login");
-});
-app.get("/dashboard/", function (req, res) {
-  if (designAppExists()) {
-    res.setHeader("Content-Security-Policy", CSP_HTML);
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-    return res.sendFile(designIndexPath);
-  }
-  res.redirect(302, "/login");
-});
-// Admin: SPA icinde sadece sifre ile girilir; normal (Firebase) giris gerekmez. Design yoksa eski admin sayfasina gonder.
-app.get("/dashboard/admin", function (req, res) {
-  if (designAppExists()) {
-    res.setHeader("Content-Security-Policy", CSP_HTML);
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-    return res.sendFile(designIndexPath);
-  }
-  res.redirect(302, "/admin");
-});
-app.use("/dashboard", function (req, res, next) {
-  if (!designAppExists()) return next();
-  express.static(designDist)(req, res, next);
-});
-app.get("/dashboard/*path", function (req, res) {
-  if (designAppExists()) {
-    res.setHeader("Content-Security-Policy", CSP_HTML);
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-    return res.sendFile(designIndexPath);
-  }
-  res.redirect(302, "/dashboard");
-});
-app.get("/design", function (req, res) { res.redirect(302, "/dashboard"); });
-app.get("/design/", function (req, res) { res.redirect(302, "/dashboard/"); });
-app.get("/design/*path", function (req, res) { res.redirect(302, "/dashboard/" + (req.params.path || "")); });
-
-app.get("/api/design-status", function (req, res) {
-  var exists = designAppExists();
-  res.json({
-    designAppReady: exists,
-    path: designDist,
-    indexExists: fs.existsSync(designIndexPath),
-    distExists: fs.existsSync(designDist),
-    hint: exists ? "Yeni tasarim /dashboard adresinde." : "npm run build:design calistirip dist olusturun (ana proje klasorunden)."
-  });
-});
-
-if (!designAppExists()) {
-  console.log("Design app: dist yok - /dashboard eski panel. Olusturmak icin: npm run build:design");
-  console.log("  Kontrol: " + designDist);
-} else {
-  console.log("Design app (yeni tasarim): /dashboard hazir.");
-}
-
 app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/api/config", function (req, res) {
@@ -510,19 +346,6 @@ app.get("/api/plan-prices", function (req, res) {
 app.get("/api/site-plans", function (req, res) {
   sitePlans = loadSitePlans();
   res.json({ plans: sitePlans });
-});
-
-app.get("/admin", function (req, res) {
-  if (designAppExists()) return res.redirect(302, "/dashboard/admin");
-  sendPublicHtml(res, "admin.html");
-});
-app.get("/admin/", function (req, res) {
-  if (designAppExists()) return res.redirect(302, "/dashboard/admin");
-  sendPublicHtml(res, "admin.html");
-});
-app.get("/admin/login", function (req, res) {
-  if (designAppExists()) return res.redirect(302, "/dashboard/admin");
-  sendPublicHtml(res, "admin.html");
 });
 
 app.post("/admin/login", function (req, res) {
@@ -2415,14 +2238,6 @@ function startServer(port) {
     }
   });
 }
-
-app.use(express.static(path.join(__dirname, "dist")));
-
-
-
-app.get("/*", (req, res) => {
-  res.sendFile(path.join(__dirname, "dist", "index.html"));
-});
 
 try {
   startServer(PORT);
