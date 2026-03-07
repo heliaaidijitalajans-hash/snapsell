@@ -553,6 +553,13 @@ app.get("/admin/subscribers", requireAdmin, async function (req, res) {
   res.json({ monthly, yearly, all: list });
 });
 
+/** Admin: Görsel düzenleme kayıtları. Şimdilik boş dizi; ileride data/image-edits.json veya Firestore ile doldurulabilir. */
+app.get("/admin/image-edits", requireAdmin, function (req, res) {
+  const loaded = loadJsonFile("image-edits.json", null);
+  const edits = Array.isArray(loaded) ? loaded : [];
+  res.json({ edits });
+});
+
 app.get("/admin/teams", requireAdmin, function (req, res) {
   loadTeams();
   res.json({ teams });
