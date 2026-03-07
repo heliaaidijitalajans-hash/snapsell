@@ -424,12 +424,21 @@ app.get("/admin/plans", requireAdmin, function (req, res) {
 
 /** Fiyat ve planları kod içi varsayılana sıfırlar. data/*.json eski kaldığında fiyatlar güncellenmez; bu endpoint dosyaları varsayılanla yazar. */
 app.post("/admin/plans/reset", requireAdmin, function (req, res) {
-  const defaultPrices = { free: 0, monthly_plan: 40, monthly_plan_pro: 65, yearly_plan: 440, enterprise: 0, addon: 15 };
-  saveJsonFile("plan-prices.json", defaultPrices);
-  saveJsonFile("site-plans.json", DEFAULT_SITE_PLANS);
-  planPrices = loadJsonFile("plan-prices.json", defaultPrices);
-  sitePlans = loadSitePlans();
-  res.json({ ok: true, message: "Planlar varsayilana sifirlandi.", planPrices, sitePlans });
+  try {
+    const defaultPrices = { free: 0, monthly_plan: 40, monthly_plan_pro: 65, yearly_plan: 440, enterprise: 0, addon: 15 };
+    if (!saveJsonFile("plan-prices.json", defaultPrices)) {
+      return res.status(500).json({ ok: false, error: "plan-prices.json yazilamadi (data/ yazilabilir mi?)" });
+    }
+    if (!saveJsonFile("site-plans.json", DEFAULT_SITE_PLANS)) {
+      return res.status(500).json({ ok: false, error: "site-plans.json yazilamadi (data/ yazilabilir mi?)" });
+    }
+    planPrices = loadJsonFile("plan-prices.json", defaultPrices);
+    sitePlans = loadSitePlans();
+    return res.json({ ok: true, message: "Planlar varsayilana sifirlandi.", planPrices, sitePlans });
+  } catch (e) {
+    console.error("admin/plans/reset:", e);
+    return res.status(500).json({ ok: false, error: e.message || "Sifirlama sirasinda hata" });
+  }
 });
 
 app.put("/admin/plans", requireAdmin, function (req, res) {

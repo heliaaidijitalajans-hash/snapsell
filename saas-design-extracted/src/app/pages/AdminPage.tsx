@@ -362,10 +362,11 @@ export function AdminPage() {
         }
         setPlansSaveMessage("Planlar varsayılana sıfırlandı. Fiyatlandırma sayfası güncel.");
       } else {
-        setPlansSaveMessage("Sıfırlama hatası.");
+        const msg = data.error || data.message || "Sıfırlama hatası.";
+        setPlansSaveMessage(msg);
       }
-    } catch {
-      setPlansSaveMessage("Bağlantı hatası.");
+    } catch (e) {
+      setPlansSaveMessage("Bağlantı hatası: " + (e instanceof Error ? e.message : "bilinmeyen"));
     } finally {
       setResettingPlans(false);
     }
