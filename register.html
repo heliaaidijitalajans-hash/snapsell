@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kayıt Ol - SnapSell</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: { primary: '#7C3AED', 'primary-hover': '#6D28D9' }
+        }
+      }
+    };
+  </script>
+  <style> body { background-color: #F9FAFB; } </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 font-sans" style="background-color: #F9FAFB;">
+  <div class="w-full max-w-md">
+    <div class="bg-white rounded-xl shadow-lg p-8 border border-gray-100">
+      <div class="text-center mb-8">
+        <h1 class="text-2xl font-bold text-gray-900">SnapSell</h1>
+        <p class="text-gray-500 text-sm mt-1">Yeni hesap oluşturun</p>
+      </div>
+      <form id="registerForm" class="space-y-5">
+        <div>
+          <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Ad Soyad</label>
+          <input type="text" id="name" name="name" required
+            class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+            placeholder="Adınız Soyadınız">
+        </div>
+        <div>
+          <label for="email" class="block text-sm font-medium text-gray-700 mb-1">E-posta</label>
+          <input type="email" id="email" name="email" required
+            class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+            placeholder="ornek@email.com">
+        </div>
+        <div>
+          <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Şifre</label>
+          <input type="password" id="password" name="password" required minlength="6"
+            class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+            placeholder="En az 6 karakter">
+        </div>
+        <p id="registerError" class="text-sm text-red-500 hidden"></p>
+        <button type="submit"
+          class="w-full py-3 rounded-lg font-semibold text-white shadow-md hover:shadow-lg transition focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+          style="background-color: #7C3AED;">
+          Hesap Oluştur
+        </button>
+      </form>
+      <p class="mt-6 text-center text-sm text-gray-600">
+        Zaten hesabın var mı?
+        <a href="/login" class="font-medium text-primary hover:underline">Giriş yap</a>
+      </p>
+    </div>
+  </div>
+  <script type="module">
+    import { getAuth, createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    const firebaseConfig = {
+      apiKey: "AIzaSyDX3-UZN9pSTgMopELRd4dWq8_VA6Pi8Gw",
+      authDomain: "snapsellapp-6649a.firebaseapp.com",
+      projectId: "snapsellapp-6649a",
+      storageBucket: "snapsellapp-6649a.firebasestorage.app",
+      messagingSenderId: "503663017163",
+      appId: "1:503663017163:web:8d02525549bd7f58f0af4e"
+    };
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    document.getElementById('registerForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const errEl = document.getElementById('registerError');
+      errEl.classList.add('hidden');
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      try {
+        await createUserWithEmailAndPassword(auth, email, password);
+        // Firebase oturumun kaydedilmesi icin kisa bekleyip Editore yonlendir
+        setTimeout(function() {
+          window.location.replace(window.location.origin + '/dashboard/editor');
+        }, 400);
+      } catch (err) {
+        errEl.textContent = err.message || 'Kayıt başarısız.';
+        errEl.classList.remove('hidden');
+      }
+    });
+  </script>
+</body>
+</html>

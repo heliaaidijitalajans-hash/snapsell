@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>SnapSell Login</title>
+
+<style>
+body{
+    font-family: Arial;
+    background:#f4f6fb;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+}
+
+.card{
+    background:white;
+    padding:40px;
+    border-radius:12px;
+    width:300px;
+    text-align:center;
+    box-shadow:0 5px 20px rgba(0,0,0,0.1);
+}
+
+input{
+    width:100%;
+    padding:12px;
+    margin:10px 0;
+}
+
+button{
+    width:100%;
+    padding:12px;
+    background:#6c63ff;
+    color:white;
+    border:none;
+    cursor:pointer;
+}
+</style>
+</head>
+
+<body>
+<div id="fileProtocolWarning" style="display:none;position:fixed;top:0;left:0;right:0;background:#c2410c;color:#fff;text-align:center;padding:8px;font-size:13px;z-index:9999">
+  Bu sayfa dosya (file://) olarak açıldı. Çalışması için <strong>npm start</strong> çalıştırıp <a href="http://localhost:3004" style="color:#fff;font-weight:bold;text-decoration:underline">http://localhost:3004</a> açın.
+</div>
+<div class="card">
+<h2>SnapSell</h2>
+
+<input id="email" placeholder="Email">
+<input id="password" type="password" placeholder="Şifre">
+
+<button onclick="register()">Kayıt Ol</button>
+<button onclick="login()">Giriş Yap</button>
+<p style="margin-top:12px"><a href="auth.html" style="color:#6c63ff">Google ile giriş yap</a> · <a href="dashboard.html" style="color:#666">Misafir devam</a></p>
+
+<p id="msg"></p>
+</div>
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+var isFile = window.location.protocol==="file:"||window.location.origin==="null";
+if (isFile) {
+  var w=document.getElementById("fileProtocolWarning");
+  if(w) w.style.display="block";
+  document.querySelectorAll(".card a[href]").forEach(function(a){
+    var h=a.getAttribute("href");
+    if(h&&!h.match(/^https?:\/\//)) a.setAttribute("href","http://localhost:3004/"+(h==="dashboard.html"?"dashboard":h==="auth.html"?"auth":""));
+  });
+}
+const firebaseConfig = {
+  apiKey: "AIzaSyDX3-UZN9pSTgMopELRd4dWq8_VA6Pi8Gw",
+  authDomain: "snapsellapp-6649a.firebaseapp.com",
+  projectId: "snapsellapp-6649a",
+  storageBucket: "snapsellapp-6649a.firebasestorage.app",
+  messagingSenderId: "503663017163",
+  appId: "1:503663017163:web:8d02525549bd7f58f0af4e"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+
+const emailInput = document.getElementById("email");
+const passwordInput = document.getElementById("password");
+const msg = document.getElementById("msg");
+
+window.register = function(){
+  createUserWithEmailAndPassword(auth, emailInput.value, passwordInput.value)
+  .then(()=> msg.innerText="Kayıt başarılı")
+  .catch(e=> msg.innerText=e.message);
+}
+
+window.login = function(){
+  signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value)
+  .then(()=> window.location.href="dashboard.html")
+  .catch(e=> msg.innerText=e.message);
+}
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SnapSell - Fiyatlandırma</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+      color: #333;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .header {
+      text-align: center;
+      color: white;
+      margin-bottom: 50px;
+    }
+    .header h1 { font-size: 2.5rem; margin-bottom: 10px; }
+    .header p { font-size: 1.2rem; opacity: 0.9; }
+    .back-link {
+      display: inline-block;
+      color: white;
+      text-decoration: none;
+      margin-bottom: 20px;
+      padding: 10px 20px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 10px;
+      transition: background 0.3s;
+    }
+    .back-link:hover { background: rgba(255,255,255,0.3); }
+    .plans-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 25px;
+      margin-top: 30px;
+    }
+    .plan-card {
+      background: white;
+      border-radius: 20px;
+      padding: 35px;
+      box-shadow: 0 15px 50px rgba(0,0,0,0.2);
+      transition: transform 0.3s;
+      position: relative;
+    }
+    .plan-card:hover { transform: translateY(-8px); }
+    .plan-card.featured {
+      border: 3px solid #f5576c;
+      transform: scale(1.02);
+    }
+    .plan-card.featured:hover { transform: scale(1.02) translateY(-8px); }
+    .plan-badge {
+      position: absolute;
+      top: -12px;
+      right: 20px;
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .plan-badge.pro {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+    .plan-name { font-size: 1.4rem; font-weight: 700; margin-bottom: 6px; color: #333; }
+    .plan-sub { font-size: 0.9rem; color: #666; margin-bottom: 12px; }
+    .plan-price { font-size: 2.2rem; font-weight: 800; color: #667eea; margin-bottom: 5px; }
+    .plan-price span { font-size: 1rem; font-weight: 500; color: #666; }
+    .plan-conversions { color: #666; margin-bottom: 20px; font-size: 0.95rem; }
+    .plan-features { list-style: none; margin-bottom: 25px; }
+    .plan-features li {
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
+      color: #555;
+      font-size: 0.95rem;
+    }
+    .plan-features li:before { content: "✓ "; color: #10b981; font-weight: bold; }
+    .plan-features li.pro-only { color: #4facfe; }
+    .plan-btn {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      text-align: center;
+      transition: all 0.3s;
+    }
+    .plan-btn.primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+    .plan-btn.primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+    }
+    .plan-btn.pro-btn {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      color: white;
+    }
+    .plan-btn.pro-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(79, 172, 254, 0.5);
+    }
+    .plan-btn.secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+    .plan-btn.secondary:hover { background: #e0e0e0; }
+    .plan-btn.contact {
+      background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+      color: white;
+    }
+    .plan-btn.contact:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(45, 55, 72, 0.4);
+    }
+    .credits-info { font-size: 0.85rem; color: #888; margin-top: 10px; }
+    @media (max-width: 900px) {
+      .plans-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 600px) {
+      .plans-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="dashboard.html" class="back-link">← Dashboard'a Dön</a>
+    <div class="header">
+      <h1>💰 SnapSell Fiyatlandırma</h1>
+      <p>Aylık ve yıllık planlar — Normal veya Pro (Leonardo AI)</p>
+    </div>
+
+    <div class="plans-grid">
+      <div class="plan-card" data-plan="free">
+        <div class="plan-name">Ücretsiz</div>
+        <div class="plan-sub">Deneme</div>
+        <div class="plan-price">₺<span class="price-value">0</span> <span>/ süresiz</span></div>
+        <div class="plan-conversions">10 dönüşüm hakkı</div>
+        <ul class="plan-features">
+          <li>Fotoğraf dönüştürme (pazaryeri)</li>
+          <li>SEO açıklaması</li>
+          <li>Fiyat analizi</li>
+        </ul>
+        <a href="dashboard.html" class="plan-btn secondary">Dashboard'a Git</a>
+        <div class="credits-info">100 kredi</div>
+      </div>
+
+      <div class="plan-card" data-plan="monthly_normal">
+        <div class="plan-name">Aylık Normal</div>
+        <div class="plan-sub">Fotoğraf dönüştürme</div>
+        <div class="plan-price">₺<span class="price-value">99</span> <span>/ ay</span></div>
+        <div class="plan-conversions">200 dönüşüm / ay</div>
+        <ul class="plan-features">
+          <li>Fotoğraf dönüştürme (arka plan, beyaz zemin)</li>
+          <li>SEO açıklaması</li>
+          <li>Fiyat analizi</li>
+          <li>Öncelikli işlem</li>
+        </ul>
+        <a href="mailto:snapsell.destek@gmail.com?subject=SnapSell%20Aylık%20Normal%20-%20₺99" class="plan-btn primary">Satın Al</a>
+        <div class="credits-info">2000 kredi / ay</div>
+      </div>
+
+      <div class="plan-card featured" data-plan="monthly_pro">
+        <div class="plan-badge pro">Pro</div>
+        <div class="plan-name">Aylık Pro</div>
+        <div class="plan-sub">+ Leonardo AI</div>
+        <div class="plan-price">₺<span class="price-value">199</span> <span>/ ay</span></div>
+        <div class="plan-conversions">500 dönüşüm / ay</div>
+        <ul class="plan-features">
+          <li>Tüm Normal özellikler</li>
+          <li><strong>Leonardo AI</strong> ile görsel üretimi</li>
+          <li>AI ile ürün görseli iyileştirme</li>
+          <li>Daha fazla dönüşüm hakkı</li>
+        </ul>
+        <a href="mailto:snapsell.destek@gmail.com?subject=SnapSell%20Aylık%20Pro%20-%20₺199" class="plan-btn pro-btn">Satın Al</a>
+        <div class="credits-info">5000 kredi / ay</div>
+      </div>
+
+      <div class="plan-card" data-plan="yearly_normal">
+        <div class="plan-name">Yıllık Normal</div>
+        <div class="plan-sub">Fotoğraf dönüştürme</div>
+        <div class="plan-price">₺<span class="price-value">899</span> <span>/ yıl</span></div>
+        <div class="plan-conversions">2400 dönüşüm / yıl</div>
+        <ul class="plan-features">
+          <li>Tüm Aylık Normal özellikler</li>
+          <li>%25 tasarruf</li>
+          <li>200 dönüşüm x 12 ay</li>
+        </ul>
+        <a href="mailto:snapsell.destek@gmail.com?subject=SnapSell%20Yıllık%20Normal%20-%20₺899" class="plan-btn primary">Satın Al</a>
+        <div class="credits-info">24000 kredi / yıl</div>
+      </div>
+
+      <div class="plan-card" data-plan="yearly_pro">
+        <div class="plan-badge pro">Pro</div>
+        <div class="plan-name">Yıllık Pro</div>
+        <div class="plan-sub">+ Leonardo AI</div>
+        <div class="plan-price">₺<span class="price-value">1799</span> <span>/ yıl</span></div>
+        <div class="plan-conversions">6000 dönüşüm / yıl</div>
+        <ul class="plan-features">
+          <li>Tüm Aylık Pro özellikleri</li>
+          <li>Leonardo AI dahil</li>
+          <li>%25 tasarruf</li>
+          <li>En iyi değer</li>
+        </ul>
+        <a href="mailto:snapsell.destek@gmail.com?subject=SnapSell%20Yıllık%20Pro%20-%20₺1799" class="plan-btn pro-btn">Satın Al</a>
+        <div class="credits-info">60000 kredi / yıl</div>
+      </div>
+
+      <div class="plan-card" data-plan="enterprise">
+        <div class="plan-name">Kurumsal</div>
+        <div class="plan-sub">Özel ihtiyaçlar</div>
+        <div class="plan-price"><span class="price-value">Özel</span> <span>/ fiyat</span></div>
+        <div class="plan-conversions">Sınırsız ihtiyaçlar için</div>
+        <ul class="plan-features">
+          <li>Özel dönüşüm limiti</li>
+          <li>Leonardo AI + API erişimi</li>
+          <li>Öncelikli destek</li>
+          <li>Özel entegrasyon</li>
+        </ul>
+        <a href="mailto:snapsell.destek@gmail.com?subject=SnapSell%20Kurumsal%20Plan" class="plan-btn contact">İletişime Geçin</a>
+        <div class="credits-info">snapsell.destek@gmail.com</div>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      fetch(window.location.origin + "/api/plan-prices").then(function (r) { return r.json(); }).then(function (data) {
+        var prices = data.planPrices || {};
+        document.querySelectorAll(".plan-card[data-plan]").forEach(function (card) {
+          var plan = card.getAttribute("data-plan");
+          var val = card.querySelector(".price-value");
+          if (!val) return;
+          var p = prices[plan];
+          if (plan === "enterprise" || p == null) val.textContent = "Özel";
+          else val.textContent = Number(p);
+        });
+      }).catch(function () {});
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+node_modules
+saas-design-extracted/node_modules
+saas-design-extracted/dist
+.git
+.env
+.env.*
+*.log
+logs
+data/*.json
+.DS_Store
+*.md
+!DEPLOY.md

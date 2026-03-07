@@ -1,0 +1,28 @@
+ONEMLI: Design sayfasi (http://localhost:3006/design) icin build MUTLAKA
+ANA PROJE icindeki bu klasorde yapilmalidir.
+
+YANLIS: C:\Users\fevzi\Downloads\SaaS E-commerce Platform Design  <- Burada build yapmayin!
+DOGRU:  C:\Users\fevzi\OneDrive\Masaustu\snapsell-app\saas-design-extracted  <- Build BURADA
+
+--- Adimlar ---
+
+1) Ana proje klasorune gidin:
+   cd C:\Users\fevzi\OneDrive\Masaustu\snapsell-app
+
+2) Design build (tek komut, ana projeden):
+   npm run build:design
+
+   VEYA bu klasore girip:
+   cd saas-design-extracted
+   npm install
+   npm run build
+
+3) Sunucuyu calistirin (ana projede):
+   node server.js
+
+4) Tarayicida acin:
+   http://localhost:3006/dashboard   <- Ana uygulama
+   http://localhost:3006/design       <- Tasarim sayfasi (build sonrasi calisir)
+
+Downloads'taki kopyada build yaparsaniz, sunucu o dist'i KULLANMAZ;
+sunucu sadece snapsell-app\saas-design-extracted\dist klasorune bakar.

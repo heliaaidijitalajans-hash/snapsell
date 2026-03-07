@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Panel - SnapSell</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>(function(){var w=console.warn;console.warn=function(m){if(typeof m==="string"&&m.indexOf("cdn.tailwindcss.com")!==-1)return;w.apply(console,arguments);};})();</script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script> tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter'] }, colors: { primary: '#7C3AED' } } } }; </script>
+  <style> body { background-color: #F9FAFB; } </style>
+</head>
+<body class="font-sans antialiased min-h-screen" style="background-color: #F9FAFB;">
+  <div id="fileProtocolWarning" class="hidden fixed top-0 left-0 right-0 bg-amber-500 text-white text-center py-3 px-4 text-sm z-[100]">
+    Bu sayfa dosya (file://) olarak açıldı. Admin paneli için sunucu üzerinden açın:
+    <a href="http://localhost:3004/admin" class="font-bold underline ml-1">http://localhost:3004/admin</a>
+  </div>
+  <div id="loginPanel" class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-sm bg-white rounded-xl shadow-lg p-8 border border-gray-100">
+      <h2 class="text-xl font-bold text-gray-900 text-center mb-6">Admin Girişi</h2>
+      <form id="loginForm">
+        <input type="password" id="adminPassword" placeholder="Şifre" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#7C3AED] outline-none mb-4" required>
+        <p id="adminLoginError" class="text-sm text-red-500 mb-2 hidden"></p>
+        <button type="submit" class="w-full py-3 rounded-lg font-semibold text-white shadow-md hover:shadow-lg transition" style="background-color: #7C3AED;">Giriş</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="dashboardPanel" class="hidden p-4 md:p-6 lg:p-8">
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-2xl font-bold text-gray-900">Admin Panel</h1>
+      <button type="button" id="btnLogoutAdmin" class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200">Çıkış</button>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
+        <p class="text-sm text-gray-500">Toplam Kullanıcı</p>
+        <p id="statUsers" class="text-2xl font-bold text-gray-900">-</p>
+      </div>
+      <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
+        <p class="text-sm text-gray-500">Toplam Dönüşüm</p>
+        <p id="statConversions" class="text-2xl font-bold text-gray-900">-</p>
+      </div>
+      <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
+        <p class="text-sm text-gray-500">Farklı Planlar</p>
+        <p id="statPlans" class="text-2xl font-bold text-gray-900">-</p>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+      <div class="px-4 py-3 border-b border-gray-100">
+        <h2 class="font-semibold text-gray-800">Kullanıcı Listesi</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="text-left px-4 py-3 text-gray-600 font-medium">ID</th>
+              <th class="text-left px-4 py-3 text-gray-600 font-medium">Plan</th>
+              <th class="text-left px-4 py-3 text-gray-600 font-medium">Kredi</th>
+              <th class="text-left px-4 py-3 text-gray-600 font-medium">Dönüşüm</th>
+            </tr>
+          </thead>
+          <tbody id="userTableBody" class="divide-y divide-gray-100">
+            <tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">Yükleniyor...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var isFileProtocol = window.location.protocol === 'file:' || window.location.origin === 'null' || !window.location.origin;
+    const API = isFileProtocol ? 'http://localhost:3004' : window.location.origin;
+
+    if (isFileProtocol) {
+      document.getElementById('fileProtocolWarning').classList.remove('hidden');
+      document.getElementById('loginPanel').style.display = 'none';
+      document.getElementById('dashboardPanel').style.display = 'none';
+    }
+
+    function getCookie(n) {
+      const v = document.cookie.match('(^|;)\\s*' + n + '\\s*=\\s*([^;]+)');
+      return v ? v.pop() : '';
+    }
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const errEl = document.getElementById('adminLoginError');
+      errEl.classList.add('hidden');
+      const password = document.getElementById('adminPassword').value;
+      try {
+        const r = await fetch(API + '/admin/login', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
+        const data = await r.json();
+        if (data.error) { errEl.textContent = data.error; errEl.classList.remove('hidden'); return; }
+        document.getElementById('loginPanel').classList.add('hidden');
+        document.getElementById('dashboardPanel').classList.remove('hidden');
+        loadAdmin();
+      } catch (err) {
+        errEl.textContent = 'Bağlantı hatası';
+        errEl.classList.remove('hidden');
+      }
+    });
+    document.getElementById('btnLogoutAdmin').addEventListener('click', async function() {
+      await fetch(API + '/admin/logout', { method: 'POST', credentials: 'include' });
+      document.getElementById('loginPanel').classList.remove('hidden');
+      document.getElementById('dashboardPanel').classList.add('hidden');
+    });
+    async function loadAdmin() {
+      const opts = { credentials: 'include' };
+      const r = await fetch(API + '/admin/users', opts);
+      if (r.status === 401) {
+        document.getElementById('loginPanel').classList.remove('hidden');
+        document.getElementById('dashboardPanel').classList.add('hidden');
+        return;
+      }
+      const data = await r.json();
+      const users = data.users || [];
+      const tbody = document.getElementById('userTableBody');
+      let totalConv = 0;
+      const planSet = new Set();
+      users.forEach(function(u) {
+        totalConv += (u.totalConversions || 0);
+        if (u.plan) planSet.add(u.plan);
+      });
+      document.getElementById('statUsers').textContent = users.length;
+      document.getElementById('statConversions').textContent = totalConv;
+      document.getElementById('statPlans').textContent = planSet.size;
+      if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">Kullanıcı yok</td></tr>';
+      } else {
+        tbody.innerHTML = users.map(function(u) {
+          return '<tr class="hover:bg-gray-50"><td class="px-4 py-3 font-mono text-xs text-gray-600">' + (u.id || '').substring(0, 14) + '...</td><td class="px-4 py-3">' + (u.plan || '-') + '</td><td class="px-4 py-3">' + (u.credits ?? '-') + '</td><td class="px-4 py-3">' + (u.totalConversions ?? 0) + '</td></tr>';
+        }).join('');
+      }
+    }
+    if (!isFileProtocol) {
+      fetch(API + '/admin/me', { credentials: 'include' }).then(function(r) {
+        if (r.ok) {
+          document.getElementById('loginPanel').classList.add('hidden');
+          document.getElementById('dashboardPanel').classList.remove('hidden');
+          loadAdmin();
+        }
+      }).catch(function() {});
+    }
+  </script>
+</body>
+</html>

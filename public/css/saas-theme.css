@@ -1,0 +1,29 @@
+/**
+ * SaaS E-commerce Platform Design - Tema değişkenleri
+ * saas-design-extracted/src/styles/theme.css tabanlı.
+ * Kullanım: <link href="/css/saas-theme.css" rel="stylesheet"> ve class="dark" ile koyu tema.
+ */
+:root {
+  --saas-font-size: 16px;
+  --saas-background: #ffffff;
+  --saas-foreground: #0a0a0a;
+  --saas-card: #ffffff;
+  --saas-primary: #FF5A5F;
+  --saas-primary-foreground: #ffffff;
+  --saas-muted: #ececf0;
+  --saas-muted-foreground: #717182;
+  --saas-border: rgba(0, 0, 0, 0.1);
+  --saas-radius: 0.625rem;
+}
+
+.dark,
+[data-theme="dark"] {
+  --saas-background: #0a0a0a;
+  --saas-foreground: #fafafa;
+  --saas-card: #141414;
+  --saas-primary: #FF5A5F;
+  --saas-primary-foreground: #ffffff;
+  --saas-muted: #262626;
+  --saas-muted-foreground: #a1a1a1;
+  --saas-border: #262626;
+}

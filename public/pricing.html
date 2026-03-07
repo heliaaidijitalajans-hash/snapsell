@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Paketler - SnapSell</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script> tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter'] }, colors: { primary: '#7C3AED' } } } }; </script>
+  <style> body { background-color: #F9FAFB; } </style>
+</head>
+<body class="font-sans min-h-screen" style="background-color: #F9FAFB;">
+  <div class="p-4 md:p-8">
+    <a href="/" class="inline-block text-gray-600 hover:text-[#7C3AED] mb-6">← Dashboard</a>
+    <h1 class="text-2xl font-bold text-gray-900 mb-2">Paketler</h1>
+    <p class="text-gray-500 mb-8">İhtiyacınıza uygun planı seçin</p>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div class="bg-white rounded-lg shadow-sm p-6 border border-gray-100">
+        <h3 class="font-semibold text-gray-900">Ücretsiz</h3>
+        <p class="text-2xl font-bold text-[#7C3AED] mt-2">₺0</p>
+        <p class="text-sm text-gray-500">10 dönüşüm</p>
+        <ul class="mt-4 space-y-2 text-sm text-gray-600">
+          <li>✓ Fotoğraf dönüştürme</li>
+          <li>✓ SEO açıklaması</li>
+        </ul>
+        <a href="/" class="mt-4 block w-full py-2.5 rounded-lg font-medium text-center text-gray-600 bg-gray-100 hover:bg-gray-200 transition">Başla</a>
+      </div>
+      <div class="bg-white rounded-lg shadow-sm p-6 border border-gray-100">
+        <h3 class="font-semibold text-gray-900">Aylık Normal</h3>
+        <p class="text-2xl font-bold text-[#7C3AED] mt-2">₺99<span class="text-sm font-normal text-gray-500">/ay</span></p>
+        <p class="text-sm text-gray-500">200 dönüşüm/ay</p>
+        <ul class="mt-4 space-y-2 text-sm text-gray-600">
+          <li>✓ Tüm ücretsiz özellikler</li>
+          <li>✓ Öncelikli işlem</li>
+        </ul>
+        <a href="mailto:snapsell.destek@gmail.com?subject=SnapSell Aylık Normal" class="mt-4 block w-full py-2.5 rounded-lg font-semibold text-center text-white shadow-md hover:shadow-lg transition" style="background-color: #7C3AED;">Satın Al</a>
+      </div>
+      <div class="bg-white rounded-lg shadow-sm p-6 border-2 border-[#7C3AED] shadow-md">
+        <span class="text-xs font-semibold text-white px-2 py-0.5 rounded" style="background-color: #7C3AED;">Pro</span>
+        <h3 class="font-semibold text-gray-900 mt-2">Aylık Pro</h3>
+        <p class="text-2xl font-bold text-[#7C3AED] mt-2">₺199<span class="text-sm font-normal text-gray-500">/ay</span></p>
+        <p class="text-sm text-gray-500">500 dönüşüm/ay + Leonardo AI</p>
+        <ul class="mt-4 space-y-2 text-sm text-gray-600">
+          <li>✓ Tüm Normal özellikler</li>
+          <li>✓ Leonardo AI</li>
+        </ul>
+        <a href="mailto:snapsell.destek@gmail.com?subject=SnapSell Aylık Pro" class="mt-4 block w-full py-2.5 rounded-lg font-semibold text-center text-white shadow-md hover:shadow-lg transition" style="background-color: #7C3AED;">Satın Al</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SnapSell - E-ticaret Görsel ve SEO Platformu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: { brand: '#FF5A5F' }
+        }
+      }
+    };
+  </script>
+  <style>
+    body { font-family: Inter, sans-serif; }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-50 text-gray-900 antialiased">
+  <!-- Nav -->
+  <nav class="bg-white shadow-sm sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <a href="/" class="text-2xl font-bold text-[#FF5A5F]">SnapSell</a>
+        <div class="hidden md:flex items-center gap-8">
+          <a href="/landing" class="text-gray-700 hover:text-[#FF5A5F] transition">Ana Sayfa</a>
+          <a href="/pricing" class="text-gray-700 hover:text-[#FF5A5F] transition">Fiyatlandırma</a>
+          <a href="/#support" class="text-gray-700 hover:text-[#FF5A5F] transition">Destek</a>
+        </div>
+        <div class="flex items-center gap-4">
+          <a href="/login" class="text-gray-700 hover:text-[#FF5A5F] font-medium transition">Giriş</a>
+          <a href="/register" class="px-4 py-2 bg-[#FF5A5F] text-white rounded-lg hover:bg-[#FF5A5F]/90 transition font-medium">Kayıt Ol</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="bg-gradient-to-br from-[#FF5A5F]/10 via-white to-[#FF5A5F]/5 py-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <h1 class="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
+        E-ticaret Satışlarınızı<br><span class="text-[#FF5A5F]">Profesyonelleştirin</span>
+      </h1>
+      <p class="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
+        SnapSell ile ürün görsellerinizi profesyonel hale getirin, SEO uyumlu içerikler oluşturun ve piyasa analizleriyle rakiplerinizin önüne geçin.
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="/dashboard" class="inline-flex items-center justify-center px-8 py-3 bg-[#FF5A5F] text-white rounded-lg hover:bg-[#FF5A5F]/90 transition shadow-lg font-medium">
+          Hemen Başla →
+        </a>
+        <a href="/pricing" class="inline-flex items-center justify-center px-8 py-3 bg-white text-[#FF5A5F] border-2 border-[#FF5A5F] rounded-lg hover:bg-[#FF5A5F]/5 transition font-medium">
+          Fiyatları Görüntüle
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="py-20 bg-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-16">
+        <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">SnapSell ile Neler Yapabilirsiniz?</h2>
+        <p class="text-xl text-gray-600">E-ticaret işinizi büyütmek için ihtiyacınız olan tüm araçlar</p>
+      </div>
+      <div class="grid md:grid-cols-3 gap-8">
+        <div class="p-8 rounded-2xl border border-gray-200 hover:shadow-xl transition-shadow bg-white" style="box-shadow: 0 4px 20px rgba(255, 90, 95, 0.05);">
+          <div class="w-14 h-14 bg-[#FF5A5F]/10 rounded-xl flex items-center justify-center mb-6 text-2xl">🖼</div>
+          <h3 class="text-xl font-bold text-gray-900 mb-3">Profesyonel Görsel Düzenleme</h3>
+          <p class="text-gray-600">Ürün görsellerinizi yapay zeka destekli araçlarla profesyonel seviyeye taşıyın.</p>
+        </div>
+        <div class="p-8 rounded-2xl border border-gray-200 hover:shadow-xl transition-shadow bg-white" style="box-shadow: 0 4px 20px rgba(255, 90, 95, 0.05);">
+          <div class="w-14 h-14 bg-[#FF5A5F]/10 rounded-xl flex items-center justify-center mb-6 text-2xl">📝</div>
+          <h3 class="text-xl font-bold text-gray-900 mb-3">SEO Uyumlu İçerik</h3>
+          <p class="text-gray-600">Ürünleriniz için optimize edilmiş başlıklar ve açıklamalar otomatik oluşturun.</p>
+        </div>
+        <div class="p-8 rounded-2xl border border-gray-200 hover:shadow-xl transition-shadow bg-white" style="box-shadow: 0 4px 20px rgba(255, 90, 95, 0.05);">
+          <div class="w-14 h-14 bg-[#FF5A5F]/10 rounded-xl flex items-center justify-center mb-6 text-2xl">📈</div>
+          <h3 class="text-xl font-bold text-gray-900 mb-3">Piyasa Analizi</h3>
+          <p class="text-gray-600">Rakiplerinizi analiz edin ve pazardaki fırsatları keşfedin.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="py-20 bg-gradient-to-br from-[#FF5A5F] to-[#FF5A5F]/80">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <h2 class="text-3xl md:text-4xl font-bold text-white mb-6">E-ticaret Başarınız İçin Hazır mısınız?</h2>
+      <p class="text-xl text-white/90 mb-8">SnapSell'e katılın ve satışlarınızı bugünden itibaren artırın</p>
+      <a href="/dashboard" class="inline-flex items-center px-8 py-3 bg-white text-[#FF5A5F] rounded-lg hover:bg-gray-100 transition shadow-lg font-semibold">
+        Ücretsiz Deneyin →
+      </a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="bg-gray-900 text-gray-300 py-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div>
+          <div class="text-2xl font-bold text-white mb-4">SnapSell</div>
+          <p class="text-sm">E-ticaret satıcıları için profesyonel ürün görseli düzenleme ve SEO optimizasyonu platformu.</p>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Ürün</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="/pricing" class="hover:text-white">Fiyatlandırma</a></li>
+            <li><a href="/dashboard" class="hover:text-white">Dashboard</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Destek</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="/#support" class="hover:text-white">İletişim</a></li>
+            <li><a href="/landing" class="hover:text-white">Ana Sayfa</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Hesap</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="/login" class="hover:text-white">Giriş</a></li>
+            <li><a href="/register" class="hover:text-white">Kayıt</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="border-t border-gray-800 mt-8 pt-8 text-sm text-center">
+        <p>© 2026 SnapSell. Tüm hakları saklıdır.</p>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
