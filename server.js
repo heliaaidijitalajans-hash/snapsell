@@ -415,25 +415,23 @@ app.get("/admin/users", requireAdmin, async function (req, res) {
   res.json({ users: list });
 });
 
+/** Planları döndürür. Bellekteki değer kullanılır; reset/put sonrası ekranın eskiye dönmesi engellenir. */
 app.get("/admin/plans", requireAdmin, function (req, res) {
-  planPrices = loadJsonFile("plan-prices.json", planPrices);
-  enterprisePlans = loadJsonFile("enterprise-plans.json", enterprisePlans);
-  sitePlans = loadSitePlans();
   res.json({ planPrices, enterprisePlans, sitePlans });
 });
 
-/** Fiyat ve planları kod içi varsayılana sıfırlar. data/*.json eski kaldığında fiyatlar güncellenmez; bu endpoint dosyaları varsayılanla yazar. */
+/** Fiyat ve planları kod içi varsayılana sıfırlar. Yanıt her zaman bellekteki varsayılanla döner; dosya yazılamasa bile ekran güncel kalır. */
 app.post("/admin/plans/reset", requireAdmin, function (req, res) {
   try {
     const defaultPrices = { free: 0, monthly_plan: 40, monthly_plan_pro: 65, yearly_plan: 440, enterprise: 0, addon: 15 };
-    if (!saveJsonFile("plan-prices.json", defaultPrices)) {
-      return res.status(500).json({ ok: false, error: "plan-prices.json yazilamadi (data/ yazilabilir mi?)" });
-    }
-    if (!saveJsonFile("site-plans.json", DEFAULT_SITE_PLANS)) {
-      return res.status(500).json({ ok: false, error: "site-plans.json yazilamadi (data/ yazilabilir mi?)" });
-    }
-    planPrices = loadJsonFile("plan-prices.json", defaultPrices);
-    sitePlans = loadSitePlans();
+    saveJsonFile("plan-prices.json", defaultPrices);
+    saveJsonFile("site-plans.json", DEFAULT_SITE_PLANS);
+    planPrices = defaultPrices;
+    sitePlans = DEFAULT_SITE_PLANS.map(function (p) {
+      const id = (p.id || "").toString();
+      const planType = p.planType || (EDITOR_PLANS.some(function (e) { return id === e; }) ? "editor" : id === "addon" ? "addon" : "conversion");
+      return { ...p, planType };
+    });
     return res.json({ ok: true, message: "Planlar varsayilana sifirlandi.", planPrices, sitePlans });
   } catch (e) {
     console.error("admin/plans/reset:", e);
