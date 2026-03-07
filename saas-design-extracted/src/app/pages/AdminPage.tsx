@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   LogOut,
   Users,
@@ -89,6 +89,7 @@ export function AdminPage() {
   const [savingPlans, setSavingPlans] = useState(false);
   const [resettingPlans, setResettingPlans] = useState(false);
   const [plansSaveMessage, setPlansSaveMessage] = useState("");
+  const plansVersionRef = useRef(0);
   const [dailyStats, setDailyStats] = useState<DailyStats | null>(null);
   const [subscribersMonthly, setSubscribersMonthly] = useState<Subscriber[]>([]);
   const [subscribersYearly, setSubscribersYearly] = useState<Subscriber[]>([]);
@@ -134,10 +135,12 @@ export function AdminPage() {
   );
 
   const loadPlans = useCallback(
-    async (overrideToken?: string | null) => {
+    async (overrideToken?: string | null, versionAtStart?: number) => {
       const r = await adminFetch("/admin/plans", {}, overrideToken);
       if (!r.ok) return;
+      if (versionAtStart !== undefined && versionAtStart !== plansVersionRef.current) return;
       const data = await r.json().catch(() => ({}));
+      if (versionAtStart !== undefined && versionAtStart !== plansVersionRef.current) return;
       const prices = data.planPrices || {};
       setPlanPrices(prices);
       setPlansEdit(prices);
@@ -215,13 +218,21 @@ export function AdminPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const plansVer = plansVersionRef.current;
     (async () => {
       try {
         const ok = await checkAuth();
         if (cancelled) return;
         setAuthenticated(ok);
         if (ok) {
-          await Promise.all([loadUsers(), loadPlans(), loadStats(), loadSubscribers(), loadTeams(), loadImageEdits()]);
+          await Promise.all([
+            loadUsers(),
+            loadPlans(undefined, plansVer),
+            loadStats(),
+            loadSubscribers(),
+            loadTeams(),
+            loadImageEdits(),
+          ]);
         }
       } catch (_) {
         if (!cancelled) setAuthenticated(false);
@@ -324,9 +335,12 @@ export function AdminPage() {
         }),
       });
       const data = await r.json();
-      if (r.ok && data.ok) {
-        setPlanPrices(data.planPrices || plansEdit);
-        setPlansEdit(data.planPrices || plansEdit);
+      const success = r.ok && (data.ok === true || data.planPrices != null || Array.isArray(data.sitePlans));
+      if (success) {
+        if (data.planPrices && typeof data.planPrices === "object") {
+          setPlanPrices(data.planPrices);
+          setPlansEdit(data.planPrices);
+        }
         if (Array.isArray(data.sitePlans)) {
           setSitePlans(data.sitePlans);
           setSitePlansEdit(data.sitePlans);
@@ -337,7 +351,7 @@ export function AdminPage() {
         }
         setPlansSaveMessage("Tüm fiyat planı kaydedildi.");
       } else {
-        setPlansSaveMessage("Kaydetme hatası.");
+        setPlansSaveMessage(data.error || data.message || "Kaydetme hatası.");
       }
     } catch {
       setPlansSaveMessage("Bağlantı hatası.");
@@ -353,17 +367,24 @@ export function AdminPage() {
     try {
       const r = await adminFetch("/admin/plans/reset", { method: "POST" });
       const data = await r.json().catch(() => ({}));
-      if (r.ok && data.ok) {
-        if (data.planPrices) setPlanPrices(data.planPrices);
-        if (data.planPrices) setPlansEdit(data.planPrices);
+      const success = r.ok && (data.ok === true || data.planPrices != null || Array.isArray(data.sitePlans));
+      if (success) {
+        plansVersionRef.current += 1;
+        if (data.planPrices && typeof data.planPrices === "object") {
+          setPlanPrices(data.planPrices);
+          setPlansEdit(data.planPrices);
+        }
         if (Array.isArray(data.sitePlans)) {
           setSitePlans(data.sitePlans);
           setSitePlansEdit(data.sitePlans);
         }
+        if (Array.isArray(data.enterprisePlans)) {
+          setEnterprisePlans(data.enterprisePlans);
+          setEnterprisePlansEdit(JSON.stringify(data.enterprisePlans, null, 2));
+        }
         setPlansSaveMessage("Planlar varsayılana sıfırlandı. Fiyatlandırma sayfası güncel.");
       } else {
-        const msg = data.error || data.message || "Sıfırlama hatası.";
-        setPlansSaveMessage(msg);
+        setPlansSaveMessage(data.error || data.message || "Sıfırlama hatası.");
       }
     } catch (e) {
       setPlansSaveMessage("Bağlantı hatası: " + (e instanceof Error ? e.message : "bilinmeyen"));

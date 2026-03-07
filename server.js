@@ -52,8 +52,22 @@ function saveJsonFile(filename, data) {
   }
 }
 
-let planPrices = loadJsonFile("plan-prices.json", { free: 0, monthly_plan: 40, monthly_plan_pro: 65, yearly_plan: 440, enterprise: 0, addon: 15 });
-let enterprisePlans = loadJsonFile("enterprise-plans.json", []);
+function savePlanPrices(updatedPrices) {
+  planPrices = updatedPrices;
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  const filePath = path.join(DATA_DIR, "plan-prices.json");
+  fs.writeFileSync(filePath, JSON.stringify(updatedPrices, null, 2), "utf8");
+}
+
+function saveSitePlans(updatedPlans) {
+  sitePlans = updatedPlans;
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  const filePath = path.join(DATA_DIR, "site-plans.json");
+  fs.writeFileSync(filePath, JSON.stringify(updatedPlans, null, 2), "utf8");
+}
+
+/** Tek kaynak: fiyat listesi sadece burada. Dosyadan okuma yok, eski veri geri gelmez. */
+const DEFAULT_PLAN_PRICES = { free: 0, monthly_plan: 40, monthly_plan_pro: 65, yearly_plan: 440, enterprise: 0, addon: 15 };
 const DEFAULT_SITE_PLANS = [
   { id: "free", name: "Ücretsiz", price: "0", period: "ay", description: "3 dönüşüm, temel özellikler", features: ["3 dönüşüm", "Temel özellikler"], cta: "Ücretsiz başla", href: "/register", highlighted: false, planType: "conversion", credits: 30 },
   { id: "monthly_plan", name: "Aylık plan", price: "40", period: "ay", description: "30 dönüşüm", features: ["30 dönüşüm", "Tüm özellikler", "SEO açıklama", "Fiyat analizi"], cta: "Başla", href: "/register?plan=monthly_plan", highlighted: true, planType: "conversion", credits: 300 },
@@ -62,21 +76,34 @@ const DEFAULT_SITE_PLANS = [
   { id: "enterprise", name: "Kurumsal", price: "—", period: "yıl", description: "Bize ulaşın", features: ["Ekibiniz ile takım kurma ayrıcalığı", "Tüm özellikler", "SEO açıklama", "Fiyat analizi", "Yüklenecek özellik gelişmeleri dahil", "Yıllık faturalandırma"], cta: "Bize ulaşın", href: "/destek", highlighted: false, planType: "conversion", credits: 0 },
   { id: "addon", name: "Ek paket", price: "15", period: "ay", description: "25 dönüşüm", features: ["25 dönüşüm", "Tüm özellikler dahil"], cta: "Ek paket al", href: "/register?plan=addon", highlighted: false, planType: "addon", credits: 250 }
 ];
-function loadSitePlans() {
-  const loaded = loadJsonFile("site-plans.json", null);
-  const plans = Array.isArray(loaded) && loaded.length > 0 ? loaded : DEFAULT_SITE_PLANS;
+
+function applyPlanType(plans) {
   return plans.map(function (p) {
     const id = (p.id || "").toString();
     const planType = p.planType || (EDITOR_PLANS.some(function (e) { return id === e; }) ? "editor" : id === "addon" ? "addon" : "conversion");
     return { ...p, planType };
   });
 }
-let sitePlans = loadSitePlans();
 
-/** Plan satın alındığında atanacak kredi. sitePlans'tan okunur; addon için ek paket kredisi. */
+/** Başlangıç: admin daha önce kaydettiyse dosyadan yükle, yoksa kod içi varsayılan. */
+function loadPlanPricesFromDisk() {
+  const loaded = loadJsonFile("plan-prices.json", null);
+  if (loaded && typeof loaded === "object" && !Array.isArray(loaded)) return { ...DEFAULT_PLAN_PRICES, ...loaded };
+  return { ...DEFAULT_PLAN_PRICES };
+}
+function loadSitePlansFromDisk() {
+  const loaded = loadJsonFile("site-plans.json", null);
+  const arr = Array.isArray(loaded) && loaded.length > 0 ? loaded : DEFAULT_SITE_PLANS;
+  return applyPlanType(arr);
+}
+
+let planPrices = loadPlanPricesFromDisk();
+let enterprisePlans = loadJsonFile("enterprise-plans.json", []);
+let sitePlans = loadSitePlansFromDisk();
+
+/** Plan satın alındığında atanacak kredi. Bellekteki sitePlans kullanılır. */
 function getCreditsForPlan(planId) {
-  const plans = loadSitePlans();
-  const p = plans.find(function (x) { return (x.id || x.name) === planId; });
+  const p = sitePlans.find(function (x) { return (x.id || x.name) === planId; });
   if (p && typeof p.credits === "number") return p.credits;
   return 0;
 }
@@ -349,12 +376,10 @@ app.get("/api/config", function (req, res) {
 });
 
 app.get("/api/plan-prices", function (req, res) {
-  planPrices = loadJsonFile("plan-prices.json", planPrices);
   enterprisePlans = loadJsonFile("enterprise-plans.json", enterprisePlans);
   res.json({ planPrices, enterprisePlans });
 });
 app.get("/api/site-plans", function (req, res) {
-  sitePlans = loadSitePlans();
   res.json({ plans: sitePlans });
 });
 
@@ -420,41 +445,38 @@ app.get("/admin/plans", requireAdmin, function (req, res) {
   res.json({ planPrices, enterprisePlans, sitePlans });
 });
 
-/** Fiyat ve planları kod içi varsayılana sıfırlar. Yanıt her zaman bellekteki varsayılanla döner; dosya yazılamasa bile ekran güncel kalır. */
+/** Fiyat ve planları kod içi varsayılana sıfırlar. */
 app.post("/admin/plans/reset", requireAdmin, function (req, res) {
   try {
-    const defaultPrices = { free: 0, monthly_plan: 40, monthly_plan_pro: 65, yearly_plan: 440, enterprise: 0, addon: 15 };
-    saveJsonFile("plan-prices.json", defaultPrices);
-    saveJsonFile("site-plans.json", DEFAULT_SITE_PLANS);
-    planPrices = defaultPrices;
-    sitePlans = DEFAULT_SITE_PLANS.map(function (p) {
-      const id = (p.id || "").toString();
-      const planType = p.planType || (EDITOR_PLANS.some(function (e) { return id === e; }) ? "editor" : id === "addon" ? "addon" : "conversion");
-      return { ...p, planType };
-    });
-    return res.json({ ok: true, message: "Planlar varsayilana sifirlandi.", planPrices, sitePlans });
+    planPrices = { ...DEFAULT_PLAN_PRICES };
+    sitePlans = applyPlanType(DEFAULT_SITE_PLANS);
+    savePlanPrices(planPrices);
+    saveSitePlans(sitePlans);
+    return res.json({ ok: true, planPrices, enterprisePlans, sitePlans });
   } catch (e) {
-    console.error("admin/plans/reset:", e);
-    return res.status(500).json({ ok: false, error: e.message || "Sifirlama sirasinda hata" });
+    return res.status(500).json({ ok: false, error: String(e && e.message) });
   }
 });
 
+/** Admin panelinden gelen fiyat/plan güncellemelerini kaydeder. Yanıtta ok: true ve güncel veri döner ki panel state güncellensin. */
 app.put("/admin/plans", requireAdmin, function (req, res) {
   const body = req.body || {};
-  if (body.planPrices && typeof body.planPrices === "object") {
+  if (body.planPrices != null && typeof body.planPrices === "object") {
     planPrices = body.planPrices;
-    saveJsonFile("plan-prices.json", planPrices);
+    savePlanPrices(planPrices);
   }
-  if (Array.isArray(body.enterprisePlans)) {
+  if (body.sitePlans != null && Array.isArray(body.sitePlans)) {
+    sitePlans = applyPlanType(body.sitePlans);
+    saveSitePlans(sitePlans);
+  }
+  if (body.enterprisePlans != null && Array.isArray(body.enterprisePlans)) {
     enterprisePlans = body.enterprisePlans;
-    saveJsonFile("enterprise-plans.json", enterprisePlans);
-  }
-  if (Array.isArray(body.sitePlans)) {
-    sitePlans = body.sitePlans;
-    saveJsonFile("site-plans.json", sitePlans);
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(path.join(DATA_DIR, "enterprise-plans.json"), JSON.stringify(enterprisePlans, null, 2), "utf8");
   }
   res.json({ ok: true, planPrices, enterprisePlans, sitePlans });
 });
+
 
 app.post("/admin/users/:id/plan", requireAdmin, async function (req, res) {
   const sessionId = req.params.id;
@@ -919,7 +941,6 @@ app.get("/api/account", async (req, res) => {
   const credits = user.credits ?? FREE_CREDITS;
   const plan = user.plan || "free";
   const conversions = Math.floor(credits / CREDITS_PER_CONVERSION);
-  const sitePlans = loadSitePlans();
   const planInfo = sitePlans.find(function (p) { return (p.id || p.name) === plan; }) || { name: plan, features: [], price: "", period: "" };
   const createdAt = user.createdAt ? (user.createdAt.toMillis ? user.createdAt.toMillis() : user.createdAt) : null;
   res.json({
@@ -2299,7 +2320,7 @@ app.post("/price", async (req, res) => {
   }
 });
 
-var PORT = 3006;
+var PORT = parseInt(process.env.PORT, 10) || 3006;
 var server;
 
 function startServer(port) {

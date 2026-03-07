@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "dist",
+    "public": "saas-design-extracted/dist",
     "ignore": [
       "firebase.json",
       "**/.*",

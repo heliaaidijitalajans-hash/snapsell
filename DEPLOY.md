@@ -4,6 +4,30 @@
 
 ---
 
+## Backend’i en kolay deploy etmek (Railway)
+
+1. **railway.app** → GitHub ile giriş.
+2. **New Project** → **Deploy from GitHub repo** → `snapsell-app` reposunu seçin.
+3. **Settings** (veya **Variables**):
+   - **Build Command:** `npm install` (veya boş bırakın; Railway varsayılan olarak `npm install` çalıştırır).
+   - **Start Command:** `npm start` (veya `node server.js`).
+   - **Root Directory:** boş (kök dizin).
+4. **Variables** sekmesinde `.env` değişkenlerinizi tek tek ekleyin:
+   - `PORT` → Railway otomatik verir, eklemeniz gerekmez.
+   - `NODE_ENV` = `production`
+   - `PUBLIC_APP_URL` = `https://snapsell.website` (veya frontend’in çalıştığı adres)
+   - `APP_DOMAIN` = `https://snapsell.website`
+   - `ALLOWED_ORIGINS` = `https://snapsell.website,https://snapsellapp-xxx.web.app` (frontend adresleri, virgülle)
+   - `FIREBASE_SERVICE_ACCOUNT_JSON` = service account JSON (tek satır)
+   - `ADMIN_PASSWORD`, `ADMIN_EMAIL`, `OPENAI_API_KEY` vb. (`.env.example` ile aynı).
+5. **Deploy** tetiklenir. Bittikten sonra **Settings → Networking → Generate Domain** ile `https://xxx.railway.app` alın.
+6. Frontend’de (Firebase veya başka host) API adresi olarak bu URL’i kullanın: `saas-design-extracted/.env` → `VITE_API_URL=https://xxx.railway.app`.
+
+**Alternatif: Render.com**  
+[render.com](https://render.com) → **New → Web Service** → repo bağla → **Build:** `npm install`, **Start:** `npm start` → Environment’a `.env` değişkenlerini ekleyin. Mantık aynı.
+
+---
+
 ## Frontend / Backend ayrımı
 
 - **Backend (server.js)** sadece API sunar (`/api/*`, `/admin/*`). HTML veya statik dosya sunmaz.
