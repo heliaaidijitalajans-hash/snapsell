@@ -32,22 +32,6 @@ type AccountData = {
   createdAt: string | null;
 };
 
-const DEMO_ACCOUNT: AccountData = {
-  email: "demo@snapsell.ai",
-  displayName: "Demo User",
-  credits: 30,
-  plan: "free",
-  conversions: 3,
-  totalConversions: 0,
-  hasLeonardo: false,
-  hasEditor: false,
-  planName: "Ücretsiz",
-  planFeatures: ["3 dönüşüm", "Temel özellikler"],
-  planPrice: "0",
-  planPeriod: "ay",
-  createdAt: new Date().toISOString()
-};
-
 export function AccountPage() {
   const { user, logout, getAuthHeaders } = useAuth();
   const { t, locale } = useLanguage();
@@ -70,9 +54,7 @@ export function AccountPage() {
         setData(payload as AccountData);
       })
       .catch((e) => {
-        if (cancelled) return;
-        setError(null);
-        setData(DEMO_ACCOUNT);
+        if (!cancelled) setError(e.message || t("account.errorGeneric"));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
