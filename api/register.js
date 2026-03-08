@@ -6,6 +6,13 @@ export default function handler(req, res) {
 
   res.status(200).json({
     success: true
-  })
+    user: data
+  });
+
+}
+    return res.status(405).json({
+          eror: "Method Not Allowed"
+
+   });
 
 }
