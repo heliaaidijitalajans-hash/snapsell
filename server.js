@@ -1127,18 +1127,24 @@ async function getPriceAnalysisWithScraperAPI(productDescription) {
 }
 
 app.post("/api/register", async (req, res) => {
-  const sessionId = randomUUID();
-  if (supabase) {
-    await supabase.from("users").insert({
-      id: sessionId,
-      credits: FREE_CREDITS,
-      plan: "free",
-      total_conversions: 0
-    });
-  } else {
-    memoryUsers.set(sessionId, { credits: FREE_CREDITS, plan: "free", createdAt: Date.now(), totalConversions: 0 });
+  try {
+    const sessionId = randomUUID();
+    if (supabase) {
+      const { error } = await supabase.from("users").insert({
+        id: sessionId,
+        credits: FREE_CREDITS,
+        plan: "free",
+        total_conversions: 0
+      });
+      if (error) throw new Error(error.message);
+    } else {
+      memoryUsers.set(sessionId, { credits: FREE_CREDITS, plan: "free", createdAt: Date.now(), totalConversions: 0 });
+    }
+    res.json({ sessionId, credits: FREE_CREDITS, plan: resolvePlan("free") });
+  } catch (err) {
+    console.error("api/register:", err.message);
+    res.status(500).json({ error: err.message || "Kayit hatasi" });
   }
-  res.json({ sessionId, credits: FREE_CREDITS, plan: resolvePlan("free") });
 });
 
 app.post("/api/auth/google", async (req, res) => {
@@ -2574,6 +2580,16 @@ app.post("/price", async (req, res) => {
 app.use(function (req, res) {
   console.warn("404:", req.method, req.path);
   res.status(404).json({ error: "Not Found", path: req.path, method: req.method });
+});
+
+app.use(function (err, req, res, next) {
+  var origin = req.headers.origin;
+  if (origin && allowedOrigins.indexOf(origin) !== -1) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
+  console.error("Unhandled error:", err);
+  res.status(500).json({ error: err.message || "Server error" });
 });
 
 var PORT = parseInt(process.env.PORT, 10) || 3006;
