@@ -27,11 +27,13 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
     "cors": "^2.8.6",
+    "cros": "^1.1.0",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "firebase-admin": "^12.7.0",
     "form-data": "^4.0.5",
     "openai": "^6.22.0",
-    "sharp": "^0.33.5"
+    "sharp": "^0.33.5",
+    "stripe": "^20.4.1"
   }
 }
