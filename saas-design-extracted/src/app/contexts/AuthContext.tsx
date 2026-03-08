@@ -8,7 +8,7 @@ import {
 } from "react";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { getFirebaseAuth } from "../lib/firebase";
-import { apiJson } from "../config";
+import { getApiBase, apiJson } from "../config";
 
 type AuthContextValue = {
   user: User | null;
@@ -26,7 +26,7 @@ async function ensureSession(): Promise<string> {
   let sid = localStorage.getItem(SESSION_KEY);
   if (sid) return sid;
   try {
-    const res = await fetch("/api/register", { method: "POST" });
+    const res = await fetch(`${getApiBase()}/register`, { method: "POST" });
     const d = await apiJson<{ sessionId?: string }>(res).catch(() => ({}));
     if (d && d.sessionId) {
       localStorage.setItem(SESSION_KEY, d.sessionId);

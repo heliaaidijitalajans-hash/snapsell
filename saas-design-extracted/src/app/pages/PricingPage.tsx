@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
+import { getApiBase } from "../config";
 
 export default function PricingPage() {
   const [plans, setPlans] = useState<Array<{ id: string; name: string; price: number | string; credits?: number; description?: string }>>([]);
 
   useEffect(() => {
-    fetch("/api/plans")
+    fetch(`${getApiBase()}/plans`)
       .then((res) => res.json())
       .then((data) => setPlans(Array.isArray(data) ? data : []))
       .catch(() => setPlans([]));

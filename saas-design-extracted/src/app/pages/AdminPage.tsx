@@ -16,6 +16,7 @@ import {
   Trash2,
   ImageIcon,
 } from "lucide-react";
+import { getApiBase } from "../config";
 
 type User = {
   id: string;
@@ -102,7 +103,7 @@ export function AdminPage() {
       const headers: Record<string, string> = { ...(opts.headers as Record<string, string>) };
       const token = overrideToken !== undefined ? overrideToken : adminToken;
       if (token) headers.Authorization = "Bearer " + token;
-      return fetch(url, {
+      return fetch(getApiBase() + url, {
         ...opts,
         credentials: "omit",
         headers,
@@ -113,7 +114,7 @@ export function AdminPage() {
 
   const checkAuth = useCallback(async () => {
     try {
-      const r = await adminFetch("/api/admin/me");
+      const r = await adminFetch("/admin/me");
       return r.ok;
     } catch {
       return false;
@@ -122,7 +123,7 @@ export function AdminPage() {
 
   const loadUsers = useCallback(
     async (overrideToken?: string | null) => {
-      const r = await adminFetch("/api/admin/users", {}, overrideToken);
+      const r = await adminFetch("/admin/users", {}, overrideToken);
       if (r.status === 401) {
         setAuthenticated(false);
         return;
@@ -135,7 +136,7 @@ export function AdminPage() {
 
   const loadPlans = useCallback(
     async (overrideToken?: string | null, versionAtStart?: number) => {
-      const r = await adminFetch("/api/admin/plans", {}, overrideToken);
+      const r = await adminFetch("/admin/plans", {}, overrideToken);
       if (!r.ok) return;
       if (versionAtStart !== undefined && versionAtStart !== plansVersionRef.current) return;
       const data = await r.json().catch(() => ({}));
@@ -173,7 +174,7 @@ export function AdminPage() {
 
   const loadStats = useCallback(
     async (overrideToken?: string | null) => {
-      const r = await adminFetch("/api/admin/stats", {}, overrideToken);
+      const r = await adminFetch("/admin/stats", {}, overrideToken);
       if (!r.ok) return;
       const data = await r.json().catch(() => ({}));
       setDailyStats({
@@ -186,7 +187,7 @@ export function AdminPage() {
 
   const loadSubscribers = useCallback(
     async (overrideToken?: string | null) => {
-      const r = await adminFetch("/api/admin/subscribers", {}, overrideToken);
+      const r = await adminFetch("/admin/subscribers", {}, overrideToken);
       if (!r.ok) return;
       const data = await r.json().catch(() => ({}));
       setSubscribersMonthly(data.monthly || []);
@@ -197,7 +198,7 @@ export function AdminPage() {
 
   const loadTeams = useCallback(
     async (overrideToken?: string | null) => {
-      const r = await adminFetch("/api/admin/teams", {}, overrideToken);
+      const r = await adminFetch("/admin/teams", {}, overrideToken);
       if (!r.ok) return;
       const data = await r.json().catch(() => ({}));
       setTeams(data.teams || []);
@@ -207,7 +208,7 @@ export function AdminPage() {
 
   const loadImageEdits = useCallback(
     async (overrideToken?: string | null) => {
-      const r = await adminFetch("/api/admin/image-edits", {}, overrideToken);
+      const r = await adminFetch("/admin/image-edits", {}, overrideToken);
       if (!r.ok) return;
       const data = await r.json().catch(() => ({}));
       setImageEdits(Array.isArray(data.edits) ? data.edits : []);
@@ -248,7 +249,7 @@ export function AdminPage() {
     e.preventDefault();
     setLoginError("");
     try {
-      const r = await fetch("/api/admin/login", {
+      const r = await fetch(getApiBase() + "/admin/login", {
         method: "POST",
         credentials: "omit",
         headers: { "Content-Type": "application/json" },
@@ -283,7 +284,7 @@ export function AdminPage() {
 
   const handleLogout = async () => {
     try {
-      await adminFetch("/api/admin/logout", { method: "POST" });
+      await adminFetch("/admin/logout", { method: "POST" });
     } catch (_) {}
     try {
       sessionStorage.removeItem(ADMIN_TOKEN_KEY);
@@ -295,7 +296,7 @@ export function AdminPage() {
   const handlePlanChange = async (userId: string, plan: string) => {
     setSavingPlan(userId);
     try {
-      const r = await adminFetch("/api/admin/users/" + encodeURIComponent(userId) + "/plan", {
+      const r = await adminFetch("/admin/users/" + encodeURIComponent(userId) + "/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan }),
@@ -324,7 +325,7 @@ export function AdminPage() {
         setSavingPlans(false);
         return;
       }
-      const r = await adminFetch("/api/admin/plans", {
+      const r = await adminFetch("/admin/plans", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -364,7 +365,7 @@ export function AdminPage() {
     setPlansSaveMessage("");
     setResettingPlans(true);
     try {
-      const r = await adminFetch("/api/admin/plans/reset", { method: "POST" });
+      const r = await adminFetch("/admin/plans/reset", { method: "POST" });
       const data = await r.json().catch(() => ({}));
       const success = r.ok && (data.ok === true || data.planPrices != null || Array.isArray(data.sitePlans));
       if (success) {
@@ -396,7 +397,7 @@ export function AdminPage() {
     const name = teamName.trim() || "Yeni Takım";
     setSavingTeam(true);
     try {
-      const r = await adminFetch("/api/admin/teams", {
+      const r = await adminFetch("/admin/teams", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
@@ -414,7 +415,7 @@ export function AdminPage() {
 
   const handleDeleteTeam = async (id: string) => {
     if (!confirm("Bu takımı silmek istediğinize emin misiniz?")) return;
-    const r = await adminFetch("/api/admin/teams/" + id, { method: "DELETE" });
+    const r = await adminFetch("/admin/teams/" + id, { method: "DELETE" });
     if (r.ok) setTeams((prev) => prev.filter((t) => t.id !== id));
   };
 

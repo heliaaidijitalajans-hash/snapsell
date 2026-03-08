@@ -14,7 +14,7 @@ import {
   Sparkles,
   Loader2,
 } from "lucide-react";
-import { apiJson } from "../config";
+import { getApiBase, apiJson } from "../config";
 
 type AccountData = {
   email: string | null;
@@ -42,7 +42,7 @@ export function AccountPage() {
   useEffect(() => {
     let cancelled = false;
     getAuthHeaders()
-      .then((headers) => fetch("/api/account", { headers }))
+      .then((headers) => fetch(`${getApiBase()}/account`, { headers }))
       .then(async (r) => (r.ok ? apiJson<AccountData>(r) : Promise.reject(new Error(t("account.errorLoad")))))
       .then((d) => {
         if (!cancelled) setData(d);
@@ -65,28 +65,11 @@ export function AccountPage() {
   }
 
   if (error || !data) {
-    const isApiConfigError = error === "API_ADRESI_YOK";
     return (
       <div className="max-w-2xl mx-auto px-4 py-12">
         <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
-          {isApiConfigError ? (
-            <>
-              <p className="text-red-700 font-medium">Backend adresi ayarlanmamış</p>
-              <p className="text-sm text-red-600 mt-3 text-left">
-                Site Firebase’de çalışıyor; API istekleri backend’e gitmeli. Şunları yapın:
-              </p>
-              <ol className="text-sm text-red-700 mt-2 text-left list-decimal list-inside space-y-1">
-                <li>API aynı origin’de çalışıyor olmalı (<code className="bg-red-100 px-1 rounded">/api/*</code>). Vercel’de deploy ediyorsanız <code className="bg-red-100 px-1 rounded">api/</code> klasörü ve <code className="bg-red-100 px-1 rounded">server.js</code> repo kökünde olmalı.</li>
-                <li>Firebase’de deploy ediyorsanız <code className="bg-red-100 px-1 rounded">dist/config.json</code> içinde <code className="bg-red-100 px-1 rounded">apiUrl</code> ile backend adresini belirtin.</li>
-                <li><code className="bg-red-100 px-1 rounded">firebase deploy</code> çalıştırın.</li>
-              </ol>
-            </>
-          ) : (
-            <>
-              <p className="text-red-700">{error || t("account.loadFailed")}</p>
-              <p className="text-sm text-red-600 mt-2">{t("account.pleaseLogin")}</p>
-            </>
-          )}
+          <p className="text-red-700">{error || t("account.loadFailed")}</p>
+          <p className="text-sm text-red-600 mt-2">{t("account.pleaseLogin")}</p>
         </div>
       </div>
     );

@@ -1,22 +1,20 @@
-/** API base URL: empty = same-origin only. All calls use fetch("/api/..."). No Railway or external backend. */
-const API_BASE_URL = "";
+/** Vercel serverless API base. All fetch calls use getApiBase() + path (e.g. /api/health). */
+export const API_BASE_URL = "/api";
 
-/** API base URL. Always "" so fetch("/api/...") is used everywhere. */
+/** API base URL for fetch. Use: fetch(getApiBase() + "/health") */
 export function getApiBase(): string {
   return API_BASE_URL;
 }
 
-/** No-op; kept for compatibility. API base is always same-origin. */
+/** No-op; kept for compatibility. Default is /api. */
 export function setApiBaseFromConfig(_url: string): void {}
 
-/** Parse JSON from response; if server returned HTML (wrong host), throw a clear error. */
+/** Parse JSON from response; if server returned HTML, throw generic error. */
 export async function apiJson<T = unknown>(res: Response): Promise<T> {
   const ct = res.headers.get("content-type") || "";
   const text = await res.text();
   if (ct.includes("text/html") || text.trimStart().startsWith("<!")) {
-    throw new Error(
-      "API_ADRESI_YOK"
-    );
+    throw new Error("Invalid API response");
   }
   if (!text) return {} as T;
   try {
