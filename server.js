@@ -435,7 +435,7 @@ app.get("/api/plans", async function (req, res) {
 });
 
 app.get("/api/stripe", (req, res) => {
-  res.json({ status: "ok" });
+  res.json({ status: "ok" })
 });
 
 /** Railway/deploy doğrulama: bu endpoint 200 dönerse admin route'ları yüklü demektir. */
