@@ -434,6 +434,10 @@ app.get("/api/plans", async function (req, res) {
   res.json(data);
 });
 
+app.get("/api/stripe", (req, res) => {
+  res.json({ status: "ok" });
+});
+
 /** Railway/deploy doğrulama: bu endpoint 200 dönerse admin route'ları yüklü demektir. */
 app.get("/admin/ping", function (req, res) {
   res.json({ ok: true, msg: "admin routes loaded", hasPlans: true, hasImageEdits: true });
