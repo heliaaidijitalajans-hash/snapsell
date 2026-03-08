@@ -1,38 +1,35 @@
 # 502 Bad Gateway – Railway Kontrol Listesi
 
-**502 = Yanıt Express uygulamasından gelmiyor.** Railway proxy, backend cevap vermediği için 502 döndürüyor. CORS hatası da bu yüzden görünüyor (502 yanıtında CORS başlığı yok).
+**502 = Uygulama yanıt vermiyor.** Railway proxy cevap alamadığı için 502 döndürüyor.
 
-## 1. Logları kontrol et
+## 1. Logları mutlaka kontrol et
 
 - Railway Dashboard → Projeniz → **Deployments** → son deployment → **View Logs**.
-- Şunları görmelisin:
-  - `SnapSell API starting...`
+- Görmek istediğin satırlar:
+  - `SnapSell start.js running, PORT=...`
   - `SnapSell API listening on port XXXX (Ready)`
-- **Bunlar yoksa** uygulama başlarken çöküyor. Logdaki **kırmızı hata / stack trace**’e bakın.
+- **Hiç log yoksa** process hiç başlamıyor (yanlış root, yanlış start komutu).
+- **"Startup failed" / "server.js load error"** varsa yanındaki hata mesajına bak; çoğu zaman eksik env (SUPABASE_*) veya require hatası.
 
-## 2. Sık çökme nedenleri
+## 2. Railway ayarları
 
-| Neden | Çözüm |
-|--------|--------|
-| Eksik/yanlış env | Railway → **Variables**. En az: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` veya `SUPABASE_ANON_KEY`. [RAILWAY-VARIABLES.md](./RAILWAY-VARIABLES.md) ile karşılaştır. |
-| PORT | Railway `PORT`’u kendisi verir. **Variables’da PORT tanımlamayın** (boş bırakın veya silin). Kod `process.env.PORT \|\| 3006` kullanıyor. |
-| Root / start komutu | Root = repo kökü (server.js ve package.json burada). Start: `node server.js` veya `npm start`. Procfile varsa: `web: node server.js`. |
-| Node sürümü | package.json `"engines": { "node": ">=18" }`. Railway buna uygun sürüm kullanır. |
+| Ayar | Olması gereken |
+|------|-----------------|
+| **Root Directory** | Boş (repo kökü). start.js ve server.js burada olmalı. |
+| **Build** | `npm install` veya railway.toml/build kullanıyorsan değiştirme. **Build Command** içinde `npm run build` olmasın (frontend build’i backend’de gerekmez). |
+| **Start Command** | `node start.js` veya `npm start`. Procfile: `web: node start.js`. |
+| **Dockerfile** | İstersen projedeki Dockerfile ile deploy et: Railway → Service → Settings → “Use Dockerfile” / build’i Dockerfile’a al. |
 
-## 3. Yerelde test
+## 3. Env (Variables)
 
-```bash
-# Repo kökünde
-npm install
-node server.js
-```
+- **SUPABASE_URL**, **SUPABASE_SERVICE_ROLE_KEY** (veya SUPABASE_ANON_KEY) mutlaka dolu.
+- **PORT** ekleme; Railway kendi verir.
+- Detay: [RAILWAY-VARIABLES.md](./RAILWAY-VARIABLES.md)
 
-Tarayıcıda: `http://localhost:3006/ping` → "OK" görmelisin. Yerelde çalışıyorsa sorun büyük ihtimalle Railway ortamı/env’de.
+## 4. Hâlâ 502 ise
 
-## 4. Railway ayarları
+1. **Dockerfile ile dene:** Projede `Dockerfile` var. Railway’de bu servisi “Build from Dockerfile” yapıp yeniden deploy et.
+2. **Yerelde çalıştır:** Repo kökünde `npm install` → `node start.js` → tarayıcıda `http://localhost:3006/ping` → "OK" gelmeli. Geliyorsa sorun Railway ortamı/ayarı.
+3. **Yeni servis aç:** Railway’de aynı repodan yeni bir service oluştur; Root = boş, Start = `node start.js`, Variables’ı kopyala. Bazen eski servis cache’i 502’ye sebep olur.
 
-- **Root Directory:** Boş (veya proje kökü).
-- **Build Command:** Boş veya `npm install`.
-- **Start Command:** Boş bırakırsanız Procfile kullanılır: `web: node server.js`. Veya açıkça: `node server.js`.
-
-Deploy’dan sonra logda **"SnapSell API listening on port ... (Ready)"** görünene kadar 502 devam edebilir; bu satırı gördükten sonra `/api/plans` ve diğer istekler 200 dönmeli.
+Deploy sonrası logda **"SnapSell API listening on port ... (Ready)"** görünene kadar 502 devam edebilir. Bu satır görünüyorsa `/ping` ve `/api/plans` 200 dönmeli.
