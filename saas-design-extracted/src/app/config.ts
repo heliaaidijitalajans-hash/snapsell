@@ -1,9 +1,9 @@
-/** All API requests use same-origin paths only: /api/... No external backend URLs. */
-const API_BASE = "";
+/** API base URL: empty = same-origin only. All calls use fetch("/api/..."). No Railway or external backend. */
+const API_BASE_URL = "";
 
 /** API base URL. Always "" so fetch("/api/...") is used everywhere. */
 export function getApiBase(): string {
-  return API_BASE;
+  return API_BASE_URL;
 }
 
 /** No-op; kept for compatibility. API base is always same-origin. */

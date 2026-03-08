@@ -30,11 +30,11 @@ Frontend’i tarayıcıda açmak için:
 
 ---
 
-## 2) Canlı sitede görünmesi (snapsell.website + Railway)
+## 2) Canlı sitede görünmesi (snapsell.website + Vercel)
 
 Sitede ve API’de güncellemelerin görünmesi için **hem frontend hem backend deploy** edilmeli.
 
-### A) Backend (Railway)
+### A) Backend (Vercel)
 
 1. Değişiklikleri Git’e gönder:
 ```bash
@@ -42,7 +42,7 @@ git add .
 git commit -m "Planlar ve fiyatlar güncellendi"
 git push
 ```
-2. Railway projeyi otomatik deploy eder (Git’e bağlıysa). Bittikten sonra Admin’e girip **「Planları varsayılana sıfırla」** butonuna bas; böylece sunucudaki `data/` dosyaları güncel planlarla güncellenir.
+2. Vercel projeyi otomatik deploy eder (Git’e bağlıysa). Bittikten sonra Admin’e girip **「Planları varsayılana sıfırla」** butonuna bas; böylece sunucudaki `data/` dosyaları güncel planlarla güncellenir.
 
 ### B) Frontend (Firebase Hosting)
 
@@ -50,7 +50,7 @@ git push
 ```bash
 npm run build
 ```
-2. `dist/config.json` içinde `apiUrl`’in backend adresine (örn. Railway URL) işaret ettiğinden emin ol.
+2. `dist/config.json` içinde `apiUrl`’in backend adresine (örn. Vercel API URL; aynı origin kullanıyorsanız boş bırakın) işaret ettiğinden emin ol.
 3. Firebase’e deploy et:
 ```bash
 firebase deploy
@@ -68,7 +68,7 @@ npm run deploy:firebase
 | Nerede test ediyorsun? | Ne yapmalısın? |
 |------------------------|----------------|
 | Sadece kendi bilgisayarında | `npm run build` + backend’i yeniden başlat (`node server.js`) |
-| Canlı site (snapsell.website) | Backend: `git push` (Railway deploy) → Admin’de 「Planları varsayılana sıfırla」. Frontend: `npm run build` → `firebase deploy` |
+| Canlı site (snapsell.website) | Backend: `git push` (Vercel deploy) → Admin’de 「Planları varsayılana sıfırla」. Frontend: `npm run build` → `firebase deploy` |
 
 **Hiçbir şey görünmüyorsa** büyük ihtimalle:
 - Canlı sitede eski build / eski backend çalışıyordur → yukarıdaki deploy adımlarını uygula.

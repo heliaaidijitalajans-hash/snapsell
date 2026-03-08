@@ -11,7 +11,7 @@
     "start": "node start.js",
     "dev": "node server.js",
     "build": "npm run build:design",
-    "deploy:firebase": "npm run build && echo. && echo [KURULUM] dist/config.json icinde apiUrl = backend URL yapin, sonra: firebase deploy && echo.",
+    "deploy:firebase": "npm run build && echo. && echo [KURULUM] Firebase icin dist/config.json apiUrl gerekirse ayarlayin, sonra: firebase deploy && echo.",
     "build:css": "npx tailwindcss -i ./src/input.css -o ./public/css/tailwind.css --minify",
     "build:design": "npm run build --prefix saas-design-extracted",
     "postinstall": "node -e \"try { require('fs').mkdirSync('data', { recursive: true }); } catch (e) {}\""
