@@ -16,7 +16,6 @@ import {
   Trash2,
   ImageIcon,
 } from "lucide-react";
-import { getApiBase } from "../config";
 
 type User = {
   id: string;
@@ -103,7 +102,7 @@ export function AdminPage() {
       const headers: Record<string, string> = { ...(opts.headers as Record<string, string>) };
       const token = overrideToken !== undefined ? overrideToken : adminToken;
       if (token) headers.Authorization = "Bearer " + token;
-      return fetch(getApiBase() + url, {
+      return fetch(url, {
         ...opts,
         credentials: "omit",
         headers,
@@ -249,7 +248,7 @@ export function AdminPage() {
     e.preventDefault();
     setLoginError("");
     try {
-      const r = await fetch(getApiBase() + "/api/admin/login", {
+      const r = await fetch("/api/admin/login", {
         method: "POST",
         credentials: "omit",
         headers: { "Content-Type": "application/json" },

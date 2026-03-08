@@ -1,6 +1,6 @@
-# SnapSell – Railway + Vercel + Firebase + Supabase Kurulum Kontrol Listesi
+# SnapSell – Vercel + Firebase + Supabase Kurulum Kontrol Listesi
 
-Tüm sistemin hatasız çalışması için aşağıdaki adımları sırayla tamamlayın.
+Tüm sistemin hatasız çalışması için aşağıdaki adımları sırayla tamamlayın. **Backend artık Railway’de değil; Vercel’de `/api/*` route’ları ile aynı origin’de çalışır.**
 
 ---
 
@@ -10,67 +10,47 @@ Tüm sistemin hatasız çalışması için aşağıdaki adımları sırayla tama
 - [ ] **Settings → API**: `Project URL` ve `service_role` (secret) key’i kopyala
 - [ ] **SQL Editor** → `supabase/migrations/001_create_users.sql` içeriğini yapıştır → **Run**
 - [ ] **SQL Editor** → `supabase/migrations/002_create_plans.sql` içeriğini yapıştır → **Run**
-- [ ] `002_create_plans.sql` örnek plan satırları ekler (Ücretsiz, Aylık, Yıllık vb.)
-- [ ] **Users tablosu için:** Supabase **Settings → API** → **service_role** (secret) key’i kopyalayıp `.env` ve Railway’e `SUPABASE_SERVICE_ROLE_KEY` olarak ekleyin. Detay: **SUPABASE-SERVICE-ROLE-ADIM.md**
+- [ ] **Users tablosu için:** Supabase **Settings → API** → **service_role** key’i kopyalayıp `.env` ve Vercel Environment Variables’a `SUPABASE_SERVICE_ROLE_KEY` olarak ekleyin. Detay: **SUPABASE-SERVICE-ROLE-ADIM.md**
 
 ---
 
-## 2. Railway (Backend)
-
-- [ ] [railway.app](https://railway.app) → GitHub ile giriş → Repo: `snapsell-app`
-- [ ] **Settings**: Build Command boş veya `npm install`, Start Command: `npm start`
-- [ ] **Variables** – proje kökündeki `.env` dosyasındaki tüm değişkenleri Railway’e tek tek kopyalayın (özellikle `FIREBASE_SERVICE_ACCOUNT_JSON` tek satır olmalı). Özet:
-
-| Değişken | Örnek / Açıklama |
-|----------|-------------------|
-| `PORT` | Railway otomatik verir (ekleme) |
-| `NODE_ENV` | `production` |
-| `SUPABASE_URL` | `https://xxxx.supabase.co` |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service_role key (veya `SUPABASE_ANON_KEY`) |
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | Firebase service account JSON (tek satır) |
-| `ALLOWED_ORIGINS` | `https://snapsell-one.vercel.app` (Vercel domain’in) |
-| `PUBLIC_APP_URL` | `https://snapsell-one.vercel.app` |
-| `APP_DOMAIN` | `https://snapsell-one.vercel.app` |
-| `ADMIN_PASSWORD` | Güçlü admin şifresi |
-| `ADMIN_EMAIL` | Admin e-posta (Firebase’deki admin ile aynı) |
-| `OPENAI_API_KEY` | `sk-...` (gerekirse) |
-
-- [ ] **Deploy** tetikle → **Settings → Networking → Generate Domain** → URL’i kopyala (örn. `https://snapsell-production.up.railway.app`)
-
----
-
-## 3. Vercel (Frontend)
+## 2. Vercel (Frontend + API)
 
 - [ ] [vercel.com](https://vercel.com) → GitHub ile giriş → **Add New → Project** → `snapsell-app`
-- [ ] **Root Directory**: `saas-design-extracted` seç (veya boş bırakıp build/output’u buna göre ayarla)
+- [ ] **Root Directory**: boş (repo kökü; `server.js`, `api/`, `saas-design-extracted` burada olmalı)
 - [ ] **Build Command**: `npm run build`
-- [ ] **Output Directory**: `dist`
-- [ ] **Environment Variables**:
-  - `VITE_API_URL` = Railway backend URL’i (örn. `https://snapsell-production.up.railway.app`) – **sonda `/` olmasın**
-- [ ] Deploy → Vercel domain’ini not et (örn. `https://snapsell-one.vercel.app`)
+- [ ] **Output Directory**: `saas-design-extracted/dist`
+- [ ] **Environment Variables** – proje kökündeki `.env` değişkenlerini ekleyin:
 
-**config.json (opsiyonel):** `saas-design-extracted/public/config.json` içinde `apiUrl` alanı Railway URL’ine ayarlı olabilir. Build’de `public` kopyalandığı için production’da bu URL kullanılır; böylece `VITE_API_URL` sadece build zamanı yedek olur.
+| Değişken | Açıklama |
+|----------|----------|
+| `SUPABASE_URL` | Supabase Project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service_role key |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | Firebase service account JSON (tek satır) |
+| `PUBLIC_APP_URL` | Vercel domain’iniz (örn. `https://snapsell-one.vercel.app`) |
+| `APP_DOMAIN` | Aynı |
+| `ADMIN_PASSWORD` | Güçlü admin şifresi |
+| `ADMIN_EMAIL` | Admin e-posta |
+| `OPENAI_API_KEY` | (gerekirse) |
+
+- [ ] Deploy → Vercel domain’ini not et. API istekleri `/api/plans`, `/api/register` vb. aynı origin’de gider.
 
 ---
 
-## 4. Firebase (Sadece Auth)
+## 3. Firebase (Sadece Auth)
 
-- [ ] [Firebase Console](https://console.firebase.google.com) → Proje: `snapsellapp-6649a`
+- [ ] [Firebase Console](https://console.firebase.google.com) → Projeniz
 - [ ] **Authentication → Sign-in method**: Google etkin
-- [ ] **Authentication → Settings → Authorized domains** → **Add domain**
-  - `snapsell-one.vercel.app` (Vercel domain’in)
-  - `snapsell-production.up.railway.app` (Railway domain’i, isteğe bağlı)
-- [ ] **Project settings → Service accounts** → JSON indir → içeriği tek satır yapıp Railway’de `FIREBASE_SERVICE_ACCOUNT_JSON` olarak yapıştır
+- [ ] **Authentication → Settings → Authorized domains** → Vercel domain’inizi ekleyin
+- [ ] **Project settings → Service accounts** → JSON indir → tek satır yapıp Vercel’de `FIREBASE_SERVICE_ACCOUNT_JSON` olarak yapıştırın
 
 ---
 
-## 5. Son Kontroller
+## 4. Son Kontroller
 
-- [ ] Railway deploy log’unda hata yok, “SnapSell API: http://localhost:…” veya “Supabase hazir.” görünüyor
-- [ ] Tarayıcıda `https://snapsell-production.up.railway.app/ping` → `OK` dönüyor
-- [ ] Vercel’de `https://snapsell-one.vercel.app` açılıyor
+- [ ] Vercel’de site açılıyor
 - [ ] Fiyatlandırma sayfası (`/fiyatlandirma`) yükleniyor; konsolda CORS hatası yok
-- [ ] Google ile giriş denendi; Firebase “domain not authorized” hatası yok
+- [ ] Google ile giriş çalışıyor; Firebase “domain not authorized” hatası yok
 
 ---
 
@@ -78,9 +58,8 @@ Tüm sistemin hatasız çalışması için aşağıdaki adımları sırayla tama
 
 | Bileşen | Servis | Rol |
 |--------|--------|-----|
-| Frontend | **Vercel** | React uygulaması; API istekleri Railway’e gider |
-| Backend | **Railway** | Node (server.js); CORS, Supabase, Firebase Auth |
+| Frontend + API | **Vercel** | React + `/api/*` (server.js); aynı origin |
 | Veritabanı | **Supabase** | `users`, `plans` tabloları |
 | Auth | **Firebase** | Google ile giriş; token doğrulama backend’de |
 
-API adresi: Frontend `getApiBase()` ile alır; önce `/config.json` (runtime), yoksa build’deki `VITE_API_URL` kullanılır.
+API adresi varsayılan olarak aynı origin (`/api/...`). İsteğe bağlı: `config.json` veya `VITE_API_URL` ile override.

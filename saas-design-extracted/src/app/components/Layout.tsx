@@ -6,8 +6,6 @@ import { useLanguage } from "../contexts/LanguageContext";
 import { LanguageSelector } from "./LanguageSelector";
 import { CookieBanner, hasAnalyticsConsent } from "./CookieBanner";
 
-import { getApiBase } from "../config";
-
 export function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
@@ -19,7 +17,7 @@ export function Layout() {
     if (sessionStorage.getItem("snapsell_visit_sent")) return;
     if (!hasAnalyticsConsent()) return;
     sessionStorage.setItem("snapsell_visit_sent", "1");
-    fetch(getApiBase() + "/api/track-visit", { method: "GET" }).catch(() => {});
+    fetch("/api/track-visit", { method: "GET" }).catch(() => {});
   }, []);
 
   const navigation = [

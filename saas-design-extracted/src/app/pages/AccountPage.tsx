@@ -14,7 +14,7 @@ import {
   Sparkles,
   Loader2,
 } from "lucide-react";
-import { getApiBase, apiJson } from "../config";
+import { apiJson } from "../config";
 
 type AccountData = {
   email: string | null;
@@ -42,7 +42,7 @@ export function AccountPage() {
   useEffect(() => {
     let cancelled = false;
     getAuthHeaders()
-      .then((headers) => fetch(getApiBase() + "/api/account", { headers }))
+      .then((headers) => fetch("/api/account", { headers }))
       .then(async (r) => (r.ok ? apiJson<AccountData>(r) : Promise.reject(new Error(t("account.errorLoad")))))
       .then((d) => {
         if (!cancelled) setData(d);
@@ -76,11 +76,9 @@ export function AccountPage() {
                 Site Firebase’de çalışıyor; API istekleri backend’e gitmeli. Şunları yapın:
               </p>
               <ol className="text-sm text-red-700 mt-2 text-left list-decimal list-inside space-y-1">
-                <li>Backend’i (server.js) Railway veya Render’da çalıştırın; URL’i kopyalayın (örn. https://xxx.railway.app).</li>
-                <li>Projede <code className="bg-red-100 px-1 rounded">dist/config.json</code> dosyasını açın.</li>
-                <li>İçine <code className="bg-red-100 px-1 rounded">{"{ \"apiUrl\": \"BURAYA_BACKEND_URL\" }"}</code> yazın (sondaki / olmasın).</li>
+                <li>API aynı origin’de çalışıyor olmalı (<code className="bg-red-100 px-1 rounded">/api/*</code>). Vercel’de deploy ediyorsanız <code className="bg-red-100 px-1 rounded">api/</code> klasörü ve <code className="bg-red-100 px-1 rounded">server.js</code> repo kökünde olmalı.</li>
+                <li>Firebase’de deploy ediyorsanız <code className="bg-red-100 px-1 rounded">dist/config.json</code> içinde <code className="bg-red-100 px-1 rounded">apiUrl</code> ile backend adresini belirtin.</li>
                 <li><code className="bg-red-100 px-1 rounded">firebase deploy</code> çalıştırın.</li>
-                <li>Backend’de <code className="bg-red-100 px-1 rounded">ALLOWED_ORIGINS</code> içine <code className="bg-red-100 px-1 rounded">https://snapsellapp-6649a.web.app</code> ekleyin.</li>
               </ol>
             </>
           ) : (

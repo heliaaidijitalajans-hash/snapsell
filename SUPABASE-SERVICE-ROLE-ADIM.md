@@ -28,7 +28,7 @@ Kaydedin.
 
 ## 3. Railway’e ekleyin
 
-1. [Railway](https://railway.app) → Projeniz → **Variables**.
+1. [Vercel](https://vercel.com) → Projeniz → **Settings → Environment Variables** (veya proje kökündeki `.env`).
 2. **New Variable** → Name: `SUPABASE_SERVICE_ROLE_KEY`
 3. Value: Az önce kopyaladığınız **service_role** key’in tamamını yapıştırın.
 4. Kaydedin, gerekirse **Redeploy** yapın.

@@ -1,44 +1,17 @@
 # SnapSell – Yayına Alma Rehberi
 
-**Önerilen yapı:** Frontend **Vercel**, Backend **Railway**, Veritabanı **Supabase**, Giriş **Firebase (Google)**.  
-Adım adım kurulum için **[KURULUM.md](./KURULUM.md)** dosyasını takip edin.
+**Önerilen yapı:** Frontend + API **Vercel** (aynı origin’de `/api/*`), Veritabanı **Supabase**, Giriş **Firebase (Google)**.  
+Adım adım kurulum için **[KURULUM.md](./KURULUM.md)** ve **[VERCEL-API.md](./VERCEL-API.md)** dosyalarını takip edin.
 
 ---
 
-## Backend’i deploy etmek (Railway)
+## Backend artık Vercel’de (Railway kullanılmıyor)
 
-1. **railway.app** → GitHub ile giriş.
-2. **New Project** → **Deploy from GitHub repo** → `snapsell-app` reposunu seçin.
-3. **Settings**:
-   - **Build Command:** `npm install`
-   - **Start Command:** `npm start` (veya `node server.js`)
-   - **Root Directory:** boş (kök dizin).
-4. **Variables** sekmesinde şunları ekleyin:
-   - `PORT` → Railway otomatik verir, eklemeniz gerekmez.
-   - `NODE_ENV` = `production`
-   - `PUBLIC_APP_URL` = `https://snapsell-app.vercel.app` (veya frontend adresiniz)
-   - `APP_DOMAIN` = `https://snapsell-app.vercel.app`
-   - `ALLOWED_ORIGINS` = `https://snapsell-app.vercel.app` (Vercel/frontend adresleri, virgülle)
-   - `FIREBASE_SERVICE_ACCOUNT_JSON` = Firebase service account JSON (tek satır; sadece Google token doğrulama)
-   - `SUPABASE_URL` = Supabase proje URL
-   - `SUPABASE_SERVICE_ROLE_KEY` = Supabase service_role key (veritabanı erişimi)
-   - `ADMIN_PASSWORD`, `ADMIN_EMAIL`, `OPENAI_API_KEY` vb. (`.env.example` ile aynı).
-5. **Deploy** tetiklenir. **Settings → Networking → Generate Domain** ile `https://xxx.railway.app` alın.
-6. Frontend’de (Vercel) **Environment Variable** olarak `VITE_API_URL` = bu Railway URL’i (sonda `/` yok).
+- API istekleri **aynı origin** üzerinden `/api/...` yapılır (örn. `fetch("/api/plans")`).
+- Vercel’de repo kökünde `api/[[...path]].js` tüm `/api/*` isteklerini `server.js` Express uygulamasına iletir.
+- **Root Directory** repo kökü olmalı; **Environment Variables** (Supabase, Firebase, Admin vb.) Vercel’e ekleyin.
 
-**Alternatif: Render.com**  
-[render.com](https://render.com) → **New → Web Service** → repo bağla → **Build:** `npm install`, **Start:** `npm start` → Environment’a `.env` değişkenlerini ekleyin. Mantık aynı.
-
----
-
-## Frontend / Backend ayrımı
-
-- **Backend (server.js)** sadece API sunar (`/api/*`, `/admin/*`). HTML veya statik dosya sunmaz.
-- **Frontend** ayrı sunucuda çalışır (Vite, Firebase Hosting, Vercel vb.). API istekleri backend URL'ine gider. CORS için backend'de `ALLOWED_ORIGINS` ile frontend origin ekleyin.
-
-**Vercel’e frontend deploy:** Proje ayarlarında **Environment Variables** → `VITE_API_URL` = Railway backend URL’i (sonda `/` yok). Build sırasında kullanılır.
-
-**Firebase Hosting kullanıyorsanız:** `saas-design-extracted/.env` veya build komutu ile `VITE_API_URL=https://your-backend.railway.app` verin.
+**Firebase Hosting kullanıyorsanız:** `dist/config.json` içinde `apiUrl` ile ayrı bir backend adresi belirtebilirsiniz (örn. Vercel API URL’i).
 
 ---
 
@@ -60,44 +33,26 @@ Yani:
 
 ---
 
-## Yöntem 1: Railway ile yayına almak (önerilen)
+## Yöntem 1: Vercel ile yayına almak (önerilen)
 
-Railway’de Node çalışır; hem API hem de `public/` ve dashboard build’i aynı sunucudan sunulur.
+Frontend ve API aynı Vercel projesinde; `/api/*` istekleri `api/[[...path]].js` ile `server.js`’e gider.
 
-### 1. Railway’e deploy
+### 1. Vercel’e deploy
 
-1. [railway.app](https://railway.app) → GitHub ile giriş.
-2. **New Project** → **Deploy from GitHub repo** → `snapsell-app` reposunu seçin.
-3. Projeyi seçin → **Settings**:
-   - **Build Command:** `npm install`
-   - **Start Command:** `npm start`
-   - **Root Directory:** boş (kök)
-4. **Variables** sekmesinde `.env` içeriğinizi ekleyin: OPENAI_API_KEY, FIREBASE_SERVICE_ACCOUNT_JSON, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ALLOWED_ORIGINS, PUBLIC_APP_URL vb. (`.env.example` referans).
-5. **Deploy** çalıştırın. Railway size `https://xxx.railway.app` gibi bir URL verir.
+1. [vercel.com](https://vercel.com) → GitHub ile giriş → **Add New → Project** → `snapsell-app`.
+2. **Root Directory:** boş (repo kökü).
+3. **Build Command:** `npm run build`, **Output Directory:** `saas-design-extracted/dist`.
+4. **Environment Variables:** `.env` içeriğini ekleyin (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, FIREBASE_SERVICE_ACCOUNT_JSON, PUBLIC_APP_URL, ADMIN_PASSWORD vb.).
+5. **Deploy** çalıştırın. Site ve API aynı domain’de çalışır.
 
 ### 2. Custom domain (snapsell.website)
 
-1. Railway’de proje → **Settings** → **Domains** → **Custom Domain**.
-2. `snapsell.website` ve isterseniz `www.snapsell.website` ekleyin.
-3. Railway’in verdiği CNAME / A kayıt bilgisini **Cloudflare (veya domain sağlayıcınız)** DNS’e ekleyin:
-   - Örnek: `snapsell.website` → CNAME → `xxx.railway.app` (Railway’in söylediği değer).
-4. **Cloudflare’de** turuncu bulut (proxy) açık kalabilir; Railway SSL ile uyumludur.
+1. Vercel’de proje → **Settings → Domains** → domain ekleyin.
+2. DNS’te CNAME veya A kaydı ile Vercel’e yönlendirin (Vercel’in verdiği değer).
 
-### 3. Ortam değişkenleri (Railway Variables)
+### 3. Firebase tarafı
 
-En az şunlar olmalı:
-
-- `PUBLIC_APP_URL` = `https://snapsell.website`
-- `ALLOWED_ORIGINS` = `https://snapsell.website` (ve varsa `https://www.snapsell.website`)
-- `APP_DOMAIN` = `https://snapsell.website`
-- Firebase: `FIREBASE_SERVICE_ACCOUNT_JSON` (tek satır JSON; sadece Google Auth)
-- Supabase: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (veritabanı)
-- Diğer API anahtarları (OPENAI, vb.)
-
-### 4. Firebase tarafı (değişiklik yok)
-
-- **Firebase Console** → **Authentication** → **Authorized domains** içinde `snapsell.website` (ve `xxx.railway.app`) zaten ekli olmalı.
-- Giriş, domain’i eklediğiniz için çalışır; hosting’i Firebase’de yapmadığınız için “API 404” sorunu kalkar.
+- **Firebase Console** → **Authentication** → **Authorized domains** → Vercel domain’inizi ekleyin.
 
 ### 5. Sonuç
 
@@ -122,14 +77,7 @@ Mantık Railway ile aynı: Tüm trafik (API + sayfalar) Render’daki Node’a g
 
 ## Yöntem 3: Firebase Hosting’i kullanmak istiyorsanız (API ayrı)
 
-Sadece arayüzü Firebase’de, API’yi başka yerde tutmak isterseniz:
-
-1. **Backend:** server.js’i Railway veya Render’da çalıştırın. Örn. API URL’i: `https://snapsell-api.railway.app`.
-2. **Frontend:** Firebase Hosting’e sadece statik build’i deploy edin (örn. `public` + `saas-design-extracted/dist`).
-3. **CORS:** Sunucuda `ALLOWED_ORIGINS` içine `https://snapsell.website` ekleyin.
-4. **API adresi:** Tüm istemci kodunda (auth.html, login.html, dashboard) `API` değişkeni production’da `https://snapsell-api.railway.app` olacak şekilde ayarlanmalı (ortam veya build-time).
-
-Bu yol daha fazla yapılandırma gerektirir; çoğu senaryo için **Yöntem 1 (Railway)** daha basittir.
+Sadece arayüzü Firebase Hosting’de, API’yi Vercel’de tutmak isterseniz: Frontend’i Firebase’e deploy edin; `config.json` veya `VITE_API_URL` ile API adresini Vercel URL’inize ayarlayın.
 
 ---
 
@@ -137,9 +85,8 @@ Bu yol daha fazla yapılandırma gerektirir; çoğu senaryo için **Yöntem 1 (R
 
 | Bileşen           | Nerede / Ne |
 |-------------------|--------------|
-| Frontend          | **Vercel** (veya Firebase Hosting). Statik build; `/api/*` burada çalışmaz. |
-| Backend (API)     | **Railway** (veya Render). Node (server.js) burada çalışır. |
-| Veritabanı       | **Supabase** (PostgreSQL). Kullanıcılar, kredi, plan. |
-| Giriş (Auth)      | **Firebase** (Google). Token doğrulama backend’de; hosting nerede olursa olsun kullanılır. |
+| Frontend + API    | **Vercel**. Statik build + `/api/*` aynı origin’de. |
+| Veritabanı        | **Supabase** (PostgreSQL). Kullanıcılar, kredi, plan. |
+| Giriş (Auth)      | **Firebase** (Google). Token doğrulama backend’de. |
 
-**Önerilen:** Frontend → Vercel, Backend → Railway, Database → Supabase. Firebase sadece Google ile giriş için. Kurulum adımları için [KURULUM.md](./KURULUM.md).
+**Önerilen:** Frontend + API → Vercel, Database → Supabase. Kurulum: [KURULUM.md](./KURULUM.md), [VERCEL-API.md](./VERCEL-API.md).

@@ -1,22 +1,13 @@
-const buildTimeBase =
-  (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL) ||
-  (typeof window !== "undefined" ? window.location.origin : "");
+/** All API requests use same-origin paths only: /api/... No external backend URLs. */
+const API_BASE = "";
 
-let runtimeOverride: string | null = null;
-
-/** Set API base from runtime config (e.g. /config.json). Call before any fetch. */
-export function setApiBaseFromConfig(url: string): void {
-  const u = (url || "").trim().replace(/\/$/, "");
-  if (u) runtimeOverride = u;
-}
-
-/** Backend API base URL. Use this everywhere. Respects config.json and VITE_API_URL. */
+/** API base URL. Always "" so fetch("/api/...") is used everywhere. */
 export function getApiBase(): string {
-  return runtimeOverride || buildTimeBase;
+  return API_BASE;
 }
 
-/** @deprecated Use getApiBase() so config.json is applied. */
-export const API_BASE = buildTimeBase;
+/** No-op; kept for compatibility. API base is always same-origin. */
+export function setApiBaseFromConfig(_url: string): void {}
 
 /** Parse JSON from response; if server returned HTML (wrong host), throw a clear error. */
 export async function apiJson<T = unknown>(res: Response): Promise<T> {

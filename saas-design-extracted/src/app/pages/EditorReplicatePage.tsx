@@ -4,8 +4,6 @@ import { useLanguage } from "../contexts/LanguageContext";
 import { Upload, Sparkles, ImageIcon, Check, Store } from "lucide-react";
 import { Link } from "react-router";
 
-import { getApiBase } from "../config";
-
 const MARKETPLACES = [
   { id: "trendyol", name: "Trendyol" },
   { id: "hepsiburada", name: "Hepsiburada" },
@@ -52,7 +50,7 @@ export function EditorReplicatePage() {
   useEffect(() => {
     let cancelled = false;
     getAuthHeaders()
-      .then((headers) => fetch(getApiBase() + "/api/replicate/status", { headers }))
+      .then((headers) => fetch("/api/replicate/status", { headers }))
       .then((r) => r.json())
       .then((data) => {
         if (!cancelled) {
@@ -100,7 +98,7 @@ export function EditorReplicatePage() {
       });
       const controller = new AbortController();
       const timeoutId = window.setTimeout(() => controller.abort(), 100000);
-      const res = await fetch(getApiBase() + "/api/photoroom/pipeline", {
+      const res = await fetch("/api/photoroom/pipeline", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({

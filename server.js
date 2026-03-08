@@ -457,7 +457,7 @@ app.get("/api/plans", async function (req, res) {
 });
 
 app.get("/api/stripe", (req, res) => {
-  res.json({ status: "ok" })
+  res.status(200).json({ message: "Payment system coming soon" });
 });
 
 /** Railway/deploy doğrulama: bu endpoint 200 dönerse admin route'ları yüklü demektir. */
@@ -1225,40 +1225,9 @@ app.get("/api/account", async (req, res) => {
   });
 });
 
-/** Ödeme tamamlandığında çağrılır: plan + kredi otomatik atanır. Body: { plan, userId? } veya { plan, email? }. Header: X-Webhook-Secret = SUBSCRIPTION_WEBHOOK_SECRET */
-app.post("/api/subscription-webhook", async (req, res) => {
-  const secret = (req.headers["x-webhook-secret"] || req.body?.secret || "").trim();
-  const expected = (process.env.SUBSCRIPTION_WEBHOOK_SECRET || "").trim();
-  if (!expected || secret !== expected) return res.status(401).json({ error: "Yetkisiz" });
-  const plan = (req.body?.plan || "").toString().trim();
-  if (!plan) return res.status(400).json({ error: "plan gerekli" });
-  const planCredits = getCreditsForPlan(plan);
-  const isAddon = plan === "addon";
-  let userId = (req.body?.userId || req.body?.uid || "").toString().trim();
-  const email = (req.body?.email || "").toString().trim().toLowerCase();
-  if (!userId && email) {
-    if (supabase) {
-      const { data: rows } = await supabase.from("users").select("id").eq("email", email).limit(1);
-      if (rows && rows.length > 0) userId = rows[0].id;
-    }
-    if (!userId) {
-      for (const [id, u] of memoryUsers) {
-        if ((u.email || "").toLowerCase() === email) { userId = id; break; }
-      }
-    }
-  }
-  if (!userId) return res.status(404).json({ error: "Kullanici bulunamadi (email veya userId gerekli)" });
-  const user = await getOrCreateUser(userId);
-  const currentCredits = user.credits ?? FREE_CREDITS;
-  const newCredits = isAddon ? currentCredits + planCredits : planCredits;
-  if (user._memory) {
-    const u = memoryUsers.get(user.id);
-    u.plan = plan;
-    u.credits = newCredits;
-  } else {
-    await updateUserInDb(user.id, { plan, credits: newCredits });
-  }
-  res.json({ ok: true, plan, credits: newCredits });
+/** Payment webhook – temporarily disabled; placeholder until payment system is re-enabled. */
+app.post("/api/subscription-webhook", (req, res) => {
+  res.status(200).json({ message: "Payment system coming soon" });
 });
 
 app.post("/api/refill-demo", async (req, res) => {
