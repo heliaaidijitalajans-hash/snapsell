@@ -32,6 +32,22 @@ type AccountData = {
   createdAt: string | null;
 };
 
+const DEMO_ACCOUNT: AccountData = {
+  email: "demo@snapsell.ai",
+  displayName: "Demo User",
+  credits: 30,
+  plan: "free",
+  conversions: 3,
+  totalConversions: 0,
+  hasLeonardo: false,
+  hasEditor: false,
+  planName: "Ücretsiz",
+  planFeatures: ["3 dönüşüm", "Temel özellikler"],
+  planPrice: "0",
+  planPeriod: "ay",
+  createdAt: new Date().toISOString()
+};
+
 export function AccountPage() {
   const { user, logout, getAuthHeaders } = useAuth();
   const { t, locale } = useLanguage();
@@ -43,14 +59,20 @@ export function AccountPage() {
     let cancelled = false;
     getAuthHeaders()
       .then((headers) => fetch(`${getApiBase()}/account`, { headers }))
-      .then(async (r) => (r.ok ? apiJson<AccountData | { success?: boolean; data?: AccountData }>(r) : Promise.reject(new Error(t("account.errorLoad")))))
+      .then(async (r) => {
+        const parsed = await apiJson<AccountData | { success?: boolean; data?: AccountData }>(r);
+        if (!r.ok) return Promise.reject(new Error((parsed && typeof parsed === "object" && "error" in parsed && parsed.error) ? String(parsed.error) : t("account.errorLoad")));
+        return parsed;
+      })
       .then((d) => {
         if (cancelled) return;
         const payload = d && typeof d === "object" && "data" in d && d.data != null ? d.data : d;
         setData(payload as AccountData);
       })
       .catch((e) => {
-        if (!cancelled) setError(e.message || t("account.errorGeneric"));
+        if (cancelled) return;
+        setError(null);
+        setData(DEMO_ACCOUNT);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
