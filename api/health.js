@@ -1,6 +1,6 @@
 export default function handler(req, res) {
   res.status(200).json({
     status: "ok",
-    message: "Snapsell API working"
+    message: "Snapsell API running"
   });
 }
