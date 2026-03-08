@@ -331,20 +331,10 @@ function setCorsHeaders(req, res, origin) {
 }
 
 const cors = require("cors");
-const corsOptions = {
-  origin: function (origin, cb) {
-    if (!origin) return cb(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) return cb(null, true);
-    return cb(null, false);
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Session-Id"]
-};
 
 const app = express();
 app.disable("x-powered-by");
-app.use(cors(corsOptions));
+app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "50mb" }));
 
 app.get("/favicon.ico", function (req, res) {
