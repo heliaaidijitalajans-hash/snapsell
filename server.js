@@ -3,18 +3,19 @@
  * Frontend ayrı bir sunucuda çalışır (Vite, static host vb.).
  * Bu sunucu sadece /api/* ve /admin/* endpoint'lerini sunar.
  */
-const express = require("express");
 const dotenv = require("dotenv");
+dotenv.config();
+
+const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const { randomUUID } = require("crypto");
 const FormDataPkg = (function () { try { return require("form-data"); } catch (_) { return null; } })();
+const supabase = require("./backend/supabase");
 
 if (typeof globalThis.File === "undefined") {
   try { globalThis.File = require("node:buffer").File; } catch (_) {}
 }
-
-dotenv.config();
 
 process.on("uncaughtException", function (err) {
   console.error("uncaughtException:", err);
@@ -161,18 +162,15 @@ function resolvePlan(plan) {
   return plan || "free";
 }
 
-let db = null;
-let FieldValue = null;
 let adminAuth = null;
-let firestoreInitDone = false;
+let firebaseAuthInitDone = false;
 
-function initFirestore() {
-  if (firestoreInitDone) return;
-  firestoreInitDone = true;
+/** Firebase: sadece Auth (Google token doğrulama). Veritabanı Supabase. */
+function initFirebaseAuth() {
+  if (firebaseAuthInitDone) return;
+  firebaseAuthInitDone = true;
   try {
     const admin = require("firebase-admin");
-    const firestore = require("firebase-admin/firestore");
-    FieldValue = firestore.FieldValue;
     if (!admin.apps.length) {
       if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
         const cred = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
@@ -181,11 +179,10 @@ function initFirestore() {
         admin.initializeApp({ credential: admin.credential.applicationDefault() });
       }
     }
-    db = admin.firestore();
     adminAuth = admin.auth();
-    console.log("Firestore hazir.");
+    console.log("Firebase Auth hazir.");
   } catch (err) {
-    console.warn("Firestore baslatilamadi (bellek modu kullanilacak):", err.message);
+    console.warn("Firebase Auth baslatilamadi:", err.message);
   }
 }
 
@@ -200,29 +197,71 @@ function cleanupProcessedImages() {
   }
 }
 
+/** Veritabanında kullanıcı güncelle (Supabase veya bellek). */
+async function updateUserInDb(userId, data) {
+  const payload = {};
+  if (data.credits != null) payload.credits = data.credits;
+  if (data.plan != null) payload.plan = data.plan;
+  if (data.totalConversions != null) payload.total_conversions = data.totalConversions;
+  if (data.email != null) payload.email = data.email;
+  if (data.displayName != null) payload.display_name = data.displayName;
+  if (Object.keys(payload).length === 0) return;
+  if (supabase) {
+    const { error } = await supabase.from("users").update(payload).eq("id", userId);
+    if (error) throw new Error(error.message);
+    return;
+  }
+  if (memoryUsers.has(userId)) {
+    const u = memoryUsers.get(userId);
+    if (data.credits != null) u.credits = data.credits;
+    if (data.plan != null) u.plan = data.plan;
+    if (data.totalConversions != null) u.totalConversions = data.totalConversions;
+    if (data.email != null) u.email = data.email;
+    if (data.displayName != null) u.displayName = data.displayName;
+  }
+}
+
 async function getOrCreateUser(sessionIdOrUid, opts) {
   opts = opts || {};
-  initFirestore();
-  if (db) {
-    const ref = db.collection(USERS_COLLECTION).doc(sessionIdOrUid);
-    const snap = await ref.get();
-    if (snap.exists) {
-      const data = snap.data();
-      const plan = resolvePlan(data.plan);
-      return { id: sessionIdOrUid, ref, credits: data.credits ?? FREE_CREDITS, plan, email: data.email || null, displayName: data.displayName || null, createdAt: data.createdAt, totalConversions: data.totalConversions ?? 0 };
+  if (supabase) {
+    const { data: row, error: fetchErr } = await supabase.from("users").select("*").eq("id", sessionIdOrUid).maybeSingle();
+    if (fetchErr) throw new Error(fetchErr.message);
+    if (row) {
+      const plan = resolvePlan(row.plan);
+      const createdAt = row.created_at ? new Date(row.created_at) : null;
+      return {
+        id: sessionIdOrUid,
+        ref: { update: async (d) => updateUserInDb(sessionIdOrUid, d) },
+        credits: row.credits ?? FREE_CREDITS,
+        plan,
+        email: row.email || null,
+        displayName: row.display_name || null,
+        createdAt,
+        totalConversions: row.total_conversions ?? 0
+      };
     }
     const plan = resolvePlan("free");
-    const data = {
+    const insertRow = {
+      id: sessionIdOrUid,
+      plan: "free",
+      credits: FREE_CREDITS,
+      total_conversions: 0
+    };
+    if (opts.email != null) insertRow.email = String(opts.email);
+    if (opts.displayName != null) insertRow.display_name = String(opts.displayName);
+    const { error: insertErr } = await supabase.from("users").insert(insertRow);
+    if (insertErr) throw new Error(insertErr.message);
+    try { incrementDailyStat("signups"); } catch (_) {}
+    return {
+      id: sessionIdOrUid,
+      ref: { update: async (d) => updateUserInDb(sessionIdOrUid, d) },
       credits: FREE_CREDITS,
       plan,
-      totalConversions: 0,
-      createdAt: FieldValue.serverTimestamp()
+      email: opts.email || null,
+      displayName: opts.displayName || null,
+      createdAt: new Date(),
+      totalConversions: 0
     };
-    if (opts.email != null) data.email = String(opts.email);
-    if (opts.displayName != null) data.displayName = String(opts.displayName);
-    await ref.set(data);
-    try { incrementDailyStat("signups"); } catch (_) {}
-    return { id: sessionIdOrUid, ref, credits: FREE_CREDITS, plan, email: opts.email || null, displayName: opts.displayName || null, totalConversions: 0 };
   }
   if (!memoryUsers.has(sessionIdOrUid)) {
     memoryUsers.set(sessionIdOrUid, { credits: FREE_CREDITS, plan: resolvePlan("free"), createdAt: Date.now(), totalConversions: 0 });
@@ -231,12 +270,13 @@ async function getOrCreateUser(sessionIdOrUid, opts) {
   const u = memoryUsers.get(sessionIdOrUid);
   return {
     id: sessionIdOrUid,
-    ref: { update: async function() {} },
+    ref: { update: async (d) => updateUserInDb(sessionIdOrUid, d) },
     credits: u.credits ?? FREE_CREDITS,
     plan: resolvePlan(u.plan),
     totalConversions: u.totalConversions ?? 0,
     email: u.email || null,
     displayName: u.displayName || null,
+    createdAt: u.createdAt != null ? (typeof u.createdAt === "number" ? u.createdAt : new Date(u.createdAt).getTime()) : null,
     _memory: true
   };
 }
@@ -246,7 +286,7 @@ async function getRequestUser(req) {
   if (authHeader && typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
     const token = authHeader.slice(7).trim();
     if (!token) return null;
-    if (!adminAuth) initFirestore();
+    if (!adminAuth) initFirebaseAuth();
     if (!adminAuth) return null;
     try {
       const decoded = await adminAuth.verifyIdToken(token);
@@ -356,7 +396,7 @@ async function requireAdmin(req, res, next) {
   if (token === ADMIN_PASSWORD) return next();
   if (bearerToken && bearerToken !== ADMIN_PASSWORD) {
     try {
-      initFirestore();
+      initFirebaseAuth();
       if (adminAuth) {
         const decoded = await adminAuth.verifyIdToken(bearerToken);
         const email = (decoded.email || "").toLowerCase();
@@ -383,6 +423,17 @@ app.get("/api/site-plans", function (req, res) {
   res.json({ plans: sitePlans });
 });
 
+app.get("/api/plans", async function (req, res) {
+  if (!supabase) {
+    return res.status(503).json({ error: "Supabase yapilandirilmadi (.env: SUPABASE_URL, SUPABASE_ANON_KEY veya SUPABASE_SERVICE_ROLE_KEY)." });
+  }
+  const { data, error } = await supabase.from("plans").select("*");
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
+});
+
 /** Railway/deploy doğrulama: bu endpoint 200 dönerse admin route'ları yüklü demektir. */
 app.get("/admin/ping", function (req, res) {
   res.json({ ok: true, msg: "admin routes loaded", hasPlans: true, hasImageEdits: true });
@@ -405,22 +456,22 @@ app.get("/admin/me", requireAdmin, function (req, res) {
 });
 
 app.get("/admin/users", requireAdmin, async function (req, res) {
-  initFirestore();
   const list = [];
-  if (db) {
-    const snap = await db.collection(USERS_COLLECTION).get();
-    snap.docs.forEach(function (d) {
-      const data = d.data();
-      list.push({
-        id: d.id,
-        email: data.email || null,
-        displayName: data.displayName || null,
-        plan: data.plan || "free",
-        credits: data.credits ?? FREE_CREDITS,
-        totalConversions: data.totalConversions ?? 0,
-        createdAt: data.createdAt ? (data.createdAt.toMillis ? data.createdAt.toMillis() : data.createdAt) : null
+  if (supabase) {
+    const { data: rows, error } = await supabase.from("users").select("id, email, display_name, plan, credits, total_conversions, created_at");
+    if (!error && rows) {
+      rows.forEach(function (r) {
+        list.push({
+          id: r.id,
+          email: r.email || null,
+          displayName: r.display_name || null,
+          plan: r.plan || "free",
+          credits: r.credits ?? FREE_CREDITS,
+          totalConversions: r.total_conversions ?? 0,
+          createdAt: r.created_at ? new Date(r.created_at).getTime() : null
+        });
       });
-    });
+    }
   }
   const seen = new Set(list.map(function (u) { return u.id; }));
   memoryUsers.forEach(function (u, id) {
@@ -489,15 +540,12 @@ app.post("/admin/users/:id/plan", requireAdmin, async function (req, res) {
   if (!sessionId || !plan) return res.status(400).json({ error: "id ve plan gerekli" });
   const planCredits = getCreditsForPlan(plan);
   const isAddon = plan === "addon";
-  initFirestore();
-  if (db) {
-    const ref = db.collection(USERS_COLLECTION).doc(sessionId);
-    const snap = await ref.get();
-    if (snap.exists) {
-      const data = snap.data();
-      const currentCredits = data.credits ?? FREE_CREDITS;
+  if (supabase) {
+    const { data: row } = await supabase.from("users").select("credits").eq("id", sessionId).maybeSingle();
+    if (row) {
+      const currentCredits = row.credits ?? FREE_CREDITS;
       const newCredits = isAddon ? currentCredits + planCredits : planCredits;
-      await ref.update({ plan, credits: newCredits });
+      await updateUserInDb(sessionId, { plan, credits: newCredits });
       return res.json({ ok: true, plan, credits: newCredits });
     }
   }
@@ -538,23 +586,23 @@ app.get("/admin/stats", requireAdmin, async function (req, res) {
 });
 
 app.get("/admin/subscribers", requireAdmin, async function (req, res) {
-  initFirestore();
   const list = [];
-  if (db) {
-    const snap = await db.collection(USERS_COLLECTION).get();
-    snap.docs.forEach(function (d) {
-      const data = d.data();
-      const plan = (data.plan || "free").toString();
-      list.push({
-        id: d.id,
-        email: data.email || null,
-        displayName: data.displayName || null,
-        plan,
-        credits: data.credits ?? FREE_CREDITS,
-        totalConversions: data.totalConversions ?? 0,
-        createdAt: data.createdAt ? (data.createdAt.toMillis ? data.createdAt.toMillis() : data.createdAt) : null
+  if (supabase) {
+    const { data: rows, error } = await supabase.from("users").select("id, email, display_name, plan, credits, total_conversions, created_at");
+    if (!error && rows) {
+      rows.forEach(function (r) {
+        const plan = (r.plan || "free").toString();
+        list.push({
+          id: r.id,
+          email: r.email || null,
+          displayName: r.display_name || null,
+          plan,
+          credits: r.credits ?? FREE_CREDITS,
+          totalConversions: r.total_conversions ?? 0,
+          createdAt: r.created_at ? new Date(r.created_at).getTime() : null
+        });
       });
-    });
+    }
   }
   memoryUsers.forEach(function (u, id) {
     list.push({
@@ -612,6 +660,188 @@ app.put("/admin/teams/:id", requireAdmin, function (req, res) {
   res.json({ ok: true, team: teams[idx] });
 });
 app.delete("/admin/teams/:id", requireAdmin, function (req, res) {
+  const id = req.params.id;
+  loadTeams();
+  const idx = teams.findIndex(function (t) { return t.id === id; });
+  if (idx < 0) return res.status(404).json({ error: "Takim bulunamadi" });
+  teams.splice(idx, 1);
+  saveTeams(teams);
+  res.json({ ok: true });
+});
+
+// --- Aynı admin route'ları /api/admin/* altında (Railway/proxy /admin 404 verirse kullan) ---
+app.get("/api/admin/ping", function (req, res) {
+  res.json({ ok: true, msg: "admin routes loaded", hasPlans: true, hasImageEdits: true });
+});
+app.post("/api/admin/login", function (req, res) {
+  const password = (req.body && req.body.password) || "";
+  if (!ADMIN_PASSWORD) return res.status(503).json({ error: "ADMIN_PASSWORD .env icinde ayarlanmali." });
+  if (password !== ADMIN_PASSWORD) return res.status(401).json({ error: "Yanlis sifre." });
+  res.cookie("snapsell_admin", ADMIN_PASSWORD, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000, path: "/", sameSite: "lax" });
+  res.json({ ok: true, token: ADMIN_PASSWORD });
+});
+app.get("/api/admin/me", requireAdmin, function (req, res) { res.json({ ok: true }); });
+app.get("/api/admin/plans", requireAdmin, function (req, res) {
+  res.json({ planPrices, enterprisePlans, sitePlans });
+});
+app.post("/api/admin/plans/reset", requireAdmin, function (req, res) {
+  try {
+    planPrices = { ...DEFAULT_PLAN_PRICES };
+    sitePlans = applyPlanType(DEFAULT_SITE_PLANS);
+    savePlanPrices(planPrices);
+    saveSitePlans(sitePlans);
+    return res.json({ ok: true, planPrices, enterprisePlans, sitePlans });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e && e.message) });
+  }
+});
+app.put("/api/admin/plans", requireAdmin, function (req, res) {
+  const body = req.body || {};
+  if (body.planPrices != null && typeof body.planPrices === "object") {
+    planPrices = body.planPrices;
+    savePlanPrices(planPrices);
+  }
+  if (body.sitePlans != null && Array.isArray(body.sitePlans)) {
+    sitePlans = applyPlanType(body.sitePlans);
+    saveSitePlans(sitePlans);
+  }
+  if (body.enterprisePlans != null && Array.isArray(body.enterprisePlans)) {
+    enterprisePlans = body.enterprisePlans;
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(path.join(DATA_DIR, "enterprise-plans.json"), JSON.stringify(enterprisePlans, null, 2), "utf8");
+  }
+  res.json({ ok: true, planPrices, enterprisePlans, sitePlans });
+});
+app.get("/api/admin/users", requireAdmin, async function (req, res) {
+  const list = [];
+  if (supabase) {
+    const { data: rows, error } = await supabase.from("users").select("id, email, display_name, plan, credits, total_conversions, created_at");
+    if (!error && rows) {
+      rows.forEach(function (r) {
+        list.push({
+          id: r.id,
+          email: r.email || null,
+          displayName: r.display_name || null,
+          plan: r.plan || "free",
+          credits: r.credits ?? FREE_CREDITS,
+          totalConversions: r.total_conversions ?? 0,
+          createdAt: r.created_at ? new Date(r.created_at).getTime() : null
+        });
+      });
+    }
+  }
+  const seen = new Set(list.map(function (u) { return u.id; }));
+  memoryUsers.forEach(function (u, id) {
+    if (seen.has(id)) return;
+    seen.add(id);
+    list.push({
+      id, email: u.email || null, displayName: u.displayName || null, plan: u.plan || "free",
+      credits: u.credits ?? FREE_CREDITS, totalConversions: u.totalConversions ?? 0,
+      createdAt: u.createdAt || null, _memory: true
+    });
+  });
+  list.sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+  res.json({ users: list });
+});
+app.post("/api/admin/users/:id/plan", requireAdmin, async function (req, res) {
+  const sessionId = req.params.id;
+  const plan = (req.body && req.body.plan) != null ? String(req.body.plan) : "";
+  if (!sessionId || !plan) return res.status(400).json({ error: "id ve plan gerekli" });
+  const planCredits = getCreditsForPlan(plan);
+  const isAddon = plan === "addon";
+  if (supabase) {
+    const { data: row } = await supabase.from("users").select("credits").eq("id", sessionId).maybeSingle();
+    if (row) {
+      const currentCredits = row.credits ?? FREE_CREDITS;
+      const newCredits = isAddon ? currentCredits + planCredits : planCredits;
+      await updateUserInDb(sessionId, { plan, credits: newCredits });
+      return res.json({ ok: true, plan, credits: newCredits });
+    }
+  }
+  if (memoryUsers.has(sessionId)) {
+    const u = memoryUsers.get(sessionId);
+    const currentCredits = u.credits ?? FREE_CREDITS;
+    u.plan = plan;
+    u.credits = isAddon ? currentCredits + planCredits : planCredits;
+    return res.json({ ok: true, plan, credits: u.credits });
+  }
+  return res.status(404).json({ error: "Kullanici bulunamadi" });
+});
+app.post("/api/admin/logout", function (req, res) {
+  res.clearCookie("snapsell_admin", { path: "/" });
+  res.json({ ok: true });
+});
+app.get("/api/admin/stats", requireAdmin, async function (req, res) {
+  const today = getTodayKey();
+  const stats = loadDailyStats();
+  const todayData = stats[today] || { visitors: 0, conversions: 0, signups: 0 };
+  const last7 = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    last7.push({ date: key, ...(stats[key] || { visitors: 0, conversions: 0, signups: 0 }) });
+  }
+  last7.reverse();
+  res.json({ today: todayData, dailyVisitors: todayData.visitors, dailyConversions: todayData.conversions, newSignupsToday: todayData.signups, last7Days: last7 });
+});
+app.get("/api/admin/subscribers", requireAdmin, async function (req, res) {
+  const list = [];
+  if (supabase) {
+    const { data: rows, error } = await supabase.from("users").select("id, email, display_name, plan, credits, total_conversions, created_at");
+    if (!error && rows) {
+      rows.forEach(function (r) {
+        const plan = (r.plan || "free").toString();
+        list.push({
+          id: r.id, email: r.email || null, displayName: r.display_name || null, plan,
+          credits: r.credits ?? FREE_CREDITS, totalConversions: r.total_conversions ?? 0,
+          createdAt: r.created_at ? new Date(r.created_at).getTime() : null
+        });
+      });
+    }
+  }
+  memoryUsers.forEach(function (u, id) {
+    list.push({
+      id, email: u.email || null, displayName: u.displayName || null, plan: u.plan || "free",
+      credits: u.credits ?? FREE_CREDITS, totalConversions: u.totalConversions ?? 0,
+      createdAt: u.createdAt || null
+    });
+  });
+  const monthly = list.filter(function (u) { return (u.plan || "").toString().startsWith("monthly_"); });
+  const yearly = list.filter(function (u) { return (u.plan || "").toString().startsWith("yearly_"); });
+  res.json({ monthly, yearly, all: list });
+});
+app.get("/api/admin/image-edits", requireAdmin, function (req, res) {
+  const loaded = loadJsonFile("image-edits.json", null);
+  res.json({ edits: Array.isArray(loaded) ? loaded : [] });
+});
+app.get("/api/admin/teams", requireAdmin, function (req, res) {
+  loadTeams();
+  res.json({ teams });
+});
+app.post("/api/admin/teams", requireAdmin, function (req, res) {
+  const body = req.body || {};
+  const name = (body.name || "").trim() || "Yeni Takım";
+  const id = randomUUID().slice(0, 8);
+  const team = { id, name, memberIds: [], enterprisePlanId: body.enterprisePlanId || null, createdAt: Date.now() };
+  loadTeams();
+  teams.push(team);
+  saveTeams(teams);
+  res.status(201).json({ ok: true, team });
+});
+app.put("/api/admin/teams/:id", requireAdmin, function (req, res) {
+  const id = req.params.id;
+  const body = req.body || {};
+  loadTeams();
+  const idx = teams.findIndex(function (t) { return t.id === id; });
+  if (idx < 0) return res.status(404).json({ error: "Takim bulunamadi" });
+  if (body.name != null) teams[idx].name = String(body.name);
+  if (Array.isArray(body.memberIds)) teams[idx].memberIds = body.memberIds;
+  if (body.enterprisePlanId != null) teams[idx].enterprisePlanId = body.enterprisePlanId;
+  saveTeams(teams);
+  res.json({ ok: true, team: teams[idx] });
+});
+app.delete("/api/admin/teams/:id", requireAdmin, function (req, res) {
   const id = req.params.id;
   loadTeams();
   const idx = teams.findIndex(function (t) { return t.id === id; });
@@ -878,15 +1108,13 @@ async function getPriceAnalysisWithScraperAPI(productDescription) {
 }
 
 app.post("/api/register", async (req, res) => {
-  initFirestore();
   const sessionId = randomUUID();
-  if (db) {
-    const ref = db.collection(USERS_COLLECTION).doc(sessionId);
-    await ref.set({
+  if (supabase) {
+    await supabase.from("users").insert({
+      id: sessionId,
       credits: FREE_CREDITS,
       plan: "free",
-      totalConversions: 0,
-      createdAt: FieldValue.serverTimestamp()
+      total_conversions: 0
     });
   } else {
     memoryUsers.set(sessionId, { credits: FREE_CREDITS, plan: "free", createdAt: Date.now(), totalConversions: 0 });
@@ -897,7 +1125,7 @@ app.post("/api/register", async (req, res) => {
 app.post("/api/auth/google", async (req, res) => {
   const idToken = (req.body && req.body.idToken) ? String(req.body.idToken).trim() : "";
   if (!idToken) return res.status(400).json({ error: "idToken gerekli" });
-  if (!adminAuth) initFirestore();
+  if (!adminAuth) initFirebaseAuth();
   if (!adminAuth) return res.status(503).json({ error: "Google giris yapilandirilmadi" });
   try {
     const decoded = await adminAuth.verifyIdToken(idToken);
@@ -947,7 +1175,7 @@ app.get("/api/account", async (req, res) => {
   const plan = user.plan || "free";
   const conversions = Math.floor(credits / CREDITS_PER_CONVERSION);
   const planInfo = sitePlans.find(function (p) { return (p.id || p.name) === plan; }) || { name: plan, features: [], price: "", period: "" };
-  const createdAt = user.createdAt ? (user.createdAt.toMillis ? user.createdAt.toMillis() : user.createdAt) : null;
+  const createdAt = user.createdAt ? (typeof user.createdAt === "object" && user.createdAt.getTime ? user.createdAt.getTime() : user.createdAt) : null;
   res.json({
     email: user.email || null,
     displayName: user.displayName || null,
@@ -977,10 +1205,9 @@ app.post("/api/subscription-webhook", async (req, res) => {
   let userId = (req.body?.userId || req.body?.uid || "").toString().trim();
   const email = (req.body?.email || "").toString().trim().toLowerCase();
   if (!userId && email) {
-    initFirestore();
-    if (db) {
-      const snap = await db.collection(USERS_COLLECTION).where("email", "==", email).limit(1).get();
-      if (!snap.empty) userId = snap.docs[0].id;
+    if (supabase) {
+      const { data: rows } = await supabase.from("users").select("id").eq("email", email).limit(1);
+      if (rows && rows.length > 0) userId = rows[0].id;
     }
     if (!userId) {
       for (const [id, u] of memoryUsers) {
@@ -997,7 +1224,7 @@ app.post("/api/subscription-webhook", async (req, res) => {
     u.plan = plan;
     u.credits = newCredits;
   } else {
-    await user.ref.update({ plan, credits: newCredits });
+    await updateUserInDb(user.id, { plan, credits: newCredits });
   }
   res.json({ ok: true, plan, credits: newCredits });
 });
@@ -1012,7 +1239,7 @@ app.post("/api/refill-demo", async (req, res) => {
     const u = memoryUsers.get(user.id);
     u.credits = newCredits;
   } else {
-    await user.ref.update({ credits: newCredits });
+    await updateUserInDb(user.id, { credits: newCredits });
   }
   res.json({ credits: newCredits, added, conversions: Math.floor(newCredits / CREDITS_PER_CONVERSION) });
 });
@@ -2127,9 +2354,9 @@ app.post("/api/process", async (req, res) => {
       u.credits = (u.credits || FREE_CREDITS) - CREDITS_PER_CONVERSION;
       u.totalConversions = (u.totalConversions || 0) + 1;
     } else {
-      await user.ref.update({
-        credits: FieldValue.increment(-CREDITS_PER_CONVERSION),
-        totalConversions: FieldValue.increment(1)
+      await updateUserInDb(user.id, {
+        credits: credits - CREDITS_PER_CONVERSION,
+        totalConversions: (user.totalConversions || 0) + 1
       });
     }
     const newCredits = credits - CREDITS_PER_CONVERSION;
@@ -2216,9 +2443,9 @@ app.post("/api/process", async (req, res) => {
       if (u.totalConversions > 0) u.totalConversions--;
     } else {
       try {
-        await user.ref.update({
-          credits: FieldValue.increment(CREDITS_PER_CONVERSION),
-          totalConversions: FieldValue.increment(-1)
+        await updateUserInDb(user.id, {
+          credits: (user.credits || 0) + CREDITS_PER_CONVERSION,
+          totalConversions: Math.max(0, (user.totalConversions || 0) - 1)
         });
       } catch (_) {}
     }
