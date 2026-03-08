@@ -335,7 +335,20 @@ const cors = require("cors");
 
 const app = express();
 app.disable("x-powered-by");
-app.use(cors({ origin: "*" }));
+
+// CORS: her istekte basligi koy; OPTIONS preflight hemen 204 ile bitir (cors paketinden once)
+app.use(function (req, res, next) {
+  var origin = req.headers.origin;
+  res.setHeader("Access-Control-Allow-Origin", origin || "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Session-Id");
+  res.setHeader("Access-Control-Max-Age", "86400");
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+  next();
+});
+app.use(cors({ origin: true, credentials: false }));
 app.use(express.json({ limit: "50mb" }));
 
 app.get("/favicon.ico", function (req, res) {
@@ -2583,10 +2596,9 @@ app.use(function (req, res) {
 
 app.use(function (err, req, res, next) {
   var origin = req.headers.origin;
-  if (origin && allowedOrigins.indexOf(origin) !== -1) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-  }
+  res.setHeader("Access-Control-Allow-Origin", origin || "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Session-Id");
   console.error("Unhandled error:", err);
   res.status(500).json({ error: err.message || "Server error" });
 });
