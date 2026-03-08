@@ -5,6 +5,7 @@
  */
 const dotenv = require("dotenv");
 dotenv.config();
+console.log("SnapSell API starting...");
 
 const express = require("express");
 const path = require("path");
@@ -2596,7 +2597,7 @@ var server;
 function startServer(port) {
   server = app.listen(port, "0.0.0.0", function () {
     PORT = port;
-    console.log("SnapSell API: http://localhost:" + PORT);
+    console.log("SnapSell API listening on port", PORT, "(Ready)");
   });
   server.on("error", function (err) {
     if (err.code === "EADDRINUSE" && port < 3010) {
