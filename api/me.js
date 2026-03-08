@@ -1,14 +1,17 @@
-/** Auth check: returns current user. Temporarily bypass verification so UI loads. */
+/** Auth check: returns current user. No demo placeholder; id from session when present. */
 export default function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
   if (req.method !== "GET") {
     return res.status(400).json({ success: false, error: "Method not allowed" });
   }
+  const sessionId = req.headers["x-session-id"] || req.headers.authorization || null;
+  const id = sessionId && typeof sessionId === "string" ? sessionId.slice(0, 32) : null;
   res.status(200).json({
     success: true,
     user: {
-      id: "demo-user",
-      email: "demo@snapsell.ai"
+      id: id || null,
+      email: null,
+      displayName: null
     }
   });
 }

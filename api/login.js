@@ -1,4 +1,4 @@
-/** Login placeholder: always return JSON. Temporarily bypass verification. */
+/** Login: always return JSON. No demo placeholder. */
 export default function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
   if (req.method !== "POST") {
@@ -6,8 +6,6 @@ export default function handler(req, res) {
   }
   res.status(200).json({
     success: true,
-    data: {
-      user: { id: "demo-user", email: "demo@snapsell.ai" }
-    }
+    data: { user: { id: null, email: null, displayName: null } }
   });
 }
