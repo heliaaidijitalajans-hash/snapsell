@@ -1,13 +1,10 @@
-/** Vercel serverless API base. All fetch calls use getApiBase() + path (e.g. /api/health). */
+/** Same-origin Vercel API. No config.json or env required. */
 export const API_BASE_URL = "/api";
 
-/** API base URL for fetch. Use: fetch(getApiBase() + "/health") */
+/** Returns "/api" for all fetch calls. No Firebase/backend detection. */
 export function getApiBase(): string {
-  return API_BASE_URL;
+  return "/api";
 }
-
-/** No-op; kept for compatibility. Default is /api. */
-export function setApiBaseFromConfig(_url: string): void {}
 
 /** Parse JSON from response; if server returned HTML, throw generic error. */
 export async function apiJson<T = unknown>(res: Response): Promise<T> {
