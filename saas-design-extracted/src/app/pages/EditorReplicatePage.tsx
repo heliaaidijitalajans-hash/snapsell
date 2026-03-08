@@ -26,6 +26,8 @@ export function EditorReplicatePage() {
   const { getAuthHeaders } = useAuth();
   const { t } = useLanguage();
   const [hasEditor, setHasEditor] = useState<boolean | null>(null);
+  const [freeEditorUsesRemaining, setFreeEditorUsesRemaining] = useState<number | null>(null);
+  const [freeLimitReached, setFreeLimitReached] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
@@ -55,7 +57,11 @@ export function EditorReplicatePage() {
       .then((r) => r.json())
       .then((data) => {
         if (!cancelled) {
-          setHasEditor(!!(data.photoRoomAvailable ?? data.available));
+          const available = !!(data.photoRoomAvailable ?? data.available);
+          setHasEditor(available);
+          if (available) setFreeLimitReached(false);
+          const remaining = data.freeEditorUsesRemaining;
+          setFreeEditorUsesRemaining(typeof remaining === "number" ? remaining : null);
         }
       })
       .catch(() => {
@@ -113,6 +119,12 @@ export function EditorReplicatePage() {
       clearTimeout(timeoutId);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (res.status === 402 && (data as any).limitReached) {
+          setFreeLimitReached(true);
+          setHasEditor(false);
+          setLoading(false);
+          return;
+        }
         const normalize = (v: unknown) => {
           if (!v) return "";
           if (typeof v === "string") return v;
@@ -133,6 +145,9 @@ export function EditorReplicatePage() {
       }
       if (data.priceSummary && typeof data.priceSummary === "string") setPriceSummary(data.priceSummary);
       if (Array.isArray(data.priceAnalysis) && data.priceAnalysis.length > 0) setPriceAnalysisPlatforms(data.priceAnalysis);
+      if (freeEditorUsesRemaining !== null) {
+        setFreeEditorUsesRemaining(Math.max(0, freeEditorUsesRemaining - 1));
+      }
     } catch (e) {
       const msg =
         e instanceof Error && e.name === "AbortError"
@@ -147,7 +162,7 @@ export function EditorReplicatePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedFile, prompt, photoQuality, priceAnalysisProductDescription, hasEditor, getAuthHeaders, t]);
+  }, [selectedFile, prompt, photoQuality, priceAnalysisProductDescription, hasEditor, getAuthHeaders, t, freeEditorUsesRemaining]);
 
   const clearSelection = useCallback(() => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -180,8 +195,12 @@ export function EditorReplicatePage() {
           <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#FF5A5F]/10 flex items-center justify-center">
             <Sparkles className="w-8 h-8 text-[#FF5A5F]" />
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">{t("editor.proPlanRequired")}</h2>
-          <p className="text-gray-600 mb-6">{t("editor.proPlanDesc")}</p>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">
+            {freeLimitReached ? t("editor.freeLimitReached") : t("editor.proPlanRequired")}
+          </h2>
+          <p className="text-gray-600 mb-6">
+            {freeLimitReached ? t("editor.freeLimitReached") : t("editor.proPlanDesc")}
+          </p>
           <Link
             to="/fiyatlandirma"
             className="inline-flex items-center justify-center px-6 py-3 rounded-lg font-medium text-white bg-[#FF5A5F] hover:bg-[#FF5A5F]/90"
@@ -195,7 +214,14 @@ export function EditorReplicatePage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">{t("editor.title")}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">{t("editor.title")}</h1>
+        {freeEditorUsesRemaining !== null && (
+          <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1.5 rounded-lg">
+            {t("editor.freeUsesRemaining").replace("{{count}}", String(freeEditorUsesRemaining))}
+          </span>
+        )}
+      </div>
 
       {!selectedFile ? (
         <div

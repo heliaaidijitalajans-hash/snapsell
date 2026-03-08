@@ -390,7 +390,13 @@ function canUsePhotoRoom(user) {
   if (!user) return false;
   const email = (user.email || "").trim().toLowerCase();
   if (REPLICATE_ALLOWED_EMAILS.indexOf(email) >= 0) return true;
-  return isEditorPlan(user.plan || "free") || isAdminUser(user);
+  if (isEditorPlan(user.plan || "free") || isAdminUser(user)) return true;
+  const plan = user.plan || "free";
+  if (plan === "free") {
+    const credits = user.credits ?? FREE_CREDITS;
+    return credits >= CREDITS_PER_CONVERSION;
+  }
+  return false;
 }
 function canUseLeonardo(user) {
   return isProPlan(user.plan || "free") || isAdminUser(user);
@@ -1260,11 +1266,17 @@ app.get("/api/replicate/status", async (req, res) => {
     const publicUrl = (process.env.PUBLIC_APP_URL || "").trim().replace(/\/$/, "");
     const photoRoom = canUsePhotoRoom(user);
     const pixian = canUsePixian(user);
+    const credits = user.credits ?? FREE_CREDITS;
+    const conversions = Math.floor(credits / CREDITS_PER_CONVERSION);
+    const plan = user.plan || "free";
+    const freeEditorUsesRemaining = plan === "free" ? conversions : null;
     res.json({
       available: photoRoom,
       photoRoomAvailable: photoRoom,
       pixianAvailable: pixian,
-      needsPublicUrl: !publicUrl
+      needsPublicUrl: !publicUrl,
+      freeEditorUsesRemaining,
+      conversions
     });
   } catch (err) {
     console.error("api/replicate/status:", err.message);
@@ -1434,7 +1446,18 @@ app.get("/api/replicate/temp/:id/nobg", function (req, res) {
 app.post("/api/photoroom/pipeline", async (req, res) => {
   const user = await getRequestUser(req);
   if (!user) return res.status(401).json({ error: "Oturum gerekli" });
-  if (!canUsePhotoRoom(user)) return res.status(403).json({ error: "Bu özellik Pro plan (Görsel Düzenleme) gerektirir. PhotoRoom ile arka plan silme ve yeni arka plan oluşturma.", upgradeUrl: "/dashboard/fiyatlandirma" });
+  if (!canUsePhotoRoom(user)) {
+    const plan = user.plan || "free";
+    const credits = user.credits ?? FREE_CREDITS;
+    if (plan === "free" && credits < CREDITS_PER_CONVERSION) {
+      return res.status(402).json({
+        error: "Ücretsiz 3 deneme hakkınızı kullandınız. Devam etmek için plan yükseltin.",
+        upgradeUrl: "/fiyatlandirma",
+        limitReached: true
+      });
+    }
+    return res.status(403).json({ error: "Bu özellik Pro plan (Görsel Düzenleme) gerektirir. PhotoRoom ile arka plan silme ve yeni arka plan oluşturma.", upgradeUrl: "/dashboard/fiyatlandirma" });
+  }
   if (!PHOTOROOM_API_KEY) return res.status(503).json({ error: "PHOTOROOM_API_KEY .env dosyasına ekleyin." });
   const { image: base64, prompt } = req.body || {};
   if (!base64 || typeof base64 !== "string") return res.status(400).json({ error: "image (base64) gerekli" });
@@ -1541,6 +1564,22 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
     replicateTempImages.set(resultId, { buffer: resultBuffer, contentType, createdAt: Date.now() });
     const baseUrl = PUBLIC_APP_URL || (req.protocol || "http") + "://" + (req.get("host") || "localhost");
     const outputUrl = baseUrl + "/api/replicate/temp/" + resultId;
+
+    if ((user.plan || "free") === "free") {
+      const credits = user.credits ?? FREE_CREDITS;
+      const newCredits = Math.max(0, credits - CREDITS_PER_CONVERSION);
+      const newTotal = (user.totalConversions ?? 0) + 1;
+      if (user._memory) {
+        const u = memoryUsers.get(user.id);
+        if (u) {
+          u.credits = newCredits;
+          u.totalConversions = newTotal;
+        }
+      } else {
+        await updateUserInDb(user.id, { credits: newCredits, totalConversions: newTotal });
+      }
+    }
+
     return res.json({ ok: true, outputUrl, output: [outputUrl] });
   } catch (e) {
     console.error("PhotoRoom pipeline error:", e);
