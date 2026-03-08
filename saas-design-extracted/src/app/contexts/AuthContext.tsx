@@ -27,10 +27,11 @@ async function ensureSession(): Promise<string> {
   if (sid) return sid;
   try {
     const res = await fetch(`${getApiBase()}/register`, { method: "POST" });
-    const d = await apiJson<{ sessionId?: string }>(res).catch(() => ({}));
-    if (d && d.sessionId) {
-      localStorage.setItem(SESSION_KEY, d.sessionId);
-      return d.sessionId;
+    const d = await apiJson<{ sessionId?: string; data?: { sessionId?: string }; success?: boolean }>(res).catch(() => ({}));
+    const sessionId = (d?.data?.sessionId ?? d?.sessionId) || "";
+    if (sessionId) {
+      localStorage.setItem(SESSION_KEY, sessionId);
+      return sessionId;
     }
   } catch (_) {
     // ag hatasi veya sunucu ulasilamaz - sessizce bos session

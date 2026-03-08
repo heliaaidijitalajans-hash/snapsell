@@ -43,9 +43,11 @@ export function AccountPage() {
     let cancelled = false;
     getAuthHeaders()
       .then((headers) => fetch(`${getApiBase()}/account`, { headers }))
-      .then(async (r) => (r.ok ? apiJson<AccountData>(r) : Promise.reject(new Error(t("account.errorLoad")))))
+      .then(async (r) => (r.ok ? apiJson<AccountData | { success?: boolean; data?: AccountData }>(r) : Promise.reject(new Error(t("account.errorLoad")))))
       .then((d) => {
-        if (!cancelled) setData(d);
+        if (cancelled) return;
+        const payload = d && typeof d === "object" && "data" in d && d.data != null ? d.data : d;
+        setData(payload as AccountData);
       })
       .catch((e) => {
         if (!cancelled) setError(e.message || t("account.errorGeneric"));
