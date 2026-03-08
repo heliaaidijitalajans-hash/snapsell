@@ -317,7 +317,7 @@ async function getRequestUser(req) {
 
 const APP_DOMAIN = (process.env.APP_DOMAIN || "").trim();
 const envOrigins = (process.env.ALLOWED_ORIGINS || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
-const allowedOrigins = envOrigins.length > 0 ? envOrigins : ["https://snapsell.website", "https://www.snapsell.website", "https://snapsellapp-6649a.web.app"];
+const allowedOrigins = envOrigins.length > 0 ? envOrigins : ["https://snapsell.website", "https://www.snapsell.website", "https://snapsellapp-6649a.web.app", "https://snapsell-one.vercel.app"];
 
 function setCorsHeaders(req, res, origin) {
   res.setHeader("Access-Control-Allow-Origin", origin);
