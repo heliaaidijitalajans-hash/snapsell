@@ -11,7 +11,18 @@ const path = require("path");
 const fs = require("fs");
 const { randomUUID } = require("crypto");
 const FormDataPkg = (function () { try { return require("form-data"); } catch (_) { return null; } })();
-const supabase = require("./backend/supabase");
+let supabase = null;
+try {
+  const url = (process.env.SUPABASE_URL || "").trim();
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "").trim();
+  if (url && key) {
+    const { createClient } = require("@supabase/supabase-js");
+    supabase = createClient(url, key);
+    console.log("Supabase hazir.");
+  }
+} catch (err) {
+  console.warn("Supabase yuklenemedi:", err.message);
+}
 
 if (typeof globalThis.File === "undefined") {
   try { globalThis.File = require("node:buffer").File; } catch (_) {}
