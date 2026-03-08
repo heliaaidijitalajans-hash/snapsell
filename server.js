@@ -44,6 +44,7 @@ const PRO_PLANS = ["monthly_plan", "monthly_plan_pro", "yearly_plan", "enterpris
 const EDITOR_PLANS = ["addon"];
 const PRO_PLAN_DEMO = process.env.PRO_PLAN_DEMO === "true" || process.env.PRO_PLAN_DEMO === "1";
 const DATA_DIR = path.join(__dirname, "data");
+try { if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (_) {}
 
 function loadJsonFile(filename, defaultValue) {
   const p = path.join(DATA_DIR, filename);
@@ -322,31 +323,28 @@ const allowedOrigins = envOrigins.length > 0 ? envOrigins : defaultOrigins;
 if (allowedOrigins.indexOf("https://snapsell-one.vercel.app") === -1) {
   allowedOrigins.push("https://snapsell-one.vercel.app");
 }
+console.log("CORS allowed origins:", allowedOrigins.join(", ") || "(none)");
 
 function setCorsHeaders(req, res, origin) {
   res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Credentials", "true");
 }
 
-function corsMiddleware(req, res, next) {
-  const origin = req.headers.origin;
-  const allowed = origin && allowedOrigins.indexOf(origin) !== -1;
-
-  if (req.method === "OPTIONS") {
-    if (allowed) setCorsHeaders(req, res, origin);
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Session-Id");
-    res.setHeader("Access-Control-Max-Age", "86400");
-    return res.status(204).end();
-  }
-
-  if (allowed) setCorsHeaders(req, res, origin);
-  next();
-}
+const cors = require("cors");
+const corsOptions = {
+  origin: function (origin, cb) {
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) return cb(null, true);
+    return cb(null, false);
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Session-Id"]
+};
 
 const app = express();
 app.disable("x-powered-by");
-app.use(corsMiddleware);
+app.use(cors(corsOptions));
 app.use(express.json({ limit: "50mb" }));
 
 app.get("/favicon.ico", function (req, res) {
@@ -439,14 +437,19 @@ app.get("/api/site-plans", function (req, res) {
 });
 
 app.get("/api/plans", async function (req, res) {
-  if (!supabase) {
-    return res.status(503).json({ error: "Supabase yapilandirilmadi (.env: SUPABASE_URL, SUPABASE_ANON_KEY veya SUPABASE_SERVICE_ROLE_KEY)." });
+  try {
+    if (!supabase) {
+      return res.status(503).json({ error: "Supabase yapilandirilmadi (.env: SUPABASE_URL, SUPABASE_ANON_KEY veya SUPABASE_SERVICE_ROLE_KEY)." });
+    }
+    const { data, error } = await supabase.from("plans").select("*");
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    res.json(data || []);
+  } catch (err) {
+    console.error("api/plans:", err.message);
+    res.status(500).json({ error: err.message || "Plans error" });
   }
-  const { data, error } = await supabase.from("plans").select("*");
-  if (error) {
-    return res.status(500).json({ error: error.message });
-  }
-  res.json(data);
 });
 
 app.get("/api/stripe", (req, res) => {
@@ -1276,17 +1279,22 @@ app.get("/api/leonardo/status", async (req, res) => {
 });
 
 app.get("/api/replicate/status", async (req, res) => {
-  const user = await getRequestUser(req);
-  if (!user) return res.status(401).json({ error: "Oturum gerekli" });
-  const publicUrl = (process.env.PUBLIC_APP_URL || "").trim().replace(/\/$/, "");
-  const photoRoom = canUsePhotoRoom(user);
-  const pixian = canUsePixian(user);
-  res.json({
-    available: photoRoom,
-    photoRoomAvailable: photoRoom,
-    pixianAvailable: pixian,
-    needsPublicUrl: !publicUrl
-  });
+  try {
+    const user = await getRequestUser(req);
+    if (!user) return res.status(401).json({ error: "Oturum gerekli" });
+    const publicUrl = (process.env.PUBLIC_APP_URL || "").trim().replace(/\/$/, "");
+    const photoRoom = canUsePhotoRoom(user);
+    const pixian = canUsePixian(user);
+    res.json({
+      available: photoRoom,
+      photoRoomAvailable: photoRoom,
+      pixianAvailable: pixian,
+      needsPublicUrl: !publicUrl
+    });
+  } catch (err) {
+    console.error("api/replicate/status:", err.message);
+    res.status(500).json({ error: err.message || "Error" });
+  }
 });
 
 const REPLICATE_API_TOKEN = (process.env.REPLICATE_API_TOKEN || process.env.REPLICATE_API_KEY || "").trim();

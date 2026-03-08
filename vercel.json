@@ -1,0 +1,6 @@
+{
+  "installCommand": "npm install && npm install --prefix saas-design-extracted",
+  "buildCommand": "npm run build",
+  "outputDirectory": "saas-design-extracted/dist",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}
