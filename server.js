@@ -437,22 +437,24 @@ app.get("/api/plan-prices", function (req, res) {
   res.json({ planPrices, enterprisePlans });
 });
 app.get("/api/site-plans", function (req, res) {
-  res.json({ plans: sitePlans });
+  res.setHeader("Content-Type", "application/json");
+  res.status(200).json({ success: true, plans: sitePlans });
 });
 
 app.get("/api/plans", async function (req, res) {
+  res.setHeader("Content-Type", "application/json");
   try {
-    if (!supabase) {
-      return res.status(503).json({ error: "Supabase yapilandirilmadi (.env: SUPABASE_URL, SUPABASE_ANON_KEY veya SUPABASE_SERVICE_ROLE_KEY)." });
+    if (supabase) {
+      const { data, error } = await supabase.from("plans").select("*");
+      if (error) {
+        return res.status(500).json({ success: false, error: error.message });
+      }
+      return res.status(200).json({ success: true, plans: data || [] });
     }
-    const { data, error } = await supabase.from("plans").select("*");
-    if (error) {
-      return res.status(500).json({ error: error.message });
-    }
-    res.json(data || []);
+    res.status(200).json({ success: true, plans: sitePlans });
   } catch (err) {
     console.error("api/plans:", err.message);
-    res.status(500).json({ error: err.message || "Plans error" });
+    res.status(500).json({ success: false, error: err.message || "Plans error" });
   }
 });
 

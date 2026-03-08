@@ -1,13 +1,33 @@
 import { useEffect, useState } from "react";
-import { getApiBase } from "../config";
+import { getApiBase, apiJson } from "../config";
+
+type PlanItem = {
+  id: string;
+  name: string;
+  price: number | string;
+  period?: string;
+  credits?: number;
+  description?: string;
+  features?: string[];
+  cta?: string;
+  href?: string;
+  highlighted?: boolean;
+};
 
 export default function PricingPage() {
-  const [plans, setPlans] = useState<Array<{ id: string; name: string; price: number | string; credits?: number; description?: string }>>([]);
+  const [plans, setPlans] = useState<PlanItem[]>([]);
 
   useEffect(() => {
     fetch(`${getApiBase()}/plans`)
-      .then((res) => res.json())
-      .then((data) => setPlans(Array.isArray(data) ? data : []))
+      .then(async (res) => {
+        const data = await apiJson<{ success?: boolean; plans?: PlanItem[] } | PlanItem[]>(res);
+        if (data && typeof data === "object" && "success" in data && "plans" in data && Array.isArray((data as { plans: PlanItem[] }).plans)) {
+          return (data as { plans: PlanItem[] }).plans;
+        }
+        if (Array.isArray(data)) return data;
+        return [];
+      })
+      .then(setPlans)
       .catch(() => setPlans([]));
   }, []);
 
