@@ -2603,27 +2603,4 @@ app.use(function (err, req, res, next) {
   res.status(500).json({ error: err.message || "Server error" });
 });
 
-var PORT = parseInt(process.env.PORT, 10) || 3006;
-var server;
-
-function startServer(port) {
-  server = app.listen(port, "0.0.0.0", function () {
-    PORT = port;
-    console.log("SnapSell API listening on port", PORT, "(Ready)");
-  });
-  server.on("error", function (err) {
-    if (err.code === "EADDRINUSE" && port < 3010) {
-      console.warn("Port " + port + " dolu, " + (port + 1) + " deneniyor...");
-      startServer(port + 1);
-    } else {
-      console.error("Sunucu hatasi:", err);
-    }
-  });
-}
-
-try {
-  startServer(PORT);
-} catch (err) {
-  console.error("Listen hatasi:", err);
-  process.exit(1);
-}
+module.exports = { app };

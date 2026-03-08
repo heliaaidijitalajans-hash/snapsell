@@ -1,0 +1,8 @@
+# Backend sadece npm install ile kurulur; frontend build calistirilmasin.
+[build]
+buildCommand = "npm install"
+
+[deploy]
+startCommand = "node start.js"
+healthcheckPath = "/ping"
+healthcheckTimeout = 30

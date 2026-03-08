@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js",
+    "start": "node start.js",
     "dev": "node server.js",
     "build": "npm run build:design",
     "deploy:firebase": "npm run build && echo. && echo [KURULUM] dist/config.json icinde apiUrl = backend URL yapin, sonra: firebase deploy && echo.",
