@@ -142,13 +142,15 @@ export function EditorReplicatePage() {
       }
       let imageUrl = (data.image ?? data.outputUrl ?? data.output?.[0] ?? (Array.isArray(data.output) ? data.output[0] : data.output)) as string | undefined;
       if (imageUrl && typeof imageUrl === "string") {
-        const apiBase = getApiBase();
-        if (!imageUrl.startsWith("http") && !imageUrl.startsWith("data:")) {
-          imageUrl = `${apiBase}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
+        if (!imageUrl.startsWith("http") && !imageUrl.startsWith("data:image")) {
+          imageUrl = `data:image/png;base64,${imageUrl}`;
         }
-        const sep = imageUrl.includes("?") ? "&" : "?";
-        const finalUrl = imageUrl + sep + "_t=" + Date.now();
-        console.log("Processed image URL:", finalUrl);
+        if (imageUrl.startsWith("/")) {
+          const apiBase = getApiBase();
+          imageUrl = `${apiBase}${imageUrl}`;
+        }
+        const finalUrl = imageUrl.startsWith("data:") ? imageUrl : imageUrl + (imageUrl.includes("?") ? "&" : "?") + "_t=" + Date.now();
+        console.log("Image URL type:", finalUrl.substring(0, 30));
         setOutputUrl(finalUrl);
       }
       if (data.priceSummary && typeof data.priceSummary === "string") setPriceSummary(data.priceSummary);
@@ -431,9 +433,12 @@ export function EditorReplicatePage() {
 
       {outputUrl && (() => {
         let displayUrl = outputUrl;
-        if (!displayUrl.startsWith("http") && !displayUrl.startsWith("data:")) {
+        if (!displayUrl.startsWith("http") && !displayUrl.startsWith("data:image")) {
+          displayUrl = `data:image/png;base64,${displayUrl}`;
+        }
+        if (displayUrl.startsWith("/")) {
           const apiBase = getApiBase();
-          displayUrl = `${apiBase}${displayUrl.startsWith("/") ? "" : "/"}${displayUrl}`;
+          displayUrl = `${apiBase}${displayUrl}`;
         }
         return (
         <div ref={resultRef} className="mt-8 space-y-6">
@@ -456,7 +461,7 @@ export function EditorReplicatePage() {
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 flex flex-col items-center">
               <img
                 src={displayUrl}
-                alt={t("editor.resultAlt")}
+                alt="Generated result"
                 className="max-w-full max-h-96 object-contain rounded-lg"
                 onError={(e) => {
                   const img = e.target as HTMLImageElement;
