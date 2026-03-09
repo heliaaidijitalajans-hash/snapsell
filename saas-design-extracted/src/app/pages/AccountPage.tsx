@@ -42,7 +42,7 @@ export function AccountPage() {
   useEffect(() => {
     let cancelled = false;
     getAuthHeaders()
-      .then((headers) => fetch(`${getApiBase()}/account`, { headers }))
+      .then((headers) => fetch(`${getApiBase()}/api/account`, { headers }))
       .then(async (r) => {
         const parsed = await apiJson<AccountData | { success?: boolean; data?: AccountData }>(r);
         if (!r.ok) return Promise.reject(new Error((parsed && typeof parsed === "object" && "error" in parsed && parsed.error) ? String(parsed.error) : t("account.errorLoad")));

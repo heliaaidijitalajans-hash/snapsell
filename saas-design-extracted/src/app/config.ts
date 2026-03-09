@@ -1,9 +1,9 @@
-/** Same-origin API. All requests go to Vercel serverless /api/*. No external server.js. */
-const API_BASE = "/api";
+/** API base: empty = same-origin. Set VITE_API_BASE for external backend (e.g. server.js). */
+const API_BASE = import.meta.env.VITE_API_BASE || "";
 
 export const API_BASE_URL = API_BASE;
 
-/** Returns "/api" so fetch(getApiBase() + "/photoroom/pipeline") hits /api/photoroom/pipeline. */
+/** Returns API base so fetch(getApiBase() + "/api/photoroom/pipeline") hits same-origin or custom backend. */
 export function getApiBase(): string {
   return API_BASE;
 }
