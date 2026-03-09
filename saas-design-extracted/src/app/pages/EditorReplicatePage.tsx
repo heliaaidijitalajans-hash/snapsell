@@ -4,6 +4,7 @@ import { useLanguage } from "../contexts/LanguageContext";
 import { Upload, Sparkles, ImageIcon, Check, Store } from "lucide-react";
 import { Link } from "react-router";
 import { getApiBase } from "../config";
+import { saveGeneratedImageToLibrary } from "../lib/libraryImages";
 
 const MARKETPLACES = [
   { id: "trendyol", name: "Trendyol" },
@@ -23,7 +24,7 @@ const QUALITY_OPTIONS = [
 ] as const;
 
 export function EditorReplicatePage() {
-  const { getAuthHeaders } = useAuth();
+  const { user, getAuthHeaders } = useAuth();
   const { t } = useLanguage();
   const [hasEditor, setHasEditor] = useState<boolean | null>(null);
   const [freeEditorUsesRemaining, setFreeEditorUsesRemaining] = useState<number | null>(null);
@@ -154,6 +155,10 @@ export function EditorReplicatePage() {
         const finalUrl = imageUrl.startsWith("data:") ? imageUrl : imageUrl + (imageUrl.includes("?") ? "&" : "?") + "_t=" + Date.now();
         console.log("Image URL type:", finalUrl.substring(0, 30));
         setOutputUrl(finalUrl);
+        if (user?.uid && imageUrl.startsWith("data:")) {
+          const userPrompt = prompt.trim() || (photoQuality === "luxury" ? "luxury product photography" : photoQuality === "professional" ? "commercial product shot" : "professional product photography");
+          saveGeneratedImageToLibrary(user.uid, imageUrl, userPrompt).catch((err) => console.warn("Library save failed:", err));
+        }
       }
       if (data.seo && typeof data.seo === "string") setSeoDescription(data.seo);
       if (data.priceSummary && typeof data.priceSummary === "string") setPriceSummary(data.priceSummary);
@@ -174,7 +179,7 @@ export function EditorReplicatePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedFile, prompt, photoQuality, priceAnalysisProductDescription, hasEditor, getAuthHeaders, t, freeEditorUsesRemaining]);
+  }, [selectedFile, prompt, photoQuality, priceAnalysisProductDescription, hasEditor, getAuthHeaders, t, freeEditorUsesRemaining, user?.uid]);
 
   const clearSelection = useCallback(() => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);

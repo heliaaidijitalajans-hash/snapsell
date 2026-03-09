@@ -330,9 +330,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     "account.loadFailed": "Hesap bilgisi yüklenemedi.",
     // Library
     "library.title": "Kütüphane",
-    "library.empty": "Henüz yükleme yok. Editörden bir fotoğraf yükleyin.",
+    "library.empty": "Henüz görsel yok. Görsel düzenlemeden bir fotoğraf işleyin; sonuçlar burada listelenir.",
+    "library.signInToView": "Kütüphaneyi görmek için giriş yapın.",
     "library.note": "Not:",
-    "library.noteText": "Kütüphane tarayıcınızda (localStorage) saklanır. En son 20 dönüşüm gösterilir; daha eski kayıtlar otomatik olarak listeden çıkar. Veriler yalnızca bu cihazda kalır; farklı cihaz veya tarayıcıda görünmez.",
+    "library.noteText": "PhotoRoom ile işlenen görseller hesabınıza kaydedilir ve burada listelenir.",
     // Editor (Görsel düzenleme)
     "editor.title": "Ürün stüdyo görseli",
     "editor.pleaseSelectImage": "Lütfen bir görsel seçin (PNG, JPG, WEBP).",
@@ -707,9 +708,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     "account.loadFailed": "Could not load account info.",
     // Library
     "library.title": "Library",
-    "library.empty": "No uploads yet. Upload a photo from the editor.",
+    "library.empty": "No images yet. Process a photo in the image editor; results will appear here.",
+    "library.signInToView": "Sign in to view your library.",
     "library.note": "Note:",
-    "library.noteText": "The library is stored in your browser (localStorage). The latest 20 conversions are shown; older entries are removed automatically. Data stays on this device only and is not visible on other devices or browsers.",
+    "library.noteText": "Images processed with PhotoRoom are saved to your account and listed here.",
     // Editor
     "editor.title": "Product studio image",
     "editor.pleaseSelectImage": "Please select an image (PNG, JPG, WEBP).",
