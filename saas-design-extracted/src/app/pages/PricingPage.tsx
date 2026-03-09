@@ -103,7 +103,7 @@ export default function PricingPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`${getApiBase()}/api/site-plans`, { signal: controller.signal })
+    fetch(`${getApiBase()}/site-plans`, { signal: controller.signal })
       .then(async (res) => {
         const data = await apiJson<{ success?: boolean; plans?: PlanItem[] } | PlanItem[]>(res);
         if (data && typeof data === "object" && "plans" in data && Array.isArray((data as { plans: PlanItem[] }).plans)) {
@@ -118,7 +118,7 @@ export default function PricingPage() {
       })
       .then(setPlans)
       .catch(() => {
-        fetch(`${getApiBase()}/api/plans`, { signal: controller.signal })
+        fetch(`${getApiBase()}/plans`, { signal: controller.signal })
           .then(async (res) => {
             const data = await apiJson<{ success?: boolean; plans?: PlanItem[] } | PlanItem[]>(res);
             if (data && typeof data === "object" && "plans" in data && Array.isArray((data as { plans: PlanItem[] }).plans)) {

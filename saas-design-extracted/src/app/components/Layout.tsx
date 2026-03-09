@@ -18,7 +18,7 @@ export function Layout() {
     if (sessionStorage.getItem("snapsell_visit_sent")) return;
     if (!hasAnalyticsConsent()) return;
     sessionStorage.setItem("snapsell_visit_sent", "1");
-    fetch(`${getApiBase()}/api/track-visit`, { method: "GET" }).catch(() => {});
+    fetch(`${getApiBase()}/track-visit`, { method: "GET" }).catch(() => {});
   }, []);
 
   const navigation = [

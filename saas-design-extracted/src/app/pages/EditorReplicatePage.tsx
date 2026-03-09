@@ -54,7 +54,7 @@ export function EditorReplicatePage() {
   useEffect(() => {
     let cancelled = false;
     getAuthHeaders()
-      .then((headers) => fetch(`${getApiBase()}/api/replicate/status`, { headers }))
+      .then((headers) => fetch(`${getApiBase()}/replicate/status`, { headers }))
       .then((r) => r.json())
       .then((data) => {
         if (!cancelled) {
@@ -106,7 +106,7 @@ export function EditorReplicatePage() {
       });
       const controller = new AbortController();
       const timeoutId = window.setTimeout(() => controller.abort(), 100000);
-      const res = await fetch(`${getApiBase()}/api/photoroom/pipeline`, {
+      const res = await fetch(`${getApiBase()}/photoroom/pipeline`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({

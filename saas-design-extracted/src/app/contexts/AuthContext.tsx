@@ -26,7 +26,7 @@ async function ensureSession(): Promise<string> {
   let sid = localStorage.getItem(SESSION_KEY);
   if (sid) return sid;
   try {
-    const res = await fetch(`${getApiBase()}/api/register`, { method: "POST" });
+    const res = await fetch(`${getApiBase()}/register`, { method: "POST" });
     const d = await apiJson<{ sessionId?: string; data?: { sessionId?: string }; success?: boolean }>(res).catch(() => ({}));
     const sessionId = (d?.data?.sessionId ?? d?.sessionId) || "";
     if (sessionId) {

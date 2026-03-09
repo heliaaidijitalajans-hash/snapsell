@@ -1,17 +1,107 @@
-/** Placeholder on Vercel: real pipeline runs on server.js. Set VITE_API_BASE to your backend URL so the app calls it instead. */
-export default function handler(req, res) {
+/**
+ * Vercel serverless: PhotoRoom v2 Edit = arka plan silme + kullanıcı promptuna göre yeni arka plan oluşturma.
+ * Frontend: { image: base64 data URL, prompt: string }.
+ * Requires PHOTOROOM_API_KEY in Vercel env.
+ */
+export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
+
   if (req.method !== "POST") {
-    return res.status(400).json({ success: false, error: "Method not allowed" });
+    return res.status(405).json({ success: false, error: "Method not allowed" });
   }
-  const authHeader = req.headers.authorization || req.headers["x-session-id"] || null;
-  if (!authHeader) {
-    return res.status(401).json({ success: false, error: "Oturum gerekli" });
+
+  if (!process.env.PHOTOROOM_API_KEY) {
+    return res.status(500).json({
+      success: false,
+      error: "Missing PHOTOROOM_API_KEY env variable"
+    });
   }
-  res.status(503).json({
-    success: false,
-    error: "Görsel işleme sunucusu bu ortamda çalışmıyor. Backend (server.js) adresini VITE_API_BASE ile ayarlayın veya backend'i aynı domain'e deploy edin.",
-    upgradeUrl: "/fiyatlandirma",
-    code: "BACKEND_REQUIRED"
-  });
+
+  let body;
+  try {
+    body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
+  } catch {
+    return res.status(400).json({ success: false, error: "Invalid JSON body" });
+  }
+
+  const image = body.image;
+  if (!image || typeof image !== "string") {
+    return res.status(400).json({ success: false, error: "Body must include image (base64 data URL)" });
+  }
+
+  let buf;
+  try {
+    const base64Part = image.replace(/^data:image\/\w+;base64,/, "");
+    if (!base64Part) return res.status(400).json({ success: false, error: "Invalid base64 image" });
+    buf = Buffer.from(base64Part, "base64");
+    if (buf.length > 10 * 1024 * 1024) return res.status(400).json({ success: false, error: "Görsel 10 MB'dan küçük olmalı" });
+  } catch (e) {
+    return res.status(400).json({ success: false, error: "Geçersiz base64 görsel" });
+  }
+
+  const bgPrompt = (body.prompt && typeof body.prompt === "string")
+    ? String(body.prompt).trim().slice(0, 500)
+    : "professional product photography, studio lighting, clean neutral background, soft shadows";
+
+  try {
+    const FormData = globalThis.FormData;
+    const form = new FormData();
+    const blob = new Blob([buf], { type: "image/png" });
+    form.append("imageFile", blob, "image.png");
+    form.append("removeBackground", "true");
+    form.append("referenceBox", "subjectBox");
+    form.append("scaling", "fit");
+    form.append("outputSize", "1200x1200");
+    form.append("padding", "0.12");
+    form.append("background.prompt", bgPrompt);
+
+    const phRes = await fetch("https://image-api.photoroom.com/v2/edit", {
+      method: "POST",
+      headers: {
+        "x-api-key": process.env.PHOTOROOM_API_KEY,
+        "pr-ai-background-model-version": "background-studio-beta-2025-03-17"
+      },
+      body: form
+    });
+
+    console.log("[photoroom/pipeline] PhotoRoom response status:", phRes.status);
+
+    if (!phRes.ok) {
+      const errText = await phRes.text();
+      console.log("[photoroom/pipeline] PhotoRoom error body:", errText.slice(0, 800));
+      let detail = errText.slice(0, 400);
+      try {
+        const j = JSON.parse(errText);
+        const raw = j.message || j.error || j.detail || detail;
+        detail = typeof raw === "string" ? raw : (raw && typeof raw === "object" ? (raw.message || raw.error || JSON.stringify(raw)) : String(raw));
+      } catch (_) {}
+      const detailStr = typeof detail === "string" ? detail : JSON.stringify(detail || "");
+      const isExhausted = /exhausted|number of images|plan.*limit|kotanız.*doldu/i.test(detailStr);
+      const status = phRes.status === 402 ? 402 : phRes.status === 401 ? 401 : 502;
+      return res.status(status).json({
+        success: false,
+        error: isExhausted
+          ? "PhotoRoom aylık görsel kotanız dolmuş. Image Editing (Plus) planınızı veya kredinizi https://app.photoroom.com/api-dashboard adresinden yenileyin."
+          : (detailStr ? "PhotoRoom: " + detailStr.slice(0, 220) : "PhotoRoom API hatası."),
+        ...(isExhausted && { upgradeUrl: "/fiyatlandirma", billingUrl: "https://app.photoroom.com/api-dashboard", photoroomDashboardUrl: "https://app.photoroom.com/api-dashboard" })
+      });
+    }
+
+    const resultBuf = Buffer.from(await phRes.arrayBuffer());
+    console.log("[photoroom/pipeline] PhotoRoom success body length:", resultBuf ? resultBuf.length : 0);
+    if (!resultBuf || resultBuf.length === 0) {
+      return res.status(502).json({ success: false, error: "PhotoRoom boş yanıt döndü." });
+    }
+    const resultBase64 = resultBuf.toString("base64");
+    const dataUrl = "data:image/png;base64," + resultBase64;
+    return res.status(200).json({ success: true, outputUrl: dataUrl, output: [dataUrl] });
+  } catch (e) {
+    console.error("[photoroom/pipeline] Error:", e.message);
+    console.error("[photoroom/pipeline] Stack:", e.stack);
+    return res.status(500).json({
+      success: false,
+      error: e.message || "PhotoRoom isteği başarısız.",
+      stack: e.stack || undefined
+    });
+  }
 }

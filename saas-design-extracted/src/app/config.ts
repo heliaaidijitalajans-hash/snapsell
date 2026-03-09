@@ -1,10 +1,11 @@
-/** API base: "" = same-origin /api/... . Set VITE_API_BASE to backend URL (e.g. https://api.snapsell.website) to use server.js. */
-const envBase = typeof import.meta.env !== "undefined" && import.meta.env?.VITE_API_BASE;
-export const API_BASE_URL = (typeof envBase === "string" ? envBase.trim() : "") || "";
+/** Same-origin API. All requests go to Vercel serverless /api/*. No external server.js. */
+const API_BASE = "/api";
 
-/** Returns API base: "" for same-origin, or VITE_API_BASE for full backend (server.js). */
+export const API_BASE_URL = API_BASE;
+
+/** Returns "/api" so fetch(getApiBase() + "/photoroom/pipeline") hits /api/photoroom/pipeline. */
 export function getApiBase(): string {
-  return API_BASE_URL;
+  return API_BASE;
 }
 
 /** Parse JSON from response. Returns {} for empty/non-JSON; throws only for HTML (wrong host). */
