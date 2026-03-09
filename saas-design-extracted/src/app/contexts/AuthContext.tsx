@@ -6,7 +6,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { onAuthStateChanged, type User } from "firebase/auth";
+import { onAuthStateChanged, getRedirectResult, type User } from "firebase/auth";
 import { getFirebaseAuth } from "../lib/firebase";
 import { getApiBase, apiJson } from "../config";
 
@@ -26,7 +26,7 @@ async function ensureSession(): Promise<string> {
   let sid = localStorage.getItem(SESSION_KEY);
   if (sid) return sid;
   try {
-    const res = await fetch(`${getApiBase()}/register`, { method: "POST" });
+    const res = await fetch(`${getApiBase()}/api/register`, { method: "POST" });
     const d = await apiJson<{ sessionId?: string; data?: { sessionId?: string }; success?: boolean }>(res).catch(() => ({}));
     const sessionId = (d?.data?.sessionId ?? d?.sessionId) || "";
     if (sessionId) {
@@ -73,7 +73,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const auth = getFirebaseAuth();
+    let cancelled = false;
+
+    getRedirectResult(auth)
+      .then((credential) => {
+        if (cancelled) return;
+        if (credential?.user) {
+          setUser(credential.user);
+          setSessionId(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) console.warn("Firebase redirect result:", err);
+      });
+
     const unsub = onAuthStateChanged(auth, async (u) => {
+      if (cancelled) return;
       setUser(u || null);
       if (!u) {
         const sid = await ensureSession();
@@ -83,7 +98,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setLoading(false);
     });
-    return () => unsub();
+
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, []);
 
   const value: AuthContextValue = {

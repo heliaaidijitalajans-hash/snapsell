@@ -37,6 +37,7 @@ export function EditorReplicatePage() {
   const [priceAnalysisPlatforms, setPriceAnalysisPlatforms] = useState<Array<{ name: string; currency: string; minPrice?: number; avgPrice?: number; maxPrice?: number }> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorBillingUrl, setErrorBillingUrl] = useState<string | null>(null);
+  const [errorUpgradeUrl, setErrorUpgradeUrl] = useState<string | null>(null);
   const [errorPhotoRoomDashboard, setErrorPhotoRoomDashboard] = useState(false);
   const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>([]);
   const [photoQuality, setPhotoQuality] = useState<"studio" | "professional" | "luxury">("studio");
@@ -53,7 +54,7 @@ export function EditorReplicatePage() {
   useEffect(() => {
     let cancelled = false;
     getAuthHeaders()
-      .then((headers) => fetch(`${getApiBase()}/replicate/status`, { headers }))
+      .then((headers) => fetch(`${getApiBase()}/api/replicate/status`, { headers }))
       .then((r) => r.json())
       .then((data) => {
         if (!cancelled) {
@@ -105,7 +106,7 @@ export function EditorReplicatePage() {
       });
       const controller = new AbortController();
       const timeoutId = window.setTimeout(() => controller.abort(), 100000);
-      const res = await fetch(`${getApiBase()}/photoroom/pipeline`, {
+      const res = await fetch(`${getApiBase()}/api/photoroom/pipeline`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({
@@ -133,9 +134,10 @@ export function EditorReplicatePage() {
         const errMsg = [normalize((data as any).error), normalize((data as any).detail)]
           .filter((s) => s && s.trim().length > 0)
           .join(" — ") || t("editor.failed");
-        const err = new Error(errMsg) as Error & { billingUrl?: string; photoroomDashboard?: boolean };
+        const err = new Error(errMsg) as Error & { billingUrl?: string; photoroomDashboard?: boolean; upgradeUrl?: string };
         if ((data as any).billingUrl) err.billingUrl = (data as any).billingUrl;
         if ((data as any).photoroomDashboardUrl) err.photoroomDashboard = true;
+        if ((data as any).upgradeUrl) err.upgradeUrl = (data as any).upgradeUrl;
         throw err;
       }
       const url = data.outputUrl ?? data.output?.[0] ?? (Array.isArray(data.output) ? data.output[0] : data.output);
@@ -153,12 +155,11 @@ export function EditorReplicatePage() {
         e instanceof Error && e.name === "AbortError"
           ? t("editor.timeout")
           : e instanceof Error ? e.message : t("editor.failed");
-      const errWithBilling = e instanceof Error && "billingUrl" in e ? (e as Error & { billingUrl?: string; photoroomDashboard?: boolean }) : null;
-      const billingUrl = errWithBilling?.billingUrl;
-      const isPhotoRoomDashboard = errWithBilling?.photoroomDashboard;
+      const errWithExtras = e instanceof Error && ("billingUrl" in e || "upgradeUrl" in e) ? (e as Error & { billingUrl?: string; upgradeUrl?: string; photoroomDashboard?: boolean }) : null;
       setError(msg);
-      setErrorBillingUrl(billingUrl || null);
-      setErrorPhotoRoomDashboard(!!isPhotoRoomDashboard);
+      setErrorBillingUrl(errWithExtras?.billingUrl || null);
+      setErrorUpgradeUrl(errWithExtras?.upgradeUrl || null);
+      setErrorPhotoRoomDashboard(!!errWithExtras?.photoroomDashboard);
     } finally {
       setLoading(false);
     }
@@ -174,6 +175,7 @@ export function EditorReplicatePage() {
     setPriceAnalysisPlatforms(null);
     setError(null);
     setErrorBillingUrl(null);
+    setErrorUpgradeUrl(null);
     setSelectedMarketplaces([]);
     setPhotoQuality("studio");
     setPriceAnalysisProductDescription("");
@@ -409,6 +411,13 @@ export function EditorReplicatePage() {
               <a href={errorBillingUrl} target="_blank" rel="noopener noreferrer" className="underline font-medium">
                 {errorPhotoRoomDashboard ? t("editor.renewPhotoRoom") : t("editor.paymentBalance")}
               </a>
+            </p>
+          )}
+          {errorUpgradeUrl && (
+            <p className="mt-2">
+              <Link to={errorUpgradeUrl} className="underline font-medium text-[#FF5A5F]">
+                {t("editor.goPricing")}
+              </Link>
             </p>
           )}
         </div>

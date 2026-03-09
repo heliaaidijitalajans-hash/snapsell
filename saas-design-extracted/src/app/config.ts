@@ -1,9 +1,10 @@
-/** Same-origin Vercel API. No config.json or env required. */
-export const API_BASE_URL = "/api";
+/** API base: "" = same-origin /api/... . Set VITE_API_BASE to backend URL (e.g. https://api.snapsell.website) to use server.js. */
+const envBase = typeof import.meta.env !== "undefined" && import.meta.env?.VITE_API_BASE;
+export const API_BASE_URL = (typeof envBase === "string" ? envBase.trim() : "") || "";
 
-/** Returns "/api" for all fetch calls. No Firebase/backend detection. */
+/** Returns API base: "" for same-origin, or VITE_API_BASE for full backend (server.js). */
 export function getApiBase(): string {
-  return "/api";
+  return API_BASE_URL;
 }
 
 /** Parse JSON from response. Returns {} for empty/non-JSON; throws only for HTML (wrong host). */

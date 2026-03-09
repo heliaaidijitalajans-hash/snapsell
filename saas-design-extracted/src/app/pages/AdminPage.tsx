@@ -103,7 +103,7 @@ export function AdminPage() {
       const headers: Record<string, string> = { ...(opts.headers as Record<string, string>) };
       const token = overrideToken !== undefined ? overrideToken : adminToken;
       if (token) headers.Authorization = "Bearer " + token;
-      return fetch(getApiBase() + url, {
+      return fetch(getApiBase() + "/api" + url, {
         ...opts,
         credentials: "omit",
         headers,
@@ -249,7 +249,7 @@ export function AdminPage() {
     e.preventDefault();
     setLoginError("");
     try {
-      const r = await fetch(getApiBase() + "/admin/login", {
+      const r = await fetch(getApiBase() + "/api/admin/login", {
         method: "POST",
         credentials: "omit",
         headers: { "Content-Type": "application/json" },
