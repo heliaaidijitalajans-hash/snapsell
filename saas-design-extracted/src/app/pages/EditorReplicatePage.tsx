@@ -140,10 +140,16 @@ export function EditorReplicatePage() {
         if ((data as any).upgradeUrl) err.upgradeUrl = (data as any).upgradeUrl;
         throw err;
       }
-      const url = data.outputUrl ?? data.output?.[0] ?? (Array.isArray(data.output) ? data.output[0] : data.output);
-      if (url && typeof url === "string") {
-        const sep = url.includes("?") ? "&" : "?";
-        setOutputUrl(url + sep + "_t=" + Date.now());
+      let imageUrl = (data.image ?? data.outputUrl ?? data.output?.[0] ?? (Array.isArray(data.output) ? data.output[0] : data.output)) as string | undefined;
+      if (imageUrl && typeof imageUrl === "string") {
+        const apiBase = getApiBase();
+        if (!imageUrl.startsWith("http") && !imageUrl.startsWith("data:")) {
+          imageUrl = `${apiBase}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
+        }
+        const sep = imageUrl.includes("?") ? "&" : "?";
+        const finalUrl = imageUrl + sep + "_t=" + Date.now();
+        console.log("Processed image URL:", finalUrl);
+        setOutputUrl(finalUrl);
       }
       if (data.priceSummary && typeof data.priceSummary === "string") setPriceSummary(data.priceSummary);
       if (Array.isArray(data.priceAnalysis) && data.priceAnalysis.length > 0) setPriceAnalysisPlatforms(data.priceAnalysis);
@@ -423,7 +429,13 @@ export function EditorReplicatePage() {
         </div>
       )}
 
-      {outputUrl && (
+      {outputUrl && (() => {
+        let displayUrl = outputUrl;
+        if (!displayUrl.startsWith("http") && !displayUrl.startsWith("data:")) {
+          const apiBase = getApiBase();
+          displayUrl = `${apiBase}${displayUrl.startsWith("/") ? "" : "/"}${displayUrl}`;
+        }
+        return (
         <div ref={resultRef} className="mt-8 space-y-6">
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
             <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
@@ -443,7 +455,7 @@ export function EditorReplicatePage() {
             <p className="text-sm text-gray-500 mb-4">{t("editor.resultHint")}</p>
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 flex flex-col items-center">
               <img
-                src={outputUrl}
+                src={displayUrl}
                 alt={t("editor.resultAlt")}
                 className="max-w-full max-h-96 object-contain rounded-lg"
                 onError={(e) => {
@@ -455,13 +467,13 @@ export function EditorReplicatePage() {
               />
               <p className="mt-2 text-sm text-amber-700 hidden">
                 {t("editor.imageLoadFailed")}{" "}
-                <a href={outputUrl} target="_blank" rel="noopener noreferrer" className="text-[#FF5A5F] underline">
+                <a href={displayUrl} target="_blank" rel="noopener noreferrer" className="text-[#FF5A5F] underline">
                   {t("editor.openInNewTab")}
                 </a>
               </p>
             </div>
             <a
-              href={outputUrl}
+              href={displayUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-3 inline-flex text-sm font-medium text-[#FF5A5F] hover:underline"
@@ -507,7 +519,8 @@ export function EditorReplicatePage() {
             </div>
           )}
         </div>
-      )}
+      );
+      })()}
     </div>
   );
 }

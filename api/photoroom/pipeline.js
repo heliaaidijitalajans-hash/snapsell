@@ -94,7 +94,12 @@ export default async function handler(req, res) {
     }
     const resultBase64 = resultBuf.toString("base64");
     const dataUrl = "data:image/png;base64," + resultBase64;
-    return res.status(200).json({ success: true, outputUrl: dataUrl, output: [dataUrl] });
+    return res.status(200).json({
+      success: true,
+      image: dataUrl,
+      outputUrl: dataUrl,
+      output: [dataUrl]
+    });
   } catch (e) {
     console.error("[photoroom/pipeline] Error:", e.message);
     console.error("[photoroom/pipeline] Stack:", e.stack);
