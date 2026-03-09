@@ -14,7 +14,8 @@
     "deploy:firebase": "npm run build && echo. && echo [KURULUM] Firebase icin dist/config.json apiUrl gerekirse ayarlayin, sonra: firebase deploy && echo.",
     "build:css": "npx tailwindcss -i ./src/input.css -o ./public/css/tailwind.css --minify",
     "build:design": "npm run build --prefix saas-design-extracted",
-    "postinstall": "node -e \"try { require('fs').mkdirSync('data', { recursive: true }); } catch (e) {}\""
+    "postinstall": "node -e \"try { require('fs').mkdirSync('data', { recursive: true }); } catch (e) {}\"",
+    "load-plans": "node scripts/load-plans.js"
   },
   "keywords": [],
   "author": "",

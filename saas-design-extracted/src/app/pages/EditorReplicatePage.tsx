@@ -33,6 +33,7 @@ export function EditorReplicatePage() {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
+  const [seoDescription, setSeoDescription] = useState<string | null>(null);
   const [priceSummary, setPriceSummary] = useState<string | null>(null);
   const [priceAnalysisPlatforms, setPriceAnalysisPlatforms] = useState<Array<{ name: string; currency: string; minPrice?: number; avgPrice?: number; maxPrice?: number }> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +94,7 @@ export function EditorReplicatePage() {
     if (!selectedFile || !hasEditor) return;
     setError(null);
     setOutputUrl(null);
+    setSeoDescription(null);
     setPriceSummary(null);
     setPriceAnalysisPlatforms(null);
     setLoading(true);
@@ -153,6 +155,7 @@ export function EditorReplicatePage() {
         console.log("Image URL type:", finalUrl.substring(0, 30));
         setOutputUrl(finalUrl);
       }
+      if (data.seo && typeof data.seo === "string") setSeoDescription(data.seo);
       if (data.priceSummary && typeof data.priceSummary === "string") setPriceSummary(data.priceSummary);
       if (Array.isArray(data.priceAnalysis) && data.priceAnalysis.length > 0) setPriceAnalysisPlatforms(data.priceAnalysis);
       if (freeEditorUsesRemaining !== null) {
@@ -179,6 +182,7 @@ export function EditorReplicatePage() {
     setSelectedFile(null);
     setPrompt("");
     setOutputUrl(null);
+    setSeoDescription(null);
     setPriceSummary(null);
     setPriceAnalysisPlatforms(null);
     setError(null);
@@ -486,6 +490,16 @@ export function EditorReplicatePage() {
               {t("editor.downloadOrOpen")}
             </a>
           </div>
+
+          {seoDescription && (
+            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                <span className="w-1 h-5 rounded-full bg-blue-500" />
+                {t("editor.seoDescription")}
+              </h3>
+              <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">{seoDescription}</p>
+            </div>
+          )}
 
           {(priceSummary || (priceAnalysisPlatforms && priceAnalysisPlatforms.length > 0)) && (
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">

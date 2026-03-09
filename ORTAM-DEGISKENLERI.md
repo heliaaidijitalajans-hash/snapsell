@@ -10,6 +10,13 @@ Vercel Dashboard → Proje → Settings → Environment Variables bölümünde a
 |----------|----------|----------------|
 | `PHOTOROOM_API_KEY` | PhotoRoom API anahtarı (arka plan silme + yeni arka plan). | [PhotoRoom API Dashboard](https://app.photoroom.com/api-dashboard) → API Key. **Image Editing (Plus)** planı gerekir. |
 
+### Opsiyonel (pipeline: SEO + fiyat analizi)
+
+| Değişken | Açıklama |
+|----------|----------|
+| `OPENAI_API_KEY` | SEO açıklaması (görsel analiz) ve fiyat özeti metni için. Tanımlanmazsa pipeline sadece görsel döndürür. |
+| `SCRAPERAPI_API_KEY` veya `SCRAPER_API_KEY` | Gerçek pazaryeri fiyat analizi (Trendyol, Hepsiburada, Amazon TR/US/UK/DE, Etsy) için. Tanımlanmazsa fiyat kısmı sadece görselden GPT tahmini ile dolar. |
+
 ### Opsiyonel (frontend build)
 
 | Değişken | Açıklama | Varsayılan |

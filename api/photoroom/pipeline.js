@@ -94,11 +94,64 @@ export default async function handler(req, res) {
     }
     const resultBase64 = resultBuf.toString("base64");
     const dataUrl = "data:image/png;base64," + resultBase64;
+
+    let seoText = "";
+    let priceSummary = null;
+    let priceAnalysis = [];
+    const productDesc = (body.productDescriptionForPriceAnalysis && String(body.productDescriptionForPriceAnalysis).trim()) || "";
+
+    if (process.env.OPENAI_API_KEY) {
+      try {
+        const { default: OpenAI } = await import("openai");
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+        const seoRes = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [{
+            role: "user",
+            content: [
+              { type: "text", text: "Bu urun fotografini analiz et ve SEO aciklamasi yaz" },
+              { type: "image_url", image_url: { url: dataUrl } }
+            ]
+          }]
+        });
+        seoText = (seoRes.choices?.[0]?.message?.content || "").trim();
+
+        const priceInput = productDesc || seoText;
+        const { getPriceAnalysisWithScraperAPI } = await import("../lib/price-analysis.js");
+        const scraped = priceInput ? await getPriceAnalysisWithScraperAPI(priceInput) : null;
+        if (scraped && scraped.platforms && scraped.platforms.length > 0) {
+          priceSummary = scraped.summaryText || "";
+          priceAnalysis = scraped.platforms;
+        } else {
+          const priceRes = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [{
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: "Bu urun fotografini analiz et ve fiyat analizi yap. Urunun tahmini piyasa fiyati (TL), platform fiyat araligi, onerilen satis fiyati ve rekabetci fiyatlandirma stratejisi belirt."
+                },
+                { type: "image_url", image_url: { url: dataUrl } }
+              ]
+            }]
+          });
+          priceSummary = (priceRes.choices?.[0]?.message?.content || "").trim() || null;
+        }
+      } catch (openaiErr) {
+        console.error("[photoroom/pipeline] OpenAI SEO/fiyat:", openaiErr.message);
+      }
+    }
+
     return res.status(200).json({
       success: true,
       image: dataUrl,
       outputUrl: dataUrl,
-      output: [dataUrl]
+      output: [dataUrl],
+      seo: seoText || undefined,
+      priceSummary: priceSummary || undefined,
+      priceAnalysis
     });
   } catch (e) {
     console.error("[photoroom/pipeline] Error:", e.message);
