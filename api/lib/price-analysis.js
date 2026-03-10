@@ -5,6 +5,36 @@
 
 const SCRAPERAPI_API_KEY = (process.env.SCRAPERAPI_API_KEY || process.env.SCRAPER_API_KEY || "").trim();
 const EXA_API_KEY = (process.env.EXA_API_KEY || "").trim();
+const SERPAPI_API_KEY = (process.env.SERPAPI_API_KEY || "").trim();
+
+/** Görsel + kullanıcı metninden fiyat araması için tek bir ürün arama terimi üretir (GPT Vision). */
+export async function getProductQueryFromImageAndText(imageUrl, userText) {
+  if (!process.env.OPENAI_API_KEY) return (userText && String(userText).trim()) || "";
+  const text = (userText && String(userText).trim()) || "";
+  if (!imageUrl || typeof imageUrl !== "string") return text;
+  try {
+    const { default: OpenAI } = await import("openai");
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const content = [
+      {
+        type: "text",
+        text: "Bu ürün görseli ve kullanıcının yazdığı metne göre fiyat araması için tek bir net arama terimi üret (Türkçe, 3-8 kelime). Sadece arama terimini döndür, başka metin yazma."
+      },
+      { type: "image_url", image_url: { url: imageUrl } }
+    ];
+    if (text) content[0].text = `Kullanıcı metni: "${text}". Buna ve görsele göre fiyat araması için tek bir net arama terimi üret (Türkçe, 3-8 kelime). Sadece arama terimini döndür.`;
+    const res = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content }],
+      max_tokens: 80
+    });
+    const query = (res.choices?.[0]?.message?.content || "").trim();
+    return query || text;
+  } catch (e) {
+    console.warn("Ürün tespiti (Vision):", e.message);
+    return text;
+  }
+}
 
 const PRICE_MARKETPLACES = [
   { urlBase: "https://www.amazon.com.tr/s?k=", currency: "TRY", name: "Amazon" },
@@ -220,6 +250,62 @@ async function getPricesFromExa(productDescription) {
 }
 
 /**
+ * SerpAPI Google Shopping ile fiyat çeker (gl=tr → TRY).
+ * Dönüş: { TRY: { minPrice, avgPrice, maxPrice }, USD: { ... } } veya null.
+ */
+async function getPricesFromSerpAPI(productQuery) {
+  if (!SERPAPI_API_KEY || !productQuery || typeof productQuery !== "string") return null;
+  const q = String(productQuery).trim().slice(0, 150);
+  if (!q) return null;
+  try {
+    const params = new URLSearchParams({
+      engine: "google_shopping",
+      q,
+      gl: "tr",
+      hl: "tr",
+      api_key: SERPAPI_API_KEY
+    });
+    const res = await fetch("https://serpapi.com/search?" + params.toString(), {
+      method: "GET",
+      signal: AbortSignal.timeout(20000)
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const tryPrices = [];
+    const usdPrices = [];
+    function addPrice(value, currency) {
+      if (value == null || Number.isNaN(value) || value < 0.5) return;
+      if (currency === "TRY") tryPrices.push(value);
+      if (currency === "USD") usdPrices.push(value);
+    }
+    function collect(item) {
+      if (!item) return;
+      const num = item.extracted_price;
+      const str = String(item.price || "");
+      if (typeof num === "number") {
+        if (/\$|USD|dolar/i.test(str)) addPrice(num, "USD");
+        else addPrice(num, "TRY"); // gl=tr → çoğunlukla TRY
+      } else if (str) {
+        const tlMatch = str.match(/(?:₺|TL)\s*([\d.,]+)/i) || str.match(/([\d.,]+)\s*(?:₺|TL)/i);
+        if (tlMatch) addPrice(parseFloat(tlMatch[1].replace(/\./g, "").replace(",", ".")), "TRY");
+        const usdMatch = str.match(/\$\s*([\d.,]+)/) || str.match(/([\d.,]+)\s*USD/i);
+        if (usdMatch) addPrice(parseFloat(usdMatch[1].replace(/,/g, "")), "USD");
+      }
+    }
+    (data.shopping_results || []).forEach(collect);
+    (data.inline_shopping_results || []).forEach(collect);
+    (data.categorized_shopping_results || []).forEach((cat) => (cat.shopping_results || []).forEach(collect));
+    const tryStats = cleanPricesMinAvgMax(tryPrices, "TRY");
+    const usdStats = cleanPricesMinAvgMax(usdPrices, "USD");
+    if (!tryStats.minPrice && !usdStats.minPrice) return null;
+    return { TRY: tryStats, USD: usdStats };
+  } catch (e) {
+    console.warn("SerpAPI fiyat:", e.message);
+    return null;
+  }
+}
+
+/**
  * Exa sonuçlarını platform listesine dönüştürür (Amazon, Trendyol, ... Etsy). GPT ile özet üretir.
  * Dönüş: { productName, platforms: [...], summaryText } veya null.
  */
@@ -366,6 +452,127 @@ const FALLBACK_PLATFORM_NAMES = [
   { name: "Çiçek Sepeti", currency: "TRY" },
   { name: "Etsy", currency: "USD" }
 ];
+
+/** ScraperAPI, Exa ve SerpAPI sonuçlarını tek TRY/USD istatistiğinde birleştirir; 6 platform satırı üretir. */
+function mergePriceSources(scraperResult, exaPrices, serpapiPrices) {
+  const tryValues = [];
+  const usdValues = [];
+  function pushStats(stats, currency) {
+    if (!stats) return;
+    if (currency === "TRY") {
+      if (stats.minPrice != null) tryValues.push(stats.minPrice);
+      if (stats.avgPrice != null) tryValues.push(stats.avgPrice);
+      if (stats.maxPrice != null) tryValues.push(stats.maxPrice);
+    } else {
+      if (stats.minPrice != null) usdValues.push(stats.minPrice);
+      if (stats.avgPrice != null) usdValues.push(stats.avgPrice);
+      if (stats.maxPrice != null) usdValues.push(stats.maxPrice);
+    }
+  }
+  if (scraperResult && Array.isArray(scraperResult.platforms)) {
+    for (const p of scraperResult.platforms) {
+      if (p.currency === "TRY") {
+        if (p.minPrice != null) tryValues.push(p.minPrice);
+        if (p.avgPrice != null) tryValues.push(p.avgPrice);
+        if (p.maxPrice != null) tryValues.push(p.maxPrice);
+      } else if (p.currency === "USD") {
+        if (p.minPrice != null) usdValues.push(p.minPrice);
+        if (p.avgPrice != null) usdValues.push(p.avgPrice);
+        if (p.maxPrice != null) usdValues.push(p.maxPrice);
+      }
+    }
+  }
+  if (exaPrices) {
+    pushStats(exaPrices.TRY, "TRY");
+    pushStats(exaPrices.USD, "USD");
+  }
+  if (serpapiPrices) {
+    pushStats(serpapiPrices.TRY, "TRY");
+    pushStats(serpapiPrices.USD, "USD");
+  }
+  const tryStats = cleanPricesMinAvgMax(tryValues, "TRY");
+  const usdStats = cleanPricesMinAvgMax(usdValues, "USD");
+  if (!tryStats.minPrice && !usdStats.minPrice) return null;
+  const platforms = FALLBACK_PLATFORM_NAMES.map(({ name, currency }) => ({
+    name,
+    currency,
+    minPrice: currency === "TRY" ? tryStats.minPrice : usdStats.minPrice,
+    avgPrice: currency === "TRY" ? tryStats.avgPrice : usdStats.avgPrice,
+    maxPrice: currency === "TRY" ? tryStats.maxPrice : usdStats.maxPrice
+  }));
+  return { platforms, tryStats, usdStats };
+}
+
+/**
+ * Görsel + metin ile ürün tespiti, ScraperAPI + Exa + SerpAPI birleşik fiyat, GPT raporu.
+ * Tablo formatı: aynı 6 platform, En düşük / Ortalama / En yüksek. Dönüş: { productName, platforms, summaryText }.
+ */
+export async function getPriceAnalysisUnified(imageUrl, userText, seoText) {
+  const fallbackText = (userText && String(userText).trim()) || (seoText && String(seoText).trim()) || "";
+  const productQuery = await getProductQueryFromImageAndText(imageUrl, fallbackText);
+  const effectiveQuery = (productQuery && productQuery.trim()) || fallbackText || "ürün";
+  const productName = effectiveQuery.slice(0, 200);
+
+  const [scraperResult, exaPrices, serpapiPrices] = await Promise.all([
+    getPriceAnalysisWithScraperAPI(effectiveQuery),
+    getPricesFromExa(effectiveQuery),
+    getPricesFromSerpAPI(effectiveQuery)
+  ]);
+
+  let platforms = null;
+  const merged = mergePriceSources(
+    scraperResult,
+    exaPrices,
+    serpapiPrices
+  );
+  if (merged && merged.platforms && merged.platforms.length > 0) {
+    platforms = merged.platforms;
+  }
+  if (!platforms || platforms.length === 0) {
+    const fallback = await getPriceAnalysisFallbackWithGPT(effectiveQuery);
+    if (fallback && fallback.platforms && fallback.platforms.length > 0) {
+      return {
+        productName: fallback.productName || productName,
+        platforms: fallback.platforms,
+        summaryText: fallback.summaryText || ""
+      };
+    }
+    platforms = FALLBACK_PLATFORM_NAMES.map(({ name, currency }) => ({
+      name,
+      currency,
+      minPrice: null,
+      avgPrice: null,
+      maxPrice: null
+    }));
+  }
+
+  let summaryText = "";
+  if (process.env.OPENAI_API_KEY && platforms.length > 0) {
+    try {
+      const { default: OpenAI } = await import("openai");
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const tableDesc = platforms.map((p) => {
+        const fmt = (v) => (v == null ? "—" : p.currency === "TRY" ? v.toLocaleString("tr-TR", { minimumFractionDigits: 2 }) : v.toLocaleString("en-US", { minimumFractionDigits: 2 }));
+        return p.name + ": En düşük " + fmt(p.minPrice) + ", Ortalama " + fmt(p.avgPrice) + ", En yüksek " + fmt(p.maxPrice) + " " + p.currency;
+      }).join("\n");
+      const res = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{
+          role: "user",
+          content: `Ürün: "${productName}". Aşağıdaki birleşik fiyat tablosu (pazaryeri, Exa ve Google Alışveriş verilerinden) için 2-4 cümle Türkçe fiyat analizi raporu yaz: piyasa aralığı, rekabetçi strateji, satış fiyatı önerisi değil bilgi amaçlı özet.\n\n${tableDesc}`
+        }]
+      });
+      summaryText = (res.choices?.[0]?.message?.content || "").trim();
+    } catch (e) {
+      console.warn("GPT birleşik özet:", e.message);
+    }
+  }
+  return {
+    productName: productName || "Ürün",
+    platforms,
+    summaryText: summaryText || "Fiyat verileri tabloya göre değerlendirilebilir."
+  };
+}
 
 /**
  * ScraperAPI veri dönmediğinde GPT ile detaylı pazar araştırması yapıp platform bazlı min/ort/maks fiyat üretir.
