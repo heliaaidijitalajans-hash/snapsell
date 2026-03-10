@@ -109,6 +109,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSessionId(sid || null);
         } else {
           setSessionId(null);
+          // Backend’de hesap oluştur/güncelle ve girişi kaydet (aynı e-posta = aynı hesap)
+          try {
+            const token = await u.getIdToken();
+            await fetch(`${getApiBase()}/api/auth/google`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ idToken: token }),
+            });
+          } catch (_) {
+            // Ağ hatası; hesap ilk API çağrısında getRequestUser ile oluşturulacak
+          }
         }
         setLoading(false); // Auth ready; safe to redirect / show login or app
       });

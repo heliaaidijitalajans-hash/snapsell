@@ -15,6 +15,7 @@ import {
   Plus,
   Trash2,
   ImageIcon,
+  LogIn,
 } from "lucide-react";
 import { getApiBase } from "../config";
 
@@ -59,6 +60,7 @@ type Subscriber = User;
 type Team = { id: string; name: string; memberIds: string[]; enterprisePlanId?: string | null; createdAt?: number };
 type DailyStats = { today: { visitors: number; conversions: number; signups: number }; last7Days: Array<{ date: string; visitors: number; conversions: number; signups: number }> };
 type ImageEditEntry = { userId: string; email?: string | null; displayName?: string | null; outputUrl: string; createdAt: number };
+type LoginLogEntry = { user_id: string; email?: string | null; display_name?: string | null; logged_at: string | null; source?: string };
 
 const ADMIN_TOKEN_KEY = "snapsell_admin_token";
 
@@ -97,6 +99,7 @@ export function AdminPage() {
   const [teamName, setTeamName] = useState("");
   const [savingTeam, setSavingTeam] = useState(false);
   const [imageEdits, setImageEdits] = useState<ImageEditEntry[]>([]);
+  const [loginLogs, setLoginLogs] = useState<LoginLogEntry[]>([]);
 
   const adminFetch = useCallback(
     async (url: string, opts: RequestInit = {}, overrideToken?: string | null) => {
@@ -232,6 +235,7 @@ export function AdminPage() {
             loadSubscribers(),
             loadTeams(),
             loadImageEdits(),
+            loadLoginLogs(),
           ]);
         }
       } catch (_) {
@@ -580,6 +584,49 @@ export function AdminPage() {
               </div>
             </div>
           )}
+        </div>
+      </section>
+
+      {/* ——— Panel: Giriş kayıtları ——— */}
+      <section className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+          <LogIn className="w-5 h-5 text-[#FF5A5F]" />
+          <h2 className="font-semibold text-gray-800">Giriş kayıtları</h2>
+        </div>
+        <div className="p-4">
+          <p className="text-sm text-gray-500 mb-4">Google ile giriş yapan kullanıcılar (dosya + veritabanı). Son 500 kayıt.</p>
+          <div className="max-h-80 overflow-y-auto border border-gray-200 rounded-lg">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 sticky top-0">
+                <tr>
+                  <th className="text-left px-3 py-2 text-gray-600">Tarih / Saat</th>
+                  <th className="text-left px-3 py-2 text-gray-600">E-posta</th>
+                  <th className="text-left px-3 py-2 text-gray-600">Ad</th>
+                  <th className="text-left px-3 py-2 text-gray-600">Kullanıcı ID</th>
+                  <th className="text-left px-3 py-2 text-gray-600">Kaynak</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loginLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-4 text-center text-gray-500">Henüz giriş kaydı yok</td>
+                  </tr>
+                ) : (
+                  loginLogs.map((log, idx) => (
+                    <tr key={idx} className="border-t border-gray-100">
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {log.logged_at ? formatDate(new Date(log.logged_at).getTime()) : "—"}
+                      </td>
+                      <td className="px-3 py-2">{log.email || "—"}</td>
+                      <td className="px-3 py-2">{log.display_name || "—"}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-gray-600">{log.user_id?.slice(0, 12)}…</td>
+                      <td className="px-3 py-2">{log.source === "db" ? "Veritabanı" : "Dosya"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 

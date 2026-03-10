@@ -66,6 +66,36 @@ function saveJsonFile(filename, data) {
   }
 }
 
+const LOGIN_LOGS_FILE = "login_logs.jsonl";
+
+/** Giriş kaydını hem dosyaya (append) hem Supabase login_logs tablosuna yazar. */
+async function recordLogin(uid, email, displayName) {
+  const entry = {
+    user_id: uid,
+    email: email || null,
+    display_name: displayName || null,
+    logged_at: new Date().toISOString()
+  };
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.appendFileSync(path.join(DATA_DIR, LOGIN_LOGS_FILE), JSON.stringify(entry) + "\n", "utf8");
+  } catch (e) {
+    console.warn("recordLogin file:", e.message);
+  }
+  if (supabase) {
+    try {
+      await supabase.from("login_logs").insert({
+        user_id: uid,
+        email: email || null,
+        display_name: displayName || null,
+        logged_at: new Date().toISOString()
+      });
+    } catch (e) {
+      console.warn("recordLogin db:", e.message);
+    }
+  }
+}
+
 function savePlanPrices(updatedPrices) {
   planPrices = updatedPrices;
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -277,8 +307,19 @@ async function getOrCreateUser(sessionIdOrUid, opts) {
     };
   }
   if (!memoryUsers.has(sessionIdOrUid)) {
-    memoryUsers.set(sessionIdOrUid, { credits: FREE_CREDITS, plan: resolvePlan("free"), createdAt: Date.now(), totalConversions: 0 });
+    memoryUsers.set(sessionIdOrUid, {
+      credits: FREE_CREDITS,
+      plan: "free",
+      createdAt: Date.now(),
+      totalConversions: 0,
+      email: opts.email != null ? String(opts.email) : null,
+      displayName: opts.displayName != null ? String(opts.displayName) : null
+    });
     try { incrementDailyStat("signups"); } catch (_) {}
+  } else if (opts.email != null || opts.displayName != null) {
+    const existing = memoryUsers.get(sessionIdOrUid);
+    if (opts.email != null) existing.email = String(opts.email);
+    if (opts.displayName != null) existing.displayName = String(opts.displayName);
   }
   const u = memoryUsers.get(sessionIdOrUid);
   return {
@@ -619,6 +660,59 @@ app.get("/admin/stats", requireAdmin, async function (req, res) {
   });
 });
 
+/** Giriş kayıtları: dosya + veritabanı (admin panel). */
+app.get("/admin/logins", requireAdmin, async function (req, res) {
+  const list = [];
+  const filePath = path.join(DATA_DIR, LOGIN_LOGS_FILE);
+  if (fs.existsSync(filePath)) {
+    try {
+      const lines = fs.readFileSync(filePath, "utf8").split("\n").filter(Boolean);
+      lines.forEach(function (line) {
+        try {
+          const o = JSON.parse(line);
+          list.push({
+            user_id: o.user_id,
+            email: o.email || null,
+            display_name: o.display_name || null,
+            logged_at: o.logged_at || null,
+            source: "file"
+          });
+        } catch (_) {}
+      });
+    } catch (e) {
+      console.warn("admin/logins file read:", e.message);
+    }
+  }
+  if (supabase) {
+    try {
+      const { data: rows, error } = await supabase.from("login_logs").select("user_id, email, display_name, logged_at").order("logged_at", { ascending: false }).limit(2000);
+      if (!error && rows) {
+        const seen = new Set(list.map(function (e) { return (e.logged_at || "") + (e.user_id || ""); }));
+        rows.forEach(function (r) {
+          const key = (r.logged_at || "") + (r.user_id || "");
+          if (seen.has(key)) return;
+          seen.add(key);
+          list.push({
+            user_id: r.user_id,
+            email: r.email || null,
+            display_name: r.display_name || null,
+            logged_at: r.logged_at || null,
+            source: "db"
+          });
+        });
+      }
+    } catch (e) {
+      console.warn("admin/logins db:", e.message);
+    }
+  }
+  list.sort(function (a, b) {
+    const ta = a.logged_at ? new Date(a.logged_at).getTime() : 0;
+    const tb = b.logged_at ? new Date(b.logged_at).getTime() : 0;
+    return tb - ta;
+  });
+  res.json({ logins: list.slice(0, 500) });
+});
+
 app.get("/admin/subscribers", requireAdmin, async function (req, res) {
   const list = [];
   if (supabase) {
@@ -818,6 +912,45 @@ app.get("/api/admin/stats", requireAdmin, async function (req, res) {
   }
   last7.reverse();
   res.json({ today: todayData, dailyVisitors: todayData.visitors, dailyConversions: todayData.conversions, newSignupsToday: todayData.signups, last7Days: last7 });
+});
+app.get("/api/admin/logins", requireAdmin, async function (req, res) {
+  const list = [];
+  const filePath = path.join(DATA_DIR, LOGIN_LOGS_FILE);
+  if (fs.existsSync(filePath)) {
+    try {
+      const lines = fs.readFileSync(filePath, "utf8").split("\n").filter(Boolean);
+      lines.forEach(function (line) {
+        try {
+          const o = JSON.parse(line);
+          list.push({ user_id: o.user_id, email: o.email || null, display_name: o.display_name || null, logged_at: o.logged_at || null, source: "file" });
+        } catch (_) {}
+      });
+    } catch (e) {
+      console.warn("api/admin/logins file:", e.message);
+    }
+  }
+  if (supabase) {
+    try {
+      const { data: rows, error } = await supabase.from("login_logs").select("user_id, email, display_name, logged_at").order("logged_at", { ascending: false }).limit(2000);
+      if (!error && rows) {
+        const seen = new Set(list.map(function (e) { return (e.logged_at || "") + (e.user_id || ""); }));
+        rows.forEach(function (r) {
+          const key = (r.logged_at || "") + (r.user_id || "");
+          if (seen.has(key)) return;
+          seen.add(key);
+          list.push({ user_id: r.user_id, email: r.email || null, display_name: r.display_name || null, logged_at: r.logged_at || null, source: "db" });
+        });
+      }
+    } catch (e) {
+      console.warn("api/admin/logins db:", e.message);
+    }
+  }
+  list.sort(function (a, b) {
+    const ta = a.logged_at ? new Date(a.logged_at).getTime() : 0;
+    const tb = b.logged_at ? new Date(b.logged_at).getTime() : 0;
+    return tb - ta;
+  });
+  res.json({ logins: list.slice(0, 500) });
 });
 app.get("/api/admin/subscribers", requireAdmin, async function (req, res) {
   const list = [];
@@ -1173,6 +1306,9 @@ app.post("/api/auth/google", async (req, res) => {
     const email = decoded.email || null;
     const displayName = decoded.name || decoded.email || null;
     const user = await getOrCreateUser(uid, { email, displayName });
+    try {
+      await recordLogin(uid, email, displayName);
+    } catch (_) {}
     const credits = user.credits ?? FREE_CREDITS;
     const plan = user.plan || "free";
     const isAdmin = email && email.toLowerCase() === ADMIN_EMAIL;
