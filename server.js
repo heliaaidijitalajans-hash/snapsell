@@ -1033,13 +1033,12 @@ const SCRAPERAPI_API_KEY = (process.env.SCRAPERAPI_API_KEY || process.env.SCRAPE
 
 /** Global pazaryerleri: URL ve para birimi (Turkiye + global). */
 const PRICE_MARKETPLACES = [
+  { urlBase: "https://www.amazon.com.tr/s?k=", currency: "TRY", name: "Amazon" },
   { urlBase: "https://www.trendyol.com/sr?q=", currency: "TRY", name: "Trendyol" },
   { urlBase: "https://www.hepsiburada.com/ara?q=", currency: "TRY", name: "Hepsiburada" },
-  { urlBase: "https://www.amazon.com.tr/s?k=", currency: "TRY", name: "Amazon TR" },
-  { urlBase: "https://www.amazon.com/s?k=", currency: "USD", name: "Amazon (US)" },
-  { urlBase: "https://www.etsy.com/search?q=", currency: "USD", name: "Etsy" },
-  { urlBase: "https://www.amazon.co.uk/s?k=", currency: "GBP", name: "Amazon (UK)" },
-  { urlBase: "https://www.amazon.de/s?k=", currency: "EUR", name: "Amazon (DE)" }
+  { urlBase: "https://www.n11.com/arama?q=", currency: "TRY", name: "N11" },
+  { urlBase: "https://www.ciceksepeti.com/arama?q=", currency: "TRY", name: "Çiçek Sepeti" },
+  { urlBase: "https://www.etsy.com/search?q=", currency: "USD", name: "Etsy" }
 ];
 
 /** Script/JSON icindeki fiyat desenlerini cikarir (marketplace para birimi ile). */
@@ -1270,6 +1269,50 @@ async function getPriceAnalysisWithScraperAPI(productDescription) {
     };
   } catch (e) {
     console.warn("ScraperAPI fiyat analizi:", e.message);
+    return null;
+  }
+}
+
+/** ScraperAPI veri dönmezse GPT ile platform bazlı min/ort/maks fiyat üretir (Amazon, Trendyol, Hepsiburada, N11, Çiçek Sepeti, Etsy). */
+async function getPriceAnalysisFallbackWithGPT(productDescription) {
+  if (!productDescription || typeof productDescription !== "string") return null;
+  const productName = productDescription.trim().slice(0, 300);
+  if (!productName) return null;
+  try {
+    const openai = getOpenAI();
+    const prompt = `Ürün veya kategori: "${productName}"
+
+Aşağıdaki pazaryerleri için bu ürün/kategori için gerçekçi piyasa fiyat aralıklarını tahmin et. Her platform için sadece sayısal min, ortalama ve max fiyat ver (TRY veya USD).
+
+Platformlar: Amazon (TRY), Trendyol (TRY), Hepsiburada (TRY), N11 (TRY), Çiçek Sepeti (TRY), Etsy (USD).
+
+Yanıtı SADECE şu JSON formatında ver, başka metin yazma:
+{"platforms":[{"name":"Amazon","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"Trendyol","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"Hepsiburada","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"N11","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"Çiçek Sepeti","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"Etsy","currency":"USD","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi}],"summaryText":"2-3 cümlelik Türkçe özet."}
+Fiyatlar gerçekçi olsun: TRY için 50-5000, USD için 5-200.`;
+    const res = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_object" }
+    });
+    const raw = (res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content) || "";
+    const parsed = JSON.parse(raw);
+    if (!parsed.platforms || !Array.isArray(parsed.platforms) || parsed.platforms.length === 0) return null;
+    const platforms = parsed.platforms.map(function (p) {
+      return {
+        name: p.name || "Platform",
+        currency: p.currency || "TRY",
+        minPrice: typeof p.minPrice === "number" ? Math.round(p.minPrice * 100) / 100 : null,
+        avgPrice: typeof p.avgPrice === "number" ? Math.round(p.avgPrice * 100) / 100 : null,
+        maxPrice: typeof p.maxPrice === "number" ? Math.round(p.maxPrice * 100) / 100 : null
+      };
+    });
+    return {
+      productName: productName || "Ürün",
+      platforms,
+      summaryText: (parsed.summaryText && String(parsed.summaryText).trim()) || "Fiyat verileri yukarıdaki tabloya göre değerlendirilebilir."
+    };
+  } catch (e) {
+    console.warn("GPT fiyat fallback:", e.message);
     return null;
   }
 }
@@ -2589,21 +2632,26 @@ app.post("/api/process", async (req, res) => {
           }).join("\n");
         }
       } else {
-        priceAnalysis = null;
-        const priceRes = await getOpenAI().chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: [{
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: "Bu urun fotografini analiz et ve fiyat analizi yap. Urunun tahmini piyasa fiyati (TL), platform fiyat araligi, onerilen satis fiyati ve rekabetci fiyatlandirma stratejisi belirt."
-              },
-              { type: "image_url", image_url: { url: imgUrl } }
-            ]
-          }]
-        });
-        priceText = (priceRes.choices && priceRes.choices[0] && priceRes.choices[0].message && priceRes.choices[0].message.content) || "";
+        priceAnalysis = await getPriceAnalysisFallbackWithGPT(priceInput);
+        if (priceAnalysis && priceAnalysis.platforms && priceAnalysis.platforms.length > 0) {
+          priceText = priceAnalysis.summaryText || "";
+        } else {
+          priceAnalysis = null;
+          const priceRes = await getOpenAI().chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [{
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: "Bu urun fotografini analiz et ve fiyat analizi yap. Urunun tahmini piyasa fiyati (TL), platform fiyat araligi, onerilen satis fiyati ve rekabetci fiyatlandirma stratejisi belirt."
+                },
+                { type: "image_url", image_url: { url: imgUrl } }
+              ]
+            }]
+          });
+          priceText = (priceRes.choices && priceRes.choices[0] && priceRes.choices[0].message && priceRes.choices[0].message.content) || "";
+        }
       }
     } catch (priceErr) {
       console.error("api/process Fiyat hatasi:", priceErr.message);

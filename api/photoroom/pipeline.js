@@ -118,26 +118,32 @@ export default async function handler(req, res) {
         seoText = (seoRes.choices?.[0]?.message?.content || "").trim();
 
         const priceInput = productDesc || seoText;
-        const { getPriceAnalysisWithScraperAPI } = await import("../lib/price-analysis.js");
-        const scraped = priceInput ? await getPriceAnalysisWithScraperAPI(priceInput) : null;
+        const { getPriceAnalysisWithScraperAPI, getPriceAnalysisFallbackWithGPT } = await import("../lib/price-analysis.js");
+        let scraped = priceInput ? await getPriceAnalysisWithScraperAPI(priceInput) : null;
         if (scraped && scraped.platforms && scraped.platforms.length > 0) {
           priceSummary = scraped.summaryText || "";
           priceAnalysis = scraped.platforms;
         } else {
-          const priceRes = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [{
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: "Bu urun fotografini analiz et ve fiyat analizi yap. Urunun tahmini piyasa fiyati (TL), platform fiyat araligi, onerilen satis fiyati ve rekabetci fiyatlandirma stratejisi belirt."
-                },
-                { type: "image_url", image_url: { url: dataUrl } }
-              ]
-            }]
-          });
-          priceSummary = (priceRes.choices?.[0]?.message?.content || "").trim() || null;
+          scraped = priceInput ? await getPriceAnalysisFallbackWithGPT(priceInput) : null;
+          if (scraped && scraped.platforms && scraped.platforms.length > 0) {
+            priceSummary = scraped.summaryText || "";
+            priceAnalysis = scraped.platforms;
+          } else {
+            const priceRes = await openai.chat.completions.create({
+              model: "gpt-4o-mini",
+              messages: [{
+                role: "user",
+                content: [
+                  {
+                    type: "text",
+                    text: "Bu urun fotografini analiz et ve fiyat analizi yap. Urunun tahmini piyasa fiyati (TL), platform fiyat araligi, onerilen satis fiyati ve rekabetci fiyatlandirma stratejisi belirt."
+                  },
+                  { type: "image_url", image_url: { url: dataUrl } }
+                ]
+              }]
+            });
+            priceSummary = (priceRes.choices?.[0]?.message?.content || "").trim() || null;
+          }
         }
       } catch (openaiErr) {
         console.error("[photoroom/pipeline] OpenAI SEO/fiyat:", openaiErr.message);

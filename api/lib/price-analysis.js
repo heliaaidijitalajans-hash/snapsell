@@ -6,13 +6,12 @@
 const SCRAPERAPI_API_KEY = (process.env.SCRAPERAPI_API_KEY || process.env.SCRAPER_API_KEY || "").trim();
 
 const PRICE_MARKETPLACES = [
+  { urlBase: "https://www.amazon.com.tr/s?k=", currency: "TRY", name: "Amazon" },
   { urlBase: "https://www.trendyol.com/sr?q=", currency: "TRY", name: "Trendyol" },
   { urlBase: "https://www.hepsiburada.com/ara?q=", currency: "TRY", name: "Hepsiburada" },
-  { urlBase: "https://www.amazon.com.tr/s?k=", currency: "TRY", name: "Amazon TR" },
-  { urlBase: "https://www.amazon.com/s?k=", currency: "USD", name: "Amazon (US)" },
-  { urlBase: "https://www.etsy.com/search?q=", currency: "USD", name: "Etsy" },
-  { urlBase: "https://www.amazon.co.uk/s?k=", currency: "GBP", name: "Amazon (UK)" },
-  { urlBase: "https://www.amazon.de/s?k=", currency: "EUR", name: "Amazon (DE)" }
+  { urlBase: "https://www.n11.com/arama?q=", currency: "TRY", name: "N11" },
+  { urlBase: "https://www.ciceksepeti.com/arama?q=", currency: "TRY", name: "Çiçek Sepeti" },
+  { urlBase: "https://www.etsy.com/search?q=", currency: "USD", name: "Etsy" }
 ];
 
 const CURRENCY_LIMITS = { TRY: [25, 80000], USD: [1, 5000], EUR: [1, 5000], GBP: [1, 5000] };
@@ -234,6 +233,73 @@ export async function getPriceAnalysisWithScraperAPI(productDescription) {
     };
   } catch (e) {
     console.warn("ScraperAPI fiyat analizi:", e.message);
+    return null;
+  }
+}
+
+/** Sabit platform listesi: tabloda her zaman bu platformlar gösterilir. */
+const FALLBACK_PLATFORM_NAMES = [
+  { name: "Amazon", currency: "TRY" },
+  { name: "Trendyol", currency: "TRY" },
+  { name: "Hepsiburada", currency: "TRY" },
+  { name: "N11", currency: "TRY" },
+  { name: "Çiçek Sepeti", currency: "TRY" },
+  { name: "Etsy", currency: "USD" }
+];
+
+/**
+ * ScraperAPI veri dönmediğinde GPT ile platform bazlı min/ort/maks fiyat üretir.
+ * Dönüş: { productName, platforms: [{ name, currency, minPrice, avgPrice, maxPrice }], summaryText }
+ */
+export async function getPriceAnalysisFallbackWithGPT(productDescription) {
+  if (!productDescription || typeof productDescription !== "string") return null;
+  const productName = productDescription.trim().slice(0, 300);
+  if (!productName) return null;
+  if (!process.env.OPENAI_API_KEY) return null;
+
+  try {
+    const { default: OpenAI } = await import("openai");
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const prompt = `Ürün veya kategori: "${productName}"
+
+Aşağıdaki pazaryerleri için bu ürün/kategori için gerçekçi piyasa fiyat aralıklarını tahmin et.
+Her platform için sadece sayısal min, ortalama ve max fiyat ver (para birimi: TRY veya USD).
+
+Platformlar:
+- Amazon (TRY)
+- Trendyol (TRY)
+- Hepsiburada (TRY)
+- N11 (TRY)
+- Çiçek Sepeti (TRY)
+- Etsy (USD)
+
+Yanıtı SADECE aşağıdaki JSON formatında ver, başka metin yazma:
+{"platforms":[{"name":"Amazon","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"Trendyol","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"Hepsiburada","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"N11","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"Çiçek Sepeti","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"Etsy","currency":"USD","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi}],"summaryText":"2-3 cümlelik Türkçe özet ve rekabetçi fiyat stratejisi."}
+
+Fiyatlar gerçekçi olsun: Türkiye pazaryerleri için TL (örn. 50-5000 TL), Etsy için USD (örn. 5-200 USD).`;
+
+    const res = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_object" }
+    });
+    const raw = (res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content) || "";
+    const parsed = JSON.parse(raw);
+    if (!parsed.platforms || !Array.isArray(parsed.platforms) || parsed.platforms.length === 0) return null;
+    const platforms = parsed.platforms.map((p) => ({
+      name: p.name || "Platform",
+      currency: p.currency || "TRY",
+      minPrice: typeof p.minPrice === "number" ? Math.round(p.minPrice * 100) / 100 : null,
+      avgPrice: typeof p.avgPrice === "number" ? Math.round(p.avgPrice * 100) / 100 : null,
+      maxPrice: typeof p.maxPrice === "number" ? Math.round(p.maxPrice * 100) / 100 : null
+    }));
+    return {
+      productName: productName || "Ürün",
+      platforms,
+      summaryText: (parsed.summaryText && String(parsed.summaryText).trim()) || "Fiyat verileri yukarıdaki tabloya göre değerlendirilebilir."
+    };
+  } catch (e) {
+    console.warn("GPT fiyat fallback:", e.message);
     return null;
   }
 }
