@@ -1,4 +1,4 @@
-import { initializeApp, type FirebaseApp } from "firebase/app";
+import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 import { getFirestore, type Firestore } from "firebase/firestore";
@@ -12,34 +12,19 @@ const firebaseConfig = {
   appId: "1:503663017163:web:8d02525549bd7f58f0af4e",
 };
 
-let app: FirebaseApp;
-let auth: Auth;
-let storage: FirebaseStorage;
-let firestore: Firestore;
+// Initialize Firebase only once (avoids duplicate-app errors with Strict Mode / HMR)
+const app: FirebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-function getApp(): FirebaseApp {
-  if (!app) {
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-  }
-  return app;
-}
+export { app as firebaseApp };
 
 export function getFirebaseAuth(): Auth {
-  getApp();
-  return auth;
+  return getAuth(app);
 }
 
 export function getFirebaseStorage(): FirebaseStorage {
-  if (!storage) {
-    storage = getStorage(getApp());
-  }
-  return storage;
+  return getStorage(app);
 }
 
 export function getFirebaseFirestore(): Firestore {
-  if (!firestore) {
-    firestore = getFirestore(getApp());
-  }
-  return firestore;
+  return getFirestore(app);
 }

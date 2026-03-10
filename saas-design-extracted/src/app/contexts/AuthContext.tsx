@@ -7,7 +7,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { onAuthStateChanged, getRedirectResult, type User } from "firebase/auth";
+import { onAuthStateChanged, getRedirectResult, setPersistence, browserLocalPersistence, type User } from "firebase/auth";
 import { getFirebaseAuth } from "../lib/firebase";
 import { getApiBase, apiJson } from "../config";
 
@@ -81,8 +81,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     (async () => {
+      // Oturumun tarayıcı kapatıldıktan sonra da kalması için persistence'ı uygulama açılışında da ayarla.
+      try {
+        await setPersistence(auth, browserLocalPersistence);
+      } catch (err) {
+        if (!cancelled) console.warn("Firebase persistence:", err);
+      }
+
       // Google redirect sonrası sayfa yüklendiğinde önce getRedirectResult tamamlanmalı.
-      // Aksi halde onAuthStateChanged bazen önce null ile tetiklenip kullanıcı tekrar giriş sayfasında kalıyor.
       try {
         const credential = await getRedirectResult(auth);
         if (cancelled) return;
