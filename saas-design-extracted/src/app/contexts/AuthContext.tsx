@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [sessionId, setSessionId] = useState<string | null>(() =>
     typeof window !== "undefined" ? localStorage.getItem(SESSION_KEY) : null
   );
-  const [loading, setLoading] = useState(true); // Stay true until onAuthStateChanged has fired
+  const [loading, setLoading] = useState(true); // Do NOT consider auth ready until onAuthStateChanged has fired
 
   const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
     const auth = getFirebaseAuth();
@@ -129,15 +129,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logout,
   };
 
+  // Do NOT redirect to /login until loading === false. Only redirect if !loading && !user.
   return (
     <AuthContext.Provider value={value}>
-      {loading ? (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="animate-pulse text-gray-500">Yükleniyor…</div>
-        </div>
-      ) : (
-        children
-      )}
+      {loading ? null : children}
     </AuthContext.Provider>
   );
 }

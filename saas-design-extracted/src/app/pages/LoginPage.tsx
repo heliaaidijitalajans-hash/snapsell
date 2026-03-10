@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { signInWithRedirect, GoogleAuthProvider } from "firebase/auth";
+import { signInWithRedirect, GoogleAuthProvider, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getFirebaseAuth } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
@@ -12,7 +12,8 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [signingIn, setSigningIn] = useState(false);
 
-  // Redirect only after auth is ready (onAuthStateChanged has fired); avoids redirect loop
+  // Only redirect after auth is ready. Do NOT redirect to /login until loading === false.
+  // Only redirect to home when !loading && user.
   useEffect(() => {
     if (loading) return;
     if (user) navigate("/", { replace: true });
@@ -24,6 +25,7 @@ export function LoginPage() {
     try {
       const auth = getFirebaseAuth();
       const provider = new GoogleAuthProvider();
+      await setPersistence(auth, browserLocalPersistence);
       await signInWithRedirect(auth, provider);
       // Page will redirect to Google; after sign-in, user returns and getRedirectResult runs in AuthContext
     } catch (e: unknown) {
@@ -34,14 +36,7 @@ export function LoginPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="animate-pulse text-gray-500">{t("nav.login")}…</div>
-      </div>
-    );
-  }
-
+  if (loading) return null;
   if (user) return null;
 
   return (
