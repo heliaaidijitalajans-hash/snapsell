@@ -4,6 +4,7 @@
  */
 
 const SCRAPERAPI_API_KEY = (process.env.SCRAPERAPI_API_KEY || process.env.SCRAPER_API_KEY || "").trim();
+const EXA_API_KEY = (process.env.EXA_API_KEY || "").trim();
 
 const PRICE_MARKETPLACES = [
   { urlBase: "https://www.amazon.com.tr/s?k=", currency: "TRY", name: "Amazon" },
@@ -161,6 +162,117 @@ function extractSellerOrResultCount(htmlOrText) {
     }
   }
   return null;
+}
+
+/**
+ * Exa ile semantik arama: ürün + fiyat içeren sayfalardan metin/highlights alır, TRY/USD fiyatları parse eder.
+ * Dönüş: { TRY: { minPrice, avgPrice, maxPrice }, USD: { minPrice, avgPrice, maxPrice } } veya null.
+ */
+async function getPricesFromExa(productDescription) {
+  if (!EXA_API_KEY || !productDescription || typeof productDescription !== "string") return null;
+  const query = String(productDescription).trim().slice(0, 150);
+  if (!query) return null;
+  try {
+    const searchQuery = query + " fiyat satış TL";
+    const res = await fetch("https://api.exa.ai/search", {
+      method: "POST",
+      headers: {
+        "x-api-key": EXA_API_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        query: searchQuery,
+        numResults: 15,
+        contents: {
+          highlights: { maxCharacters: 5000 },
+          text: true
+        }
+      }),
+      signal: AbortSignal.timeout(25000)
+    });
+    if (!res.ok) {
+      console.warn("Exa API:", res.status, await res.text().catch(() => ""));
+      return null;
+    }
+    const data = await res.json();
+    const results = data.results || [];
+    const textParts = [];
+    for (const r of results) {
+      if (r.content?.highlights?.length) textParts.push(r.content.highlights.join(" "));
+      if (r.content?.text) textParts.push(r.content.text);
+    }
+    const combined = textParts.join(" ");
+    if (!combined || combined.length < 50) return null;
+    const extracted = extractPricesWithCurrency(combined);
+    const byCurrency = { TRY: [], USD: [] };
+    for (const p of extracted) {
+      if (p.currency === "TRY") byCurrency.TRY.push(p.value);
+      if (p.currency === "USD") byCurrency.USD.push(p.value);
+    }
+    const tryStats = cleanPricesMinAvgMax(byCurrency.TRY, "TRY");
+    const usdStats = cleanPricesMinAvgMax(byCurrency.USD, "USD");
+    if (!tryStats.minPrice && !usdStats.minPrice) return null;
+    return { TRY: tryStats, USD: usdStats };
+  } catch (e) {
+    console.warn("Exa fiyat analizi:", e.message);
+    return null;
+  }
+}
+
+/**
+ * Exa sonuçlarını platform listesine dönüştürür (Amazon, Trendyol, ... Etsy). GPT ile özet üretir.
+ * Dönüş: { productName, platforms: [...], summaryText } veya null.
+ */
+export async function getPriceAnalysisWithExa(productDescription) {
+  const exaPrices = await getPricesFromExa(productDescription);
+  if (!exaPrices) return null;
+  const productName = productDescription.trim().slice(0, 200);
+  const platforms = [];
+  const tryStats = exaPrices.TRY;
+  const usdStats = exaPrices.USD;
+  for (const { name, currency } of FALLBACK_PLATFORM_NAMES) {
+    if (currency === "TRY" && (tryStats.minPrice != null || tryStats.avgPrice != null || tryStats.maxPrice != null)) {
+      platforms.push({
+        name,
+        currency: "TRY",
+        minPrice: tryStats.minPrice ?? null,
+        avgPrice: tryStats.avgPrice ?? null,
+        maxPrice: tryStats.maxPrice ?? null
+      });
+    } else if (currency === "USD" && (usdStats.minPrice != null || usdStats.avgPrice != null || usdStats.maxPrice != null)) {
+      platforms.push({
+        name,
+        currency: "USD",
+        minPrice: usdStats.minPrice ?? null,
+        avgPrice: usdStats.avgPrice ?? null,
+        maxPrice: usdStats.maxPrice ?? null
+      });
+    }
+  }
+  if (platforms.length === 0) return null;
+  let summaryText = "";
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const { default: OpenAI } = await import("openai");
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const tableDesc = platforms.map((p) => {
+        const fmt = (v) => (v == null ? "—" : p.currency === "TRY" ? v.toLocaleString("tr-TR", { minimumFractionDigits: 2 }) : v.toLocaleString("en-US", { minimumFractionDigits: 2 }));
+        return p.name + ": En düşük " + fmt(p.minPrice) + ", Ortalama " + fmt(p.avgPrice) + ", En yüksek " + fmt(p.maxPrice) + " " + p.currency;
+      }).join("\n");
+      const res = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: `Ürün: "${productName}". Aşağıdaki fiyat tablosu (Exa arama sonuçlarından) için 2-3 cümle Türkçe özet ve rekabetçi fiyat stratejisi yaz.\n\n${tableDesc}` }]
+      });
+      summaryText = (res.choices?.[0]?.message?.content || "").trim();
+    } catch (e) {
+      console.warn("GPT Exa özet:", e.message);
+    }
+  }
+  return {
+    productName: productName || "Ürün",
+    platforms,
+    summaryText: summaryText || "Fiyat verileri Exa arama sonuçlarından derlendi."
+  };
 }
 
 /**
