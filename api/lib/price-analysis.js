@@ -29,9 +29,13 @@ function extractPricesFromScripts(html, currency) {
     out.push({ value: Math.round(n * 100) / 100, currency });
   }
   const patterns = [
-    /"(?:price|amount|currentPrice|minPrice|maxPrice|value|fiyat|birimFiyat|salePrice)"\s*:\s*(\d+(?:[.,]\d+)?)/gi,
-    /data-(?:price|amount)="(\d+(?:[.,]\d+)?)"/gi,
-    /"price"\s*:\s*\{\s*"value"\s*:\s*(\d+(?:[.,]\d+)?)/gi
+    /"(?:price|amount|currentPrice|minPrice|maxPrice|value|fiyat|birimFiyat|salePrice|discountPrice|sellingPrice|originalPrice|productPrice|listPrice|marketPrice)"\s*:\s*(\d+(?:[.,]\d+)?)/gi,
+    /"(?:price|amount|currentPrice|sellingPrice)"\s*:\s*\{\s*"(?:value|amount)"\s*:\s*(\d+(?:[.,]\d+)?)/gi,
+    /data-(?:price|amount|product-price|sale-price)="(\d+(?:[.,]\d+)?)"/gi,
+    /data-price="(\d+(?:[.,]\d+)?)"/gi,
+    /"price"\s*:\s*\{\s*"value"\s*:\s*(\d+(?:[.,]\d+)?)/gi,
+    /discountedPrice["\s:]+(\d+(?:[.,]\d+)?)/gi,
+    /sellingPrice["\s:]+(\d+(?:[.,]\d+)?)/gi
   ];
   for (const re of patterns) {
     let m;
@@ -176,12 +180,16 @@ export async function getPriceAnalysisWithScraperAPI(productDescription) {
       const targetUrl = marketplace.urlBase + searchQuery;
       const apiUrl = "https://api.scraperapi.com?api_key=" + SCRAPERAPI_API_KEY + "&url=" + encodeURIComponent(targetUrl);
       let html = "";
-      try {
-        const res = await fetch(apiUrl, { method: "GET", signal: AbortSignal.timeout(60000) });
-        if (res.ok) html = await res.text();
-      } catch (e) {
-        console.warn("ScraperAPI " + marketplace.name + ":", e.message);
-        continue;
+      const maxRetries = 2;
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const res = await fetch(apiUrl, { method: "GET", signal: AbortSignal.timeout(90000) });
+          if (res.ok) html = await res.text();
+          if (html && html.length > 500) break;
+        } catch (e) {
+          if (attempt === maxRetries) console.warn("ScraperAPI " + marketplace.name + ":", e.message);
+        }
+        if (attempt < maxRetries) await new Promise((r) => setTimeout(r, 1500));
       }
       if (!html || html.length < 200) continue;
       const textNoScripts = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -248,7 +256,7 @@ const FALLBACK_PLATFORM_NAMES = [
 ];
 
 /**
- * ScraperAPI veri dönmediğinde GPT ile platform bazlı min/ort/maks fiyat üretir.
+ * ScraperAPI veri dönmediğinde GPT ile detaylı pazar araştırması yapıp platform bazlı min/ort/maks fiyat üretir.
  * Dönüş: { productName, platforms: [{ name, currency, minPrice, avgPrice, maxPrice }], summaryText }
  */
 export async function getPriceAnalysisFallbackWithGPT(productDescription) {
@@ -260,27 +268,34 @@ export async function getPriceAnalysisFallbackWithGPT(productDescription) {
   try {
     const { default: OpenAI } = await import("openai");
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const prompt = `Ürün veya kategori: "${productName}"
+    const prompt = `Sen bir e-ticaret fiyat analisti ve pazar araştırmacısısın. Aşağıdaki ürün/kategori için Türkiye ve Etsy piyasasında GERÇEKÇI fiyat aralıkları üret.
 
-Aşağıdaki pazaryerleri için bu ürün/kategori için gerçekçi piyasa fiyat aralıklarını tahmin et.
-Her platform için sadece sayısal min, ortalama ve max fiyat ver (para birimi: TRY veya USD).
+ÜRÜN / KATEGORİ: "${productName}"
 
-Platformlar:
-- Amazon (TRY)
-- Trendyol (TRY)
-- Hepsiburada (TRY)
-- N11 (TRY)
-- Çiçek Sepeti (TRY)
-- Etsy (USD)
+YAPMAN GEREKENLER:
+1. Bu ürünün hangi kategoriye girdiğini düşün (elektronik, giyim, ev eşyası, kozmetik, gıda takviyesi, hediyelik eşya vb.).
+2. Türkiye'de 2024 yılı bu kategorideki TİPİK perakende fiyat aralığını (en ucuz satıcıdan en pahalıya) biliyormuşsun gibi davran. Örnek: kadın deri ceket 800-4500 TL, bluetooth kulaklık 150-1200 TL, makyaj seti 80-600 TL.
+3. Her platformun pazar konumunu dikkate al:
+   - Amazon TR: geniş yelpaze, orta-üst segment, kampanyalı fiyatlar.
+   - Trendyol: Türkiye'de çok yaygın, hem uygun hem premium ürün, indirimli fiyatlar sık.
+   - Hepsiburada: benzer Trendyol'a, çok satıcılı, fiyat dağılımı geniş.
+   - N11: genelde benzer veya biraz daha uygun fiyatlar, küçük satıcılar.
+   - Çiçek Sepeti: çiçek, hediye, özel gün ürünleri ağırlıklı; bu kategoride değilse genel pazar ortalaması kullan.
+   - Etsy: ABD/global, el yapımı veya unique ürünler, USD; Türkiye ürünü için USD karşılığı makul band (örn. 15-80 USD).
+4. minPrice = piyasadaki en düşük gerçekçi fiyat, avgPrice = ortalama satış fiyatı, maxPrice = premium/özel ürün tarafı. Aralıklar birbirine makul uzaklıkta olsun (min ile max en az %20-30 fark).
 
-Yanıtı SADECE aşağıdaki JSON formatında ver, başka metin yazma:
-{"platforms":[{"name":"Amazon","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"Trendyol","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"Hepsiburada","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"N11","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"Çiçek Sepeti","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"Etsy","currency":"USD","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi}],"summaryText":"2-3 cümlelik Türkçe özet ve rekabetçi fiyat stratejisi."}
-
-Fiyatlar gerçekçi olsun: Türkiye pazaryerleri için TL (örn. 50-5000 TL), Etsy için USD (örn. 5-200 USD).`;
+ÇIKTI: Sadece aşağıdaki JSON. Başka açıklama yazma. Tüm sayılar sayı (number) olsun.
+{"platforms":[{"name":"Amazon","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"Trendyol","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"Hepsiburada","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"N11","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"Çiçek Sepeti","currency":"TRY","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi},{"name":"Etsy","currency":"USD","minPrice":sayi,"avgPrice":sayi,"maxPrice":sayi}],"summaryText":"2-4 cümle Türkçe: Bu ürün kategorisinde piyasa aralığı, hangi platformda neden fark olabileceği ve rekabetçi fiyat önerisi (sadece bilgi amaçlı, satış tavsiyesi değil)."}`;
 
     const res = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        {
+          role: "system",
+          content: "Sen e-ticaret fiyat analisti ve pazar araştırmacısısın. Türkiye (TRY) ve Etsy (USD) için gerçekçi, kategorisine uygun fiyat aralıkları üretirsin. Yanıtını sadece geçerli JSON olarak verirsin."
+        },
+        { role: "user", content: prompt }
+      ],
       response_format: { type: "json_object" }
     });
     const raw = (res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content) || "";
