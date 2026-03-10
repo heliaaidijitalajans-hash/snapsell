@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { signInWithRedirect, GoogleAuthProvider, setPersistence, browserLocalPersistence } from "firebase/auth";
+import { signInWithPopup, GoogleAuthProvider, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getFirebaseAuth } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
@@ -26,11 +26,18 @@ export function LoginPage() {
       const auth = getFirebaseAuth();
       const provider = new GoogleAuthProvider();
       await setPersistence(auth, browserLocalPersistence);
-      await signInWithRedirect(auth, provider);
-      // Page will redirect to Google; after sign-in, user returns and getRedirectResult runs in AuthContext
+      await signInWithPopup(auth, provider);
+      // Popup ile giriş; sayfa aynı kalır, onAuthStateChanged ile user set edilir, sonra ana sayfaya yönlendirilir
     } catch (e: unknown) {
-      const msg = e && typeof e === "object" && "message" in e ? String((e as { message: unknown }).message) : "Giriş başarısız.";
-      setError(msg);
+      const err = e && typeof e === "object" && "message" in e ? (e as { message: string; code?: string }) : null;
+      const msg = err?.message || "Giriş başarısız.";
+      if (err?.code === "auth/popup-blocked") {
+        setError("Açılan pencere engellendi. Lütfen açılır pencereye izin verip tekrar deneyin.");
+      } else if (err?.code === "auth/popup-closed-by-user") {
+        setError("Giriş penceresi kapatıldı. Tekrar denemek için butona tıklayın.");
+      } else {
+        setError(msg);
+      }
     } finally {
       setSigningIn(false);
     }

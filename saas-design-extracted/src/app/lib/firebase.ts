@@ -12,19 +12,25 @@ const firebaseConfig = {
   appId: "1:503663017163:web:8d02525549bd7f58f0af4e",
 };
 
-// Initialize Firebase only once (avoids duplicate-app errors with Strict Mode / HMR)
-const app: FirebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-
-export { app as firebaseApp };
+/** Single Firebase app instance. Call initializeApp() only once using getApps(). */
+function getFirebaseApp(): FirebaseApp {
+  if (!getApps().length) {
+    return initializeApp(firebaseConfig);
+  }
+  return getApp();
+}
 
 export function getFirebaseAuth(): Auth {
-  return getAuth(app);
+  return getAuth(getFirebaseApp());
 }
 
 export function getFirebaseStorage(): FirebaseStorage {
-  return getStorage(app);
+  return getStorage(getFirebaseApp());
 }
 
 export function getFirebaseFirestore(): Firestore {
-  return getFirestore(app);
+  return getFirestore(getFirebaseApp());
 }
+
+/** For code that needs the app instance directly. */
+export const firebaseApp = getFirebaseApp();

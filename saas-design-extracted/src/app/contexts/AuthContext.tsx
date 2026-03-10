@@ -88,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!cancelled) console.warn("Firebase persistence:", err);
       }
 
-      // Google redirect sonrası sayfa yüklendiğinde önce getRedirectResult tamamlanmalı.
+      // Redirect ile dönüldüyse sonucu al (popup kullanıyorsak genelde boş döner).
       try {
         const credential = await getRedirectResult(auth);
         if (cancelled) return;
