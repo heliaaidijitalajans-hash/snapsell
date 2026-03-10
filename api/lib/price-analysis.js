@@ -203,7 +203,7 @@ async function getPricesFromExa(productDescription) {
   const query = String(productDescription).trim().slice(0, 150);
   if (!query) return null;
   try {
-    const searchQuery = query + " fiyat satış TL";
+    const searchQuery = query + " fiyat TL satış";
     const res = await fetch("https://api.exa.ai/search", {
       method: "POST",
       headers: {
@@ -275,6 +275,8 @@ async function getPricesFromSerpAPI(productQuery) {
     const usdPrices = [];
     function addPrice(value, currency) {
       if (value == null || Number.isNaN(value) || value < 0.5) return;
+      const limits = CURRENCY_LIMITS[currency];
+      if (limits && (value < limits[0] || value > limits[1])) return;
       if (currency === "TRY") tryPrices.push(value);
       if (currency === "USD") usdPrices.push(value);
     }
@@ -396,6 +398,7 @@ export async function getPriceAnalysisWithScraperAPI(productDescription) {
       const extracted = fromText.concat(fromScripts);
       const pricesForCurrency = (extracted.filter(p => p.currency === marketplace.currency)).map(p => p.value);
       const stats = cleanPricesMinAvgMax(pricesForCurrency, marketplace.currency);
+      if (stats.count < 1 || (stats.minPrice == null && stats.maxPrice == null)) continue;
       const sellerCount = extractSellerOrResultCount(html) || extractSellerOrResultCount(textNoScripts);
       platforms.push({
         name: marketplace.name,
@@ -453,33 +456,44 @@ const FALLBACK_PLATFORM_NAMES = [
   { name: "Etsy", currency: "USD" }
 ];
 
-/** ScraperAPI, Exa ve SerpAPI sonuçlarını tek TRY/USD istatistiğinde birleştirir; 6 platform satırı üretir. */
+/** ScraperAPI satırının gerçekçi olup olmadığını kontrol eder (aykırı/saçma fiyatları eler). */
+function isScraperPlatformValid(p) {
+  const min = p.minPrice;
+  const max = p.maxPrice;
+  const avg = p.avgPrice;
+  const limits = CURRENCY_LIMITS[p.currency] || [1, 100000];
+  if (min == null && avg == null && max == null) return false;
+  const hasMin = min != null && min >= limits[0] && min <= limits[1];
+  const hasMax = max != null && max >= limits[0] && max <= limits[1];
+  if (!hasMin && !hasMax) return false;
+  const lo = min ?? avg ?? max;
+  const hi = max ?? avg ?? min;
+  if (lo > hi) return false;
+  if (hi / lo > 30) return false;
+  if (avg != null && min != null && max != null && (avg < min - 0.01 || avg > max + 0.01)) return false;
+  return true;
+}
+
+/** Platform öncelikli birleştirme: ScraperAPI gerçek platform verisini kullanır, eksik platformlar sadece Exa+SerpAPI ile doldurulur. */
 function mergePriceSources(scraperResult, exaPrices, serpapiPrices) {
-  const tryValues = [];
-  const usdValues = [];
+  const scraperMap = new Map();
+  if (scraperResult && Array.isArray(scraperResult.platforms)) {
+    for (const p of scraperResult.platforms) {
+      if (isScraperPlatformValid(p)) scraperMap.set(p.name, p);
+    }
+  }
+  const fallbackTryValues = [];
+  const fallbackUsdValues = [];
   function pushStats(stats, currency) {
     if (!stats) return;
     if (currency === "TRY") {
-      if (stats.minPrice != null) tryValues.push(stats.minPrice);
-      if (stats.avgPrice != null) tryValues.push(stats.avgPrice);
-      if (stats.maxPrice != null) tryValues.push(stats.maxPrice);
+      if (stats.minPrice != null) fallbackTryValues.push(stats.minPrice);
+      if (stats.avgPrice != null) fallbackTryValues.push(stats.avgPrice);
+      if (stats.maxPrice != null) fallbackTryValues.push(stats.maxPrice);
     } else {
-      if (stats.minPrice != null) usdValues.push(stats.minPrice);
-      if (stats.avgPrice != null) usdValues.push(stats.avgPrice);
-      if (stats.maxPrice != null) usdValues.push(stats.maxPrice);
-    }
-  }
-  if (scraperResult && Array.isArray(scraperResult.platforms)) {
-    for (const p of scraperResult.platforms) {
-      if (p.currency === "TRY") {
-        if (p.minPrice != null) tryValues.push(p.minPrice);
-        if (p.avgPrice != null) tryValues.push(p.avgPrice);
-        if (p.maxPrice != null) tryValues.push(p.maxPrice);
-      } else if (p.currency === "USD") {
-        if (p.minPrice != null) usdValues.push(p.minPrice);
-        if (p.avgPrice != null) usdValues.push(p.avgPrice);
-        if (p.maxPrice != null) usdValues.push(p.maxPrice);
-      }
+      if (stats.minPrice != null) fallbackUsdValues.push(stats.minPrice);
+      if (stats.avgPrice != null) fallbackUsdValues.push(stats.avgPrice);
+      if (stats.maxPrice != null) fallbackUsdValues.push(stats.maxPrice);
     }
   }
   if (exaPrices) {
@@ -490,17 +504,37 @@ function mergePriceSources(scraperResult, exaPrices, serpapiPrices) {
     pushStats(serpapiPrices.TRY, "TRY");
     pushStats(serpapiPrices.USD, "USD");
   }
-  const tryStats = cleanPricesMinAvgMax(tryValues, "TRY");
-  const usdStats = cleanPricesMinAvgMax(usdValues, "USD");
-  if (!tryStats.minPrice && !usdStats.minPrice) return null;
-  const platforms = FALLBACK_PLATFORM_NAMES.map(({ name, currency }) => ({
-    name,
-    currency,
-    minPrice: currency === "TRY" ? tryStats.minPrice : usdStats.minPrice,
-    avgPrice: currency === "TRY" ? tryStats.avgPrice : usdStats.avgPrice,
-    maxPrice: currency === "TRY" ? tryStats.maxPrice : usdStats.maxPrice
-  }));
-  return { platforms, tryStats, usdStats };
+  const fallbackTRY = cleanPricesMinAvgMax(fallbackTryValues, "TRY");
+  const fallbackUSD = cleanPricesMinAvgMax(fallbackUsdValues, "USD");
+
+  const platforms = FALLBACK_PLATFORM_NAMES.map(({ name, currency }) => {
+    const scraped = scraperMap.get(name);
+    if (scraped) {
+      return {
+        name: scraped.name,
+        currency: scraped.currency,
+        minPrice: scraped.minPrice ?? null,
+        avgPrice: scraped.avgPrice ?? null,
+        maxPrice: scraped.maxPrice ?? null
+      };
+    }
+    const fallback = currency === "TRY" ? fallbackTRY : fallbackUSD;
+    return {
+      name,
+      currency,
+      minPrice: fallback.minPrice ?? null,
+      avgPrice: fallback.avgPrice ?? null,
+      maxPrice: fallback.maxPrice ?? null
+    };
+  });
+
+  const hasAny = platforms.some(p => p.minPrice != null || p.avgPrice != null || p.maxPrice != null);
+  if (!hasAny) return null;
+  return {
+    platforms,
+    tryStats: fallbackTRY,
+    usdStats: fallbackUSD
+  };
 }
 
 /**
