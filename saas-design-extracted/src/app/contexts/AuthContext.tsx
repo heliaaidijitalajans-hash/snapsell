@@ -23,12 +23,14 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const SESSION_KEY = "snapsell_session";
 
+type RegisterResponse = { sessionId?: string; data?: { sessionId?: string }; success?: boolean };
+
 async function ensureSession(): Promise<string> {
   let sid = localStorage.getItem(SESSION_KEY);
   if (sid) return sid;
   try {
     const res = await fetch(`${getApiBase()}/api/register`, { method: "POST" });
-    const d = await apiJson<{ sessionId?: string; data?: { sessionId?: string }; success?: boolean }>(res).catch(() => ({}));
+    const d = await apiJson<RegisterResponse>(res).catch((): RegisterResponse => ({}));
     const sessionId = (d?.data?.sessionId ?? d?.sessionId) || "";
     if (sessionId) {
       localStorage.setItem(SESSION_KEY, sessionId);
@@ -45,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [sessionId, setSessionId] = useState<string | null>(() =>
     typeof window !== "undefined" ? localStorage.getItem(SESSION_KEY) : null
   );
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Stay true until onAuthStateChanged has fired
 
   const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
     const auth = getFirebaseAuth();
@@ -102,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setSessionId(null);
         }
-        setLoading(false);
+        setLoading(false); // Auth ready; safe to redirect / show login or app
       });
       if (cancelled && unsubRef.current) {
         unsubRef.current();
@@ -128,7 +130,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={value}>
+      {loading ? (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="animate-pulse text-gray-500">Yükleniyor…</div>
+        </div>
+      ) : (
+        children
+      )}
+    </AuthContext.Provider>
   );
 }
 

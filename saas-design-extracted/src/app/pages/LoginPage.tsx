@@ -12,8 +12,10 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [signingIn, setSigningIn] = useState(false);
 
+  // Redirect only after auth is ready (onAuthStateChanged has fired); avoids redirect loop
   useEffect(() => {
-    if (!loading && user) navigate("/", { replace: true });
+    if (loading) return;
+    if (user) navigate("/", { replace: true });
   }, [loading, user, navigate]);
 
   async function handleGoogleSignIn() {
