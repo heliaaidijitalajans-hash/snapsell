@@ -4,6 +4,7 @@ import {
   useEffect,
   useState,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
 import { onAuthStateChanged, getRedirectResult, type User } from "firebase/auth";
@@ -71,37 +72,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = "/login";
   }, []);
 
+  const unsubRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
     const auth = getFirebaseAuth();
     let cancelled = false;
 
-    getRedirectResult(auth)
-      .then((credential) => {
+    (async () => {
+      // Google redirect sonrası sayfa yüklendiğinde önce getRedirectResult tamamlanmalı.
+      // Aksi halde onAuthStateChanged bazen önce null ile tetiklenip kullanıcı tekrar giriş sayfasında kalıyor.
+      try {
+        const credential = await getRedirectResult(auth);
         if (cancelled) return;
         if (credential?.user) {
           setUser(credential.user);
           setSessionId(null);
         }
-      })
-      .catch((err) => {
+      } catch (err) {
         if (!cancelled) console.warn("Firebase redirect result:", err);
-      });
-
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      if (cancelled) return;
-      setUser(u || null);
-      if (!u) {
-        const sid = await ensureSession();
-        setSessionId(sid || null);
-      } else {
-        setSessionId(null);
       }
-      setLoading(false);
-    });
+
+      if (cancelled) return;
+      unsubRef.current = onAuthStateChanged(auth, async (u) => {
+        if (cancelled) return;
+        setUser(u || null);
+        if (!u) {
+          const sid = await ensureSession();
+          setSessionId(sid || null);
+        } else {
+          setSessionId(null);
+        }
+        setLoading(false);
+      });
+      if (cancelled && unsubRef.current) {
+        unsubRef.current();
+        unsubRef.current = null;
+      }
+    })();
 
     return () => {
       cancelled = true;
-      unsub();
+      if (unsubRef.current) {
+        unsubRef.current();
+        unsubRef.current = null;
+      }
     };
   }, []);
 
