@@ -25,7 +25,7 @@ Accurate price estimation from product images: structured identification → pre
 - **With image:** `runPricePipeline(imageUrl, { userHint: "optional text" })`
 - **Text only:** `runPricePipelineFromText("Nike Air Max white")`
 
-From `price-analysis.js`: `getPriceAnalysisV2(imageUrl, userHint)` returns this format. `getPriceAnalysisUnified()` uses the pipeline first and maps to legacy `platforms` + `summaryText` for the existing UI.
+From `lib/price-analysis.js`: `getPriceAnalysisV2(imageUrl, userHint)` returns this format. `getPriceAnalysisUnified()` uses the pipeline first and maps to legacy `platforms` + `summaryText` for the existing UI.
 
 ## Env
 

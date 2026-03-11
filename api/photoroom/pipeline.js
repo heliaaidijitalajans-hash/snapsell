@@ -117,7 +117,7 @@ export default async function handler(req, res) {
         });
         seoText = (seoRes.choices?.[0]?.message?.content || "").trim();
 
-        const { getPriceAnalysisUnified } = await import("../lib/price-analysis.js");
+        const { getPriceAnalysisUnified } = await import("../../lib/price-analysis.js");
         const unified = await getPriceAnalysisUnified(dataUrl, productDesc, seoText);
         if (unified && unified.platforms && unified.platforms.length > 0) {
           priceSummary = unified.summaryText || "";
