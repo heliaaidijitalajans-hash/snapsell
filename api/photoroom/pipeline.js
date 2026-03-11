@@ -98,6 +98,8 @@ export default async function handler(req, res) {
     let seoText = "";
     let priceSummary = null;
     let priceAnalysis = [];
+    let priceError = null;
+    let priceErrorMessage = null;
     const productDesc = (body.productDescriptionForPriceAnalysis && String(body.productDescriptionForPriceAnalysis).trim()) || "";
 
     if (process.env.OPENAI_API_KEY) {
@@ -119,7 +121,12 @@ export default async function handler(req, res) {
 
         const { getPriceAnalysisUnified } = await import("../../lib/price-analysis.js");
         const unified = await getPriceAnalysisUnified(dataUrl, productDesc, seoText);
-        if (unified && unified.platforms && unified.platforms.length > 0) {
+        if (unified?.error) {
+          priceError = unified.error;
+          priceErrorMessage = unified.message;
+          priceSummary = unified.message || "";
+          priceAnalysis = [];
+        } else if (unified && unified.platforms && unified.platforms.length > 0) {
           priceSummary = unified.summaryText || "";
           priceAnalysis = unified.platforms;
         } else {
@@ -143,7 +150,7 @@ export default async function handler(req, res) {
       }
     }
 
-    return res.status(200).json({
+    const json = {
       success: true,
       image: dataUrl,
       outputUrl: dataUrl,
@@ -151,7 +158,12 @@ export default async function handler(req, res) {
       seo: seoText || undefined,
       priceSummary: priceSummary || undefined,
       priceAnalysis
-    });
+    };
+    if (priceError) {
+      json.error = priceError;
+      json.message = priceErrorMessage;
+    }
+    return res.status(200).json(json);
   } catch (e) {
     console.error("[photoroom/pipeline] Error:", e.message);
     console.error("[photoroom/pipeline] Stack:", e.stack);
