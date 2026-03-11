@@ -1,6 +1,7 @@
 /**
  * Fiyat analizi: ScraperAPI ile pazaryerlerinden fiyat çekme + GPT özet.
  * server.js ile aynı mantık (PRICE_MARKETPLACES, extract*, cleanPricesMinAvgMax).
+ * V2: price-pipeline (structured image analysis + Google Shopping + cleaning) for accurate estimates.
  */
 
 const SCRAPERAPI_API_KEY = (process.env.SCRAPERAPI_API_KEY || process.env.SCRAPER_API_KEY || "").trim();
@@ -538,11 +539,66 @@ function mergePriceSources(scraperResult, exaPrices, serpapiPrices) {
 }
 
 /**
- * Görsel + metin ile ürün tespiti, ScraperAPI + Exa + SerpAPI birleşik fiyat, GPT raporu.
- * Tablo formatı: aynı 6 platform, En düşük / Ortalama / En yüksek. Dönüş: { productName, platforms, summaryText }.
+ * New pipeline result → legacy format for existing UI (productName, platforms, summaryText).
+ */
+function mapPipelineResultToLegacy(result) {
+  if (!result || !result.price_analysis) return null;
+  const id = result.product_identification || {};
+  const productName = [id.brand, id.model, id.product_type].filter(Boolean).join(" ").trim() || "Ürün";
+  const pa = result.price_analysis;
+  const currency = pa.currency || "TRY";
+  const platforms = [{
+    name: "Google Shopping",
+    currency,
+    minPrice: pa.min_value ?? null,
+    avgPrice: pa.average_value ?? null,
+    maxPrice: pa.max_value ?? null
+  }];
+  const summaryText = [
+    pa.median_price && `Medyan fiyat: ${pa.median_price}.`,
+    pa.average_price && `Ortalama: ${pa.average_price}.`,
+    pa.price_range && `Piyasa aralığı: ${pa.price_range}.`
+  ].filter(Boolean).join(" ") + " (Google Shopping verileri, bilgi amaçlıdır.)";
+  return { productName, platforms, summaryText, _v2: result };
+}
+
+/**
+ * Accurate price pipeline (V2): structured image analysis → Google Shopping only → clean → median/avg/range.
+ * Returns new format: { product_identification, price_analysis, sources }.
+ */
+export async function getPriceAnalysisV2(imageUrl, userHint) {
+  const { runPricePipeline, runPricePipelineFromText } = await import("./price-pipeline/index.js");
+  if (imageUrl && typeof imageUrl === "string") {
+    return runPricePipeline(imageUrl, { userHint: (userHint && String(userHint).trim()) || "" });
+  }
+  const text = (userHint && String(userHint).trim()) || "";
+  return runPricePipelineFromText(text);
+}
+
+/**
+ * Görsel + metin ile ürün tespiti. Önce V2 pipeline (doğru fiyat) dener; sonuç yoksa ScraperAPI + Exa + SerpAPI birleşik.
+ * Tablo formatı: platforms (En düşük / Ortalama / En yüksek). Dönüş: { productName, platforms, summaryText }.
  */
 export async function getPriceAnalysisUnified(imageUrl, userText, seoText) {
   const fallbackText = (userText && String(userText).trim()) || (seoText && String(seoText).trim()) || "";
+  const productNameFromQuery = fallbackText.slice(0, 200);
+
+  if (process.env.SERPAPI_API_KEY && (imageUrl || fallbackText)) {
+    try {
+      const { runPricePipeline, runPricePipelineFromText } = await import("./price-pipeline/index.js");
+      const result = imageUrl
+        ? await runPricePipeline(imageUrl, { userHint: fallbackText })
+        : await runPricePipelineFromText(fallbackText);
+      const hasPrices = result?.price_analysis?.median_value != null || result?.price_analysis?.average_value != null;
+      if (hasPrices && (result?.sources?.length > 0 || result?.price_analysis?.price_range)) {
+        const legacy = mapPipelineResultToLegacy(result);
+        if (legacy) return legacy;
+      }
+    } catch (e) {
+      console.warn("Price pipeline V2:", e.message);
+    }
+  }
+
   const productQuery = await getProductQueryFromImageAndText(imageUrl, fallbackText);
   const effectiveQuery = (productQuery && productQuery.trim()) || fallbackText || "ürün";
   const productName = effectiveQuery.slice(0, 200);
