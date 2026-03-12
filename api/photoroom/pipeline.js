@@ -126,10 +126,11 @@ export default async function handler(req, res) {
           priceErrorMessage = unified.message;
           priceSummary = unified.message || "";
           priceAnalysis = [];
-        } else if (unified && unified.platforms && unified.platforms.length > 0) {
-          priceSummary = unified.summaryText || "";
-          priceAnalysis = unified.platforms;
-        } else {
+        } else if (unified) {
+          priceSummary = unified.summaryText || priceSummary || "";
+          priceAnalysis = Array.isArray(unified.platforms) && unified.platforms.length > 0 ? unified.platforms : [];
+        }
+        if (!priceAnalysis || priceAnalysis.length === 0) {
           const priceRes = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [{
