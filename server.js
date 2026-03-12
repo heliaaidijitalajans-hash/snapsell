@@ -1450,10 +1450,15 @@ app.get("/api/auth/google", function (req, res) {
 
 app.post("/api/auth/google", async (req, res) => {
   try {
+    console.log("Received Google auth request");
     const idToken = (req.body && req.body.idToken) ? String(req.body.idToken).trim() : "";
-    if (!idToken) return res.status(400).json({ error: "idToken gerekli" });
+    if (!idToken) {
+      return res.status(400).json({ error: "Missing idToken", message: "idToken gerekli" });
+    }
     if (!adminAuth) initFirebaseAuth();
-    if (!adminAuth) return res.status(503).json({ error: "Google giris yapilandirilmadi" });
+    if (!adminAuth) {
+      return res.status(503).json({ error: "Google giris yapilandirilmadi" });
+    }
     const decoded = await adminAuth.verifyIdToken(idToken);
     const uid = decoded.uid;
     const email = decoded.email || null;
@@ -1475,9 +1480,14 @@ app.post("/api/auth/google", async (req, res) => {
       hasEditor: isEditorPlan(plan),
       isAdmin: !!isAdmin
     });
-  } catch (e) {
-    console.warn("Google auth:", e.message);
-    return res.status(401).json({ error: "Gecersiz token", message: e.message });
+  } catch (error) {
+    console.error("Google auth error:", error);
+    if (res.headersSent) return;
+    const isTokenError = error && (error.code === "auth/id-token-expired" || error.code === "auth/argument-error" || error.message && /token|invalid|expired/i.test(error.message));
+    if (isTokenError) {
+      return res.status(401).json({ error: "Gecersiz token", message: error.message || "Token verification failed" });
+    }
+    return res.status(500).json({ error: "Google authentication failed", message: error.message || "Internal error" });
   }
 });
 
