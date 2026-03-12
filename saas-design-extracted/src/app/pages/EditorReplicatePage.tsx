@@ -36,7 +36,6 @@ export function EditorReplicatePage() {
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
   const [seoDescription, setSeoDescription] = useState<string | null>(null);
   const [priceSummary, setPriceSummary] = useState<string | null>(null);
-  const [priceAnalysisPlatforms, setPriceAnalysisPlatforms] = useState<Array<{ name: string; currency: string; minPrice?: number; avgPrice?: number; maxPrice?: number }> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorBillingUrl, setErrorBillingUrl] = useState<string | null>(null);
   const [errorUpgradeUrl, setErrorUpgradeUrl] = useState<string | null>(null);
@@ -97,7 +96,6 @@ export function EditorReplicatePage() {
     setOutputUrl(null);
     setSeoDescription(null);
     setPriceSummary(null);
-    setPriceAnalysisPlatforms(null);
     setLoading(true);
     try {
       const headers = await getAuthHeaders();
@@ -162,7 +160,6 @@ export function EditorReplicatePage() {
       }
       if (data.seo && typeof data.seo === "string") setSeoDescription(data.seo);
       if (data.priceSummary && typeof data.priceSummary === "string") setPriceSummary(data.priceSummary);
-      if (Array.isArray(data.priceAnalysis) && data.priceAnalysis.length > 0) setPriceAnalysisPlatforms(data.priceAnalysis);
       if (freeEditorUsesRemaining !== null) {
         setFreeEditorUsesRemaining(Math.max(0, freeEditorUsesRemaining - 1));
       }
@@ -189,7 +186,6 @@ export function EditorReplicatePage() {
     setOutputUrl(null);
     setSeoDescription(null);
     setPriceSummary(null);
-    setPriceAnalysisPlatforms(null);
     setError(null);
     setErrorBillingUrl(null);
     setErrorUpgradeUrl(null);
@@ -506,49 +502,18 @@ export function EditorReplicatePage() {
             </div>
           )}
 
-          {(priceSummary || (priceAnalysisPlatforms && priceAnalysisPlatforms.length > 0)) && (
+          {priceSummary && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-gray-200 bg-gray-50/80">
                 <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                   <span className="w-1 h-5 rounded-full bg-emerald-500" />
                   {t("editor.priceAnalysis")}
                 </h3>
-                {priceSummary && <p className="text-gray-600 text-sm leading-relaxed mt-1">{priceSummary}</p>}
               </div>
               <div className="p-5">
-                {priceAnalysisPlatforms && priceAnalysisPlatforms.length > 0 && (
-                  <div className="overflow-x-auto rounded-lg border border-gray-200">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-gray-100 text-gray-700 font-medium">
-                          <th className="text-left py-3 px-4 border-b border-gray-200">{t("editor.priceSource")}</th>
-                          <th className="text-right py-3 px-4 border-b border-gray-200">{t("editor.priceAvg")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {priceAnalysisPlatforms.map((p: { name: string; currency: string; minPrice?: number; avgPrice?: number; maxPrice?: number }, i: number) => {
-                          const fmt = (n: number | undefined) => {
-                            if (n == null) return "—";
-                            const opts = { minimumFractionDigits: 0, maximumFractionDigits: 2 };
-                            return p.currency === "TRY" ? n.toLocaleString("tr-TR", opts) : n.toLocaleString("en-US", opts);
-                          };
-                          const suffix = p.currency ? ` ${p.currency}` : "";
-                          return (
-                            <tr key={i} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50 transition-colors">
-                              <td className="py-3 px-4 font-medium text-gray-800">{p.name}</td>
-                              <td className="py-3 px-4 text-right text-gray-700 tabular-nums">{fmt(p.avgPrice)}{suffix}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                <p className="text-gray-700 text-sm leading-relaxed">{priceSummary}</p>
                 <p className="mt-3 text-xs text-gray-500 leading-relaxed">
                   {t("editor.priceDisclaimer")}
-                </p>
-                <p className="mt-2 text-sm font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                  {t("editor.priceDisclaimerBold")}
                 </p>
               </div>
             </div>
