@@ -1465,10 +1465,6 @@ app.post("/api/register", async (req, res) => {
   }
 });
 
-app.get("/api/auth/google", function (req, res) {
-  res.status(405).json({ error: "Method Not Allowed", message: "Use POST with body: { idToken: \"...\" }" });
-});
-
 app.post("/api/auth/google", async (req, res) => {
   try {
     console.log("Received Google auth request");
