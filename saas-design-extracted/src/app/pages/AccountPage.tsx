@@ -44,26 +44,32 @@ export function AccountPage() {
 
   useEffect(() => {
     let cancelled = false;
-    getAuthHeaders()
-      .then((headers) => fetch(`${getApiBase()}/api/account`, { headers }))
-      .then(async (r) => {
-        const parsed = await apiJson<AccountData | { success?: boolean; data?: AccountData }>(r);
-        if (!r.ok) return Promise.reject(new Error((parsed && typeof parsed === "object" && "error" in parsed && parsed.error) ? String(parsed.error) : t("account.errorLoad")));
-        return parsed;
-      })
-      .then((d) => {
-        if (cancelled) return;
-        const payload = d && typeof d === "object" && "data" in d && d.data != null ? d.data : d;
-        setData(payload as AccountData);
-      })
+    const fetchAccount = async () => {
+      let headers: Record<string, string> = {};
+      if (user) {
+        const token = await user.getIdToken();
+        headers = { Authorization: "Bearer " + token };
+      } else {
+        headers = await getAuthHeaders();
+      }
+      const r = await fetch(`${getApiBase()}/api/account`, { headers });
+      const parsed = await apiJson<AccountData | { success?: boolean; data?: AccountData; error?: string }>(r);
+      if (cancelled) return;
+      if (!r.ok) {
+        throw new Error((parsed && typeof parsed === "object" && "error" in parsed && parsed.error) ? String(parsed.error) : t("account.errorLoad"));
+      }
+      const payload = parsed && typeof parsed === "object" && "data" in parsed && parsed.data != null ? parsed.data : parsed;
+      setData(payload as AccountData);
+    };
+    fetchAccount()
       .catch((e) => {
-        if (!cancelled) setError(e.message || t("account.errorGeneric"));
+        if (!cancelled) setError(e instanceof Error ? e.message : t("account.errorGeneric"));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [getAuthHeaders, t]);
+  }, [user, getAuthHeaders, t]);
 
   const handleCancelSubscription = async () => {
     if (!window.confirm(t("account.cancelConfirm"))) return;
@@ -71,10 +77,16 @@ export function AccountPage() {
     setCancelSuccess(false);
     setCancelLoading(true);
     try {
-      const headers = await getAuthHeaders();
+      let headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (user) {
+        const token = await user.getIdToken();
+        headers.Authorization = "Bearer " + token;
+      } else {
+        Object.assign(headers, await getAuthHeaders());
+      }
       const res = await fetch(`${getApiBase()}/api/account/cancel-subscription`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
+        headers,
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {

@@ -50,25 +50,36 @@ export function EditorReplicatePage() {
     );
   }, []);
 
+  // Giriş yapmış kullanıcı için her zaman Bearer (user) kullan; sayfa yenilenince session ile 3 hak dönmesin
   useEffect(() => {
     let cancelled = false;
-    getAuthHeaders()
-      .then((headers) => fetch(`${getApiBase()}/api/replicate/status`, { headers }))
-      .then((r) => r.json())
-      .then((data) => {
-        if (!cancelled) {
-          const available = !!(data.photoRoomAvailable ?? data.available);
-          setHasEditor(available);
-          if (available) setFreeLimitReached(false);
-          const remaining = data.freeEditorUsesRemaining;
-          setFreeEditorUsesRemaining(typeof remaining === "number" ? remaining : null);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setHasEditor(false);
-      });
+    const fetchStatus = async () => {
+      let headers: Record<string, string> = {};
+      if (user) {
+        const token = await user.getIdToken();
+        headers = { Authorization: "Bearer " + token };
+      } else {
+        headers = await getAuthHeaders();
+      }
+      const r = await fetch(`${getApiBase()}/api/replicate/status`, { headers });
+      const data = await r.json().catch(() => ({}));
+      if (cancelled) return;
+      if (!r.ok) {
+        setHasEditor(false);
+        if (r.status === 401) setFreeEditorUsesRemaining(null);
+        return;
+      }
+      const available = !!(data.photoRoomAvailable ?? data.available);
+      setHasEditor(available);
+      if (available) setFreeLimitReached(false);
+      const remaining = data.freeEditorUsesRemaining;
+      setFreeEditorUsesRemaining(typeof remaining === "number" ? remaining : null);
+    };
+    fetchStatus().catch(() => {
+      if (!cancelled) setHasEditor(false);
+    });
     return () => { cancelled = true; };
-  }, [getAuthHeaders]);
+  }, [user, getAuthHeaders]);
 
   useEffect(() => {
     return () => {
