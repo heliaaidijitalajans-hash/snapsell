@@ -33,6 +33,7 @@ export default async function handler(req, res) {
   }
 
   const backendUrl =
+    process.env.VITE_API_BASE_URL ||
     process.env.API_BASE ||
     process.env.BACKEND_URL ||
     process.env.VITE_API_BASE ||
@@ -40,7 +41,7 @@ export default async function handler(req, res) {
   if (!backendUrl || backendUrl.includes("localhost")) {
     return res.status(503).json({
       error: "Backend not configured",
-      message: "Set API_BASE or BACKEND_URL in Vercel env to your Express API URL (e.g. https://your-api.railway.app)",
+      message: "Set VITE_API_BASE_URL, API_BASE or BACKEND_URL in Vercel env to your Express API URL (e.g. https://your-api.railway.app)",
     });
   }
 

@@ -1,11 +1,11 @@
-/** API base: empty = same-origin. Set VITE_API_BASE for external backend (e.g. server.js). */
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+/** Full backend URL. All API requests use this; no relative paths. Set VITE_API_BASE_URL (e.g. https://your-api.railway.app). */
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || "").toString().replace(/\/$/, "");
 
-export const API_BASE_URL = API_BASE;
+export { API_BASE_URL };
 
-/** Returns API base so fetch(getApiBase() + "/api/photoroom/pipeline") hits same-origin or custom backend. */
+/** Returns full API base URL for fetch( getApiBase() + "/api/..." ). */
 export function getApiBase(): string {
-  return API_BASE;
+  return API_BASE_URL;
 }
 
 /** Parse JSON from response. Returns {} for empty/non-JSON; throws only for HTML (wrong host). */

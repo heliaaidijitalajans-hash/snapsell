@@ -15,6 +15,7 @@ export async function POST(req: Request) {
     }
 
     const backendUrl =
+      process.env.VITE_API_BASE_URL ||
       process.env.VITE_API_BASE ||
       process.env.API_BASE ||
       process.env.BACKEND_URL ||
