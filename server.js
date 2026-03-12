@@ -1557,16 +1557,20 @@ app.get("/api/replicate/status", async (req, res) => {
     const photoRoom = canUsePhotoRoom(user);
     const pixian = canUsePixian(user);
     const credits = user.credits ?? FREE_CREDITS;
-    const conversions = Math.floor(credits / CREDITS_PER_CONVERSION);
     const plan = user.plan || "free";
-    const freeEditorUsesRemaining = plan === "free" ? conversions : null;
+    const totalConversions = user.totalConversions ?? 0;
+    const maxFreeConversions = 3;
+    const conversionsFromCredits = Math.floor(credits / CREDITS_PER_CONVERSION);
+    const remainingByTotal = Math.max(0, maxFreeConversions - totalConversions);
+    const freeEditorUsesRemaining =
+      plan === "free" ? Math.min(conversionsFromCredits, remainingByTotal) : null;
     res.json({
       available: photoRoom,
       photoRoomAvailable: photoRoom,
       pixianAvailable: pixian,
       needsPublicUrl: !publicUrl,
       freeEditorUsesRemaining,
-      conversions
+      conversions: conversionsFromCredits
     });
   } catch (err) {
     console.error("api/replicate/status:", err.message);
@@ -1739,7 +1743,9 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
   if (!canUsePhotoRoom(user)) {
     const plan = user.plan || "free";
     const credits = user.credits ?? FREE_CREDITS;
-    if (plan === "free" && credits < CREDITS_PER_CONVERSION) {
+    const totalConversions = user.totalConversions ?? 0;
+    const maxFreeConversions = 3;
+    if (plan === "free" && (credits < CREDITS_PER_CONVERSION || totalConversions >= maxFreeConversions)) {
       return res.status(402).json({
         error: "Ücretsiz 3 deneme hakkınızı kullandınız. Devam etmek için plan yükseltin.",
         upgradeUrl: "/fiyatlandirma",
@@ -2668,6 +2674,18 @@ app.post("/api/process", async (req, res) => {
   const user = await getRequestUser(req);
   if (!user) return res.status(401).json({ error: "Oturum gerekli. Lutfen giris yapin veya sayfayi yenileyin." });
   const credits = user.credits ?? FREE_CREDITS;
+  const plan = user.plan || "free";
+  const totalConversions = user.totalConversions ?? 0;
+  const maxFreeConversions = 3;
+  if (plan === "free" && totalConversions >= maxFreeConversions) {
+    return res.status(402).json({
+      error: "FREE_LIMIT_REACHED",
+      message: "Ücretsiz 3 deneme hakkınızı kullandınız. Devam etmek için plan yükseltin.",
+      limitReached: true,
+      credits,
+      totalConversions
+    });
+  }
   if (credits < CREDITS_PER_CONVERSION) {
     return res.status(402).json({
       error: "INSUFFICIENT_CREDITS",
