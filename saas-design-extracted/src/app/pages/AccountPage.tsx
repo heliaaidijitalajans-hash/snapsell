@@ -38,6 +38,9 @@ export function AccountPage() {
   const [data, setData] = useState<AccountData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelMessage, setCancelMessage] = useState<string | null>(null);
+  const [cancelSuccess, setCancelSuccess] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,6 +65,37 @@ export function AccountPage() {
     return () => { cancelled = true; };
   }, [getAuthHeaders, t]);
 
+  const handleCancelSubscription = async () => {
+    if (!window.confirm(t("account.cancelConfirm"))) return;
+    setCancelMessage(null);
+    setCancelSuccess(false);
+    setCancelLoading(true);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${getApiBase()}/api/account/cancel-subscription`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setCancelMessage((json && typeof json === "object" && "error" in json ? json.error : json.message) || t("account.errorGeneric"));
+        return;
+      }
+      setCancelMessage(t("account.cancelSuccess"));
+      setCancelSuccess(true);
+      const refetch = await fetch(`${getApiBase()}/api/account`, { headers });
+      const refetchData = await apiJson<AccountData | { data?: AccountData }>(refetch);
+      if (refetch.ok && refetchData) {
+        const payload = refetchData && typeof refetchData === "object" && "data" in refetchData && refetchData.data != null ? refetchData.data : refetchData;
+        setData(payload as AccountData);
+      }
+    } catch (e) {
+      setCancelMessage(e instanceof Error ? e.message : t("account.errorGeneric"));
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -83,6 +117,9 @@ export function AccountPage() {
 
   const displayEmail = data.email || user?.email || "—";
   const displayName = data.displayName || user?.displayName || "—";
+  const isFreePlan =
+    String(data.plan || "").toLowerCase().trim() === "free" ||
+    (!data.hasEditor && !data.hasLeonardo);
 
   const dateLocale = locale === "en" ? "en-US" : "tr-TR";
 
@@ -219,13 +256,26 @@ export function AccountPage() {
                 <h3 className="font-medium text-gray-900">{t("account.cancelTitle")}</h3>
                 <p className="text-sm text-gray-600 mt-0.5">{t("account.cancelDesc")}</p>
               </div>
-              <Link
-                to="/destek"
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 shrink-0"
-              >
-                <XCircle className="w-4 h-4" />
-                {t("account.cancel")}
-              </Link>
+              {!isFreePlan ? (
+                <div className="flex flex-col items-stretch sm:items-end gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleCancelSubscription}
+                    disabled={cancelLoading}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 disabled:opacity-60"
+                  >
+                    {cancelLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                    {t("account.cancel")}
+                  </button>
+                  {cancelMessage && (
+                    <p className={`text-sm ${cancelSuccess ? "text-green-600" : "text-red-600"}`}>
+                      {cancelMessage}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-600 shrink-0">{t("account.alreadyFree")}</p>
+              )}
             </div>
             <div className="pt-2 border-t border-gray-100">
               <p className="text-sm font-medium text-gray-900">{t("account.renewingSubscription")}</p>

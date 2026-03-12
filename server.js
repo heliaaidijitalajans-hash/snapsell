@@ -1426,6 +1426,23 @@ app.get("/api/account", async (req, res) => {
   });
 });
 
+/** Aboneliği iptal et: planı free yapar (yenileme durdurulur). */
+app.post("/api/account/cancel-subscription", async (req, res) => {
+  const user = await getRequestUser(req);
+  if (!user) return res.status(401).json({ error: "Oturum gerekli" });
+  const currentPlan = user.plan || "free";
+  if (currentPlan === "free") {
+    return res.status(200).json({ success: true, message: "Zaten ücretsiz plandasınız.", plan: "free" });
+  }
+  try {
+    await updateUserInDb(user.id, { plan: "free" });
+    res.status(200).json({ success: true, message: "Abonelik iptal edildi.", plan: "free" });
+  } catch (err) {
+    console.error("cancel-subscription:", err.message);
+    res.status(500).json({ error: "İptal işlemi sırasında bir hata oluştu.", message: err.message });
+  }
+});
+
 /** Payment webhook – temporarily disabled; placeholder until payment system is re-enabled. */
 app.post("/api/subscription-webhook", (req, res) => {
   res.status(200).json({ message: "Payment system coming soon" });
