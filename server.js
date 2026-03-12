@@ -471,6 +471,18 @@ app.use(function (req, res, next) {
 app.use(cors({ origin: true, credentials: false }));
 app.use(express.json({ limit: "50mb" }));
 
+app.get("/", function (req, res) {
+  res.json({
+    status: "ok",
+    service: "SnapSell API",
+    message: "SnapSell backend is running"
+  });
+});
+
+app.get("/health", function (req, res) {
+  res.send("ok");
+});
+
 app.get("/favicon.ico", function (req, res) {
   res.status(204).end();
 });
