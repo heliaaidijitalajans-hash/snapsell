@@ -438,58 +438,21 @@ async function getRequestUser(req) {
 }
 
 const APP_DOMAIN = (process.env.APP_DOMAIN || "").trim();
-const envOrigins = (process.env.ALLOWED_ORIGINS || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
-const defaultOrigins = [
-  "https://snapsell.website",
-  "https://www.snapsell.website",
-  "https://snapsell-production.up.railway.app",
-  "http://localhost:5173",
-  "https://snapsellapp-6649a.web.app",
-  "https://snapsell-one.vercel.app"
-];
-const allowedOrigins = envOrigins.length > 0 ? envOrigins : defaultOrigins;
-console.log("CORS allowed origins:", allowedOrigins.join(", ") || "(none)");
-
-function setCorsHeaders(req, res, origin) {
-  res.setHeader("Access-Control-Allow-Origin", origin);
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-}
-
 const cors = require("cors");
+
+const corsOptions = {
+  origin: [
+    "https://snapsell.website",
+    "https://www.snapsell.website",
+    "https://snapsell-one.vercel.app"
+  ],
+  credentials: true
+};
 
 const app = express();
 app.disable("x-powered-by");
 
-// Preflight (OPTIONS): always respond with CORS headers so browser gets Access-Control-Allow-Origin
-app.use(function (req, res, next) {
-  const origin = req.headers.origin;
-  if (req.method === "OPTIONS") {
-    if (origin && allowedOrigins.includes(origin)) {
-      res.setHeader("Access-Control-Allow-Origin", origin);
-      res.setHeader("Access-Control-Allow-Credentials", "true");
-      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Session-Id");
-      res.setHeader("Access-Control-Max-Age", "86400");
-    }
-    return res.status(204).end();
-  }
-  next();
-});
-
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      return callback(null, false);
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Session-Id"]
-  })
-);
+app.use(cors(corsOptions));
 app.use(express.json({ limit: "50mb" }));
 
 app.get("/", function (req, res) {
@@ -587,7 +550,7 @@ async function requireAdmin(req, res, next) {
 app.get("/api/config", function (req, res) {
   res.json({
     appDomain: APP_DOMAIN || null,
-    allowedOrigins: allowedOrigins.length ? allowedOrigins : null
+    allowedOrigins: corsOptions.origin && corsOptions.origin.length ? corsOptions.origin : null
   });
 });
 
