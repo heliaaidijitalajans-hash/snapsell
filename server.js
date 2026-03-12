@@ -439,11 +439,15 @@ async function getRequestUser(req) {
 
 const APP_DOMAIN = (process.env.APP_DOMAIN || "").trim();
 const envOrigins = (process.env.ALLOWED_ORIGINS || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
-const defaultOrigins = ["https://snapsell.website", "https://www.snapsell.website", "https://snapsellapp-6649a.web.app", "https://snapsell-one.vercel.app"];
+const defaultOrigins = [
+  "https://snapsell.website",
+  "https://www.snapsell.website",
+  "https://snapsell-production.up.railway.app",
+  "http://localhost:5173",
+  "https://snapsellapp-6649a.web.app",
+  "https://snapsell-one.vercel.app"
+];
 const allowedOrigins = envOrigins.length > 0 ? envOrigins : defaultOrigins;
-if (allowedOrigins.indexOf("https://snapsell-one.vercel.app") === -1) {
-  allowedOrigins.push("https://snapsell-one.vercel.app");
-}
 console.log("CORS allowed origins:", allowedOrigins.join(", ") || "(none)");
 
 function setCorsHeaders(req, res, origin) {
@@ -456,19 +460,18 @@ const cors = require("cors");
 const app = express();
 app.disable("x-powered-by");
 
-// CORS: her istekte basligi koy; OPTIONS preflight hemen 204 ile bitir (cors paketinden once)
-app.use(function (req, res, next) {
-  var origin = req.headers.origin;
-  res.setHeader("Access-Control-Allow-Origin", origin || "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Session-Id");
-  res.setHeader("Access-Control-Max-Age", "86400");
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
-  next();
-});
-app.use(cors({ origin: true, credentials: false }));
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("CORS not allowed"));
+    },
+    credentials: true
+  })
+);
 app.use(express.json({ limit: "50mb" }));
 
 app.get("/", function (req, res) {
