@@ -1432,12 +1432,16 @@ app.post("/api/register", async (req, res) => {
   }
 });
 
+app.get("/api/auth/google", function (req, res) {
+  res.status(405).json({ error: "Method Not Allowed", message: "Use POST with body: { idToken: \"...\" }" });
+});
+
 app.post("/api/auth/google", async (req, res) => {
-  const idToken = (req.body && req.body.idToken) ? String(req.body.idToken).trim() : "";
-  if (!idToken) return res.status(400).json({ error: "idToken gerekli" });
-  if (!adminAuth) initFirebaseAuth();
-  if (!adminAuth) return res.status(503).json({ error: "Google giris yapilandirilmadi" });
   try {
+    const idToken = (req.body && req.body.idToken) ? String(req.body.idToken).trim() : "";
+    if (!idToken) return res.status(400).json({ error: "idToken gerekli" });
+    if (!adminAuth) initFirebaseAuth();
+    if (!adminAuth) return res.status(503).json({ error: "Google giris yapilandirilmadi" });
     const decoded = await adminAuth.verifyIdToken(idToken);
     const uid = decoded.uid;
     const email = decoded.email || null;
@@ -1449,7 +1453,7 @@ app.post("/api/auth/google", async (req, res) => {
     const credits = user.credits ?? FREE_CREDITS;
     const plan = user.plan || "free";
     const isAdmin = email && email.toLowerCase() === ADMIN_EMAIL;
-    res.json({
+    return res.json({
       ok: true,
       user: { uid, email, displayName: displayName || email || "Kullanici" },
       credits,
@@ -1461,7 +1465,7 @@ app.post("/api/auth/google", async (req, res) => {
     });
   } catch (e) {
     console.warn("Google auth:", e.message);
-    res.status(401).json({ error: "Gecersiz token", message: e.message });
+    return res.status(401).json({ error: "Gecersiz token", message: e.message });
   }
 });
 
