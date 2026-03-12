@@ -95,9 +95,55 @@ export function HomePage() {
               className="w-full h-auto rounded-xl border border-gray-200 shadow-sm object-cover aspect-square"
             />
           </div>
-          <div className="mt-16 text-center max-w-2xl mx-auto">
-            <h2 className="text-2xl font-bold text-gray-900 mb-3">{t("home.upcomingFeaturesTitle")}</h2>
-            <p className="text-gray-600">{t("home.upcomingFeaturesText")}</p>
+          <div className="mt-20">
+            <div className="relative max-w-4xl mx-auto rounded-3xl bg-gradient-to-br from-[#FF5A5F]/5 via-white to-gray-50/80 border border-gray-200/80 shadow-xl shadow-gray-200/30 overflow-hidden">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-[#FF5A5F]/[0.06] rounded-full -translate-y-1/2 translate-x-1/2" aria-hidden />
+              <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#FF5A5F]/[0.04] rounded-full translate-y-1/2 -translate-x-1/2" aria-hidden />
+              <div className="relative px-6 sm:px-10 py-10 sm:py-12">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-center gap-2 sm:gap-4 mb-8">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-[#FF5A5F]/10 text-[#FF5A5F] w-fit">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#FF5A5F] animate-pulse" />
+                    {t("home.upcomingFeaturesSubtitle")}
+                  </span>
+                  <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{t("home.upcomingFeaturesTitle")}</h2>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+                  <div className="group flex flex-col items-center text-center p-5 sm:p-6 rounded-2xl bg-white/70 backdrop-blur-sm border border-gray-100 hover:border-[#FF5A5F]/20 hover:shadow-md transition-all duration-300">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#FF5A5F]/15 to-[#FF5A5F]/5 flex items-center justify-center mb-4 group-hover:from-[#FF5A5F]/20 group-hover:to-[#FF5A5F]/10 transition-colors">
+                      <svg className="w-7 h-7 text-[#FF5A5F]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <path d="M14 2v6h6" />
+                        <path d="M16 13H8" /><path d="M16 17H8" /><path d="M10 9H8" />
+                        <polygon points="5 8 5 16 12 12 5 8" />
+                      </svg>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-800 leading-snug">{t("home.upcomingFeature1")}</p>
+                  </div>
+                  <div className="group flex flex-col items-center text-center p-5 sm:p-6 rounded-2xl bg-white/70 backdrop-blur-sm border border-gray-100 hover:border-[#FF5A5F]/20 hover:shadow-md transition-all duration-300">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#FF5A5F]/15 to-[#FF5A5F]/5 flex items-center justify-center mb-4 group-hover:from-[#FF5A5F]/20 group-hover:to-[#FF5A5F]/10 transition-colors">
+                      <svg className="w-7 h-7 text-[#FF5A5F]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <path d="M21 15l-5-5L5 21" />
+                        <polygon points="10 9 10 15 16 12 10 9" />
+                      </svg>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-800 leading-snug">{t("home.upcomingFeature2")}</p>
+                  </div>
+                  <div className="group flex flex-col items-center text-center p-5 sm:p-6 rounded-2xl bg-white/70 backdrop-blur-sm border border-gray-100 hover:border-[#FF5A5F]/20 hover:shadow-md transition-all duration-300">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#FF5A5F]/15 to-[#FF5A5F]/5 flex items-center justify-center mb-4 group-hover:from-[#FF5A5F]/20 group-hover:to-[#FF5A5F]/10 transition-colors">
+                      <svg className="w-7 h-7 text-[#FF5A5F]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 3v18h18" />
+                        <path d="M18 17V9" />
+                        <path d="M13 17V5" />
+                        <path d="M8 17v-3" />
+                      </svg>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-800 leading-snug">{t("home.upcomingFeature3")}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
