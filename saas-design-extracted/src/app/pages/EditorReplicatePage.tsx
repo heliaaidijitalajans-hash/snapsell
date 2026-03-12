@@ -522,9 +522,7 @@ export function EditorReplicatePage() {
                       <thead>
                         <tr className="bg-gray-100 text-gray-700 font-medium">
                           <th className="text-left py-3 px-4 border-b border-gray-200">{t("editor.priceSource")}</th>
-                          <th className="text-right py-3 px-4 border-b border-gray-200">{t("editor.priceMin")}</th>
                           <th className="text-right py-3 px-4 border-b border-gray-200">{t("editor.priceAvg")}</th>
-                          <th className="text-right py-3 px-4 border-b border-gray-200">{t("editor.priceMax")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -538,9 +536,7 @@ export function EditorReplicatePage() {
                           return (
                             <tr key={i} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50 transition-colors">
                               <td className="py-3 px-4 font-medium text-gray-800">{p.name}</td>
-                              <td className="py-3 px-4 text-right text-gray-700 tabular-nums">{fmt(p.minPrice)}{suffix}</td>
                               <td className="py-3 px-4 text-right text-gray-700 tabular-nums">{fmt(p.avgPrice)}{suffix}</td>
-                              <td className="py-3 px-4 text-right text-gray-700 tabular-nums">{fmt(p.maxPrice)}{suffix}</td>
                             </tr>
                           );
                         })}
