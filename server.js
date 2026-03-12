@@ -283,6 +283,25 @@ async function getOrCreateUser(sessionIdOrUid, opts) {
         totalConversions: row.total_conversions ?? 0
       };
     }
+    // Aynı e-posta ile daha önce kayıt varsa onu kullan (ücretsiz hak yenilenmesin)
+    if (opts.email != null && String(opts.email).trim() !== "") {
+      const emailNorm = String(opts.email).trim().toLowerCase();
+      const { data: existingByEmail, error: emailErr } = await supabase.from("users").select("*").ilike("email", emailNorm).maybeSingle();
+      if (!emailErr && existingByEmail) {
+        const plan = resolvePlan(existingByEmail.plan);
+        const createdAt = existingByEmail.created_at ? new Date(existingByEmail.created_at) : null;
+        return {
+          id: existingByEmail.id,
+          ref: { update: async (d) => updateUserInDb(existingByEmail.id, d) },
+          credits: existingByEmail.credits ?? FREE_CREDITS,
+          plan,
+          email: existingByEmail.email || null,
+          displayName: existingByEmail.display_name || null,
+          createdAt,
+          totalConversions: existingByEmail.total_conversions ?? 0
+        };
+      }
+    }
     const plan = resolvePlan("free");
     const insertRow = {
       id: sessionIdOrUid,
@@ -305,6 +324,25 @@ async function getOrCreateUser(sessionIdOrUid, opts) {
       createdAt: new Date(),
       totalConversions: 0
     };
+  }
+  // Bellek deposu: aynı e-posta varsa onu kullan (ücretsiz hak yenilenmesin)
+  if (opts.email != null && String(opts.email).trim() !== "") {
+    const emailNorm = String(opts.email).trim().toLowerCase();
+    for (const [id, u] of memoryUsers.entries()) {
+      if (u.email && String(u.email).trim().toLowerCase() === emailNorm) {
+        return {
+          id,
+          ref: { update: async (d) => updateUserInDb(id, d) },
+          credits: u.credits ?? FREE_CREDITS,
+          plan: resolvePlan(u.plan),
+          totalConversions: u.totalConversions ?? 0,
+          email: u.email || null,
+          displayName: u.displayName || null,
+          createdAt: u.createdAt != null ? (typeof u.createdAt === "number" ? u.createdAt : new Date(u.createdAt).getTime()) : null,
+          _memory: true
+        };
+      }
+    }
   }
   if (!memoryUsers.has(sessionIdOrUid)) {
     memoryUsers.set(sessionIdOrUid, {
