@@ -6,14 +6,16 @@ function isSnapsellWebsite(): boolean {
   return h === "snapsell.website" || h === "www.snapsell.website";
 }
 
-/** Base URL for API. Empty on snapsell.website = same-origin /api (proxy → Railway, no CORS). */
-const API_BASE_URL = envApiBase || (typeof window !== "undefined" && isSnapsellWebsite() ? "" : envApiBase);
+/** Base URL for API. On snapsell.website we always use same-origin /api (proxy) to avoid CORS. */
+const API_BASE_URL = "";
 export { API_BASE_URL };
 
-/** Returns full API base URL for fetch( getApiBase() + "/api/..." ). Empty = same-origin /api. */
+/** Returns full API base URL for fetch( getApiBase() + "/api/..." ). On snapsell.website always "" = same-origin /api. */
 export function getApiBase(): string {
-  if (envApiBase) return envApiBase;
-  if (isSnapsellWebsite()) return "";
+  if (typeof window !== "undefined" && window.location?.hostname) {
+    const h = window.location.hostname.toLowerCase();
+    if (h === "snapsell.website" || h === "www.snapsell.website") return "";
+  }
   return envApiBase;
 }
 
