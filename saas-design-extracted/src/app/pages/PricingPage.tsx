@@ -72,7 +72,9 @@ function PlanCard({
         )}
       </div>
       <ul className="mb-8 flex-1 space-y-3">
-        {(plan.features || []).map((feature) => (
+        {(plan.features || [])
+          .filter((f) => !/fiyat analizi|price analysis/i.test(String(f)))
+          .map((feature) => (
           <li key={feature} className="flex items-start gap-3 text-gray-700">
             <span className="mt-0.5 shrink-0 rounded-full bg-[#FF5A5F]/10 p-0.5">
               <Check className="w-4 h-4 text-[#FF5A5F]" strokeWidth={2.5} />

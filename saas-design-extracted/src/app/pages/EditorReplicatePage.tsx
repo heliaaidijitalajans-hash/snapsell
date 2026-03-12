@@ -35,14 +35,12 @@ export function EditorReplicatePage() {
   const [loading, setLoading] = useState(false);
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
   const [seoDescription, setSeoDescription] = useState<string | null>(null);
-  const [priceSummary, setPriceSummary] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorBillingUrl, setErrorBillingUrl] = useState<string | null>(null);
   const [errorUpgradeUrl, setErrorUpgradeUrl] = useState<string | null>(null);
   const [errorPhotoRoomDashboard, setErrorPhotoRoomDashboard] = useState(false);
   const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>([]);
   const [photoQuality, setPhotoQuality] = useState<"studio" | "professional" | "luxury">("studio");
-  const [priceAnalysisProductDescription, setPriceAnalysisProductDescription] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
 
@@ -95,7 +93,6 @@ export function EditorReplicatePage() {
     setError(null);
     setOutputUrl(null);
     setSeoDescription(null);
-    setPriceSummary(null);
     setLoading(true);
     try {
       const headers = await getAuthHeaders();
@@ -114,7 +111,6 @@ export function EditorReplicatePage() {
           image: base64,
           prompt: prompt.trim() || (photoQuality === "luxury" ? "luxury product photography, premium lighting, elegant background" : photoQuality === "professional" ? "commercial product shot, clean neutral background, professional" : "professional product photography, studio lighting, soft daylight"),
           photoQuality,
-          productDescriptionForPriceAnalysis: priceAnalysisProductDescription.trim() || undefined,
         }),
         signal: controller.signal,
       });
@@ -159,7 +155,6 @@ export function EditorReplicatePage() {
         }
       }
       if (data.seo && typeof data.seo === "string") setSeoDescription(data.seo);
-      if (data.priceSummary && typeof data.priceSummary === "string") setPriceSummary(data.priceSummary);
       if (freeEditorUsesRemaining !== null) {
         setFreeEditorUsesRemaining(Math.max(0, freeEditorUsesRemaining - 1));
       }
@@ -176,7 +171,7 @@ export function EditorReplicatePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedFile, prompt, photoQuality, priceAnalysisProductDescription, hasEditor, getAuthHeaders, t, freeEditorUsesRemaining, user?.uid]);
+  }, [selectedFile, prompt, photoQuality, hasEditor, getAuthHeaders, t, freeEditorUsesRemaining, user?.uid]);
 
   const clearSelection = useCallback(() => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -185,13 +180,11 @@ export function EditorReplicatePage() {
     setPrompt("");
     setOutputUrl(null);
     setSeoDescription(null);
-    setPriceSummary(null);
     setError(null);
     setErrorBillingUrl(null);
     setErrorUpgradeUrl(null);
     setSelectedMarketplaces([]);
     setPhotoQuality("studio");
-    setPriceAnalysisProductDescription("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [previewUrl]);
 
@@ -376,25 +369,6 @@ export function EditorReplicatePage() {
         </div>
       </section>
 
-      <section className="mt-6">
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/60">
-            <h2 className="text-base font-semibold text-gray-900">{t("editor.priceAnalysisTitle")}</h2>
-            <p className="text-sm text-gray-500 mt-0.5">{t("editor.priceAnalysisHint")}</p>
-          </div>
-          <div className="p-4 sm:p-5">
-            <textarea
-              id="price-analysis-product-description"
-              value={priceAnalysisProductDescription}
-              onChange={(e) => setPriceAnalysisProductDescription(e.target.value)}
-              placeholder={t("editor.pricePlaceholder")}
-              rows={3}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:ring-2 focus:ring-[#FF5A5F] focus:border-[#FF5A5F] outline-none resize-y min-h-[80px]"
-            />
-          </div>
-        </div>
-      </section>
-
       <div className="mt-6">
         <button
           type="button"
@@ -502,22 +476,6 @@ export function EditorReplicatePage() {
             </div>
           )}
 
-          {priceSummary && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-200 bg-gray-50/80">
-                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                  <span className="w-1 h-5 rounded-full bg-emerald-500" />
-                  {t("editor.priceAnalysis")}
-                </h3>
-              </div>
-              <div className="p-5">
-                <p className="text-gray-700 text-sm leading-relaxed">{priceSummary}</p>
-                <p className="mt-3 text-xs text-gray-500 leading-relaxed">
-                  {t("editor.priceDisclaimer")}
-                </p>
-              </div>
-            </div>
-          )}
         </div>
       );
       })()}

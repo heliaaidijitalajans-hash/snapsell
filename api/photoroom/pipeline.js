@@ -96,11 +96,6 @@ export default async function handler(req, res) {
     const dataUrl = "data:image/png;base64," + resultBase64;
 
     let seoText = "";
-    let priceSummary = null;
-    let priceAnalysis = [];
-    let priceError = null;
-    let priceErrorMessage = null;
-    const productDesc = (body.productDescriptionForPriceAnalysis && String(body.productDescriptionForPriceAnalysis).trim()) || "";
 
     if (process.env.OPENAI_API_KEY) {
       try {
@@ -118,36 +113,8 @@ export default async function handler(req, res) {
           }]
         });
         seoText = (seoRes.choices?.[0]?.message?.content || "").trim();
-
-        const { getPriceAnalysisUnified } = await import("../../lib/price-analysis.js");
-        const unified = await getPriceAnalysisUnified(dataUrl, productDesc, seoText);
-        if (unified?.error) {
-          priceError = unified.error;
-          priceErrorMessage = unified.message;
-          priceSummary = unified.message || "";
-          priceAnalysis = [];
-        } else if (unified) {
-          priceSummary = unified.summaryText || priceSummary || "";
-          priceAnalysis = Array.isArray(unified.platforms) && unified.platforms.length > 0 ? unified.platforms : [];
-        }
-        if (!priceAnalysis || priceAnalysis.length === 0) {
-          const priceRes = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [{
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: "Bu urun fotografini analiz et ve fiyat analizi yap. Urunun tahmini piyasa fiyati (TL), platform fiyat araligi, onerilen satis fiyati ve rekabetci fiyatlandirma stratejisi belirt."
-                },
-                { type: "image_url", image_url: { url: dataUrl } }
-              ]
-            }]
-          });
-          priceSummary = (priceRes.choices?.[0]?.message?.content || "").trim() || null;
-        }
       } catch (openaiErr) {
-        console.error("[photoroom/pipeline] OpenAI SEO/fiyat:", openaiErr.message);
+        console.error("[photoroom/pipeline] OpenAI SEO:", openaiErr.message);
       }
     }
 
@@ -156,14 +123,8 @@ export default async function handler(req, res) {
       image: dataUrl,
       outputUrl: dataUrl,
       output: [dataUrl],
-      seo: seoText || undefined,
-      priceSummary: priceSummary || undefined,
-      priceAnalysis
+      seo: seoText || undefined
     };
-    if (priceError) {
-      json.error = priceError;
-      json.message = priceErrorMessage;
-    }
     return res.status(200).json(json);
   } catch (e) {
     console.error("[photoroom/pipeline] Error:", e.message);
