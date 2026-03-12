@@ -443,18 +443,24 @@ const cors = require("cors");
 const corsOptions = {
   origin: [
     "https://snapsell.website",
-    "https://www.snapsell.website",
-    "https://snapsell-one.vercel.app"
+    "https://www.snapsell.website"
   ],
-  credentials: true
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Session-Id"]
 };
 
 const app = express();
 app.disable("x-powered-by");
 
+// 1) CORS first, before any routes
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
+
+// 2) Body parser
 app.use(express.json({ limit: "50mb" }));
+
+// 3) API routes (app.get, app.post, app.use("/api/...") etc. follow below)
 
 app.get("/", function (req, res) {
   res.json({
