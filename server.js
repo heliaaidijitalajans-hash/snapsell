@@ -460,6 +460,22 @@ const cors = require("cors");
 const app = express();
 app.disable("x-powered-by");
 
+// Preflight (OPTIONS): always respond with CORS headers so browser gets Access-Control-Allow-Origin
+app.use(function (req, res, next) {
+  const origin = req.headers.origin;
+  if (req.method === "OPTIONS") {
+    if (origin && allowedOrigins.includes(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Session-Id");
+      res.setHeader("Access-Control-Max-Age", "86400");
+    }
+    return res.status(204).end();
+  }
+  next();
+});
+
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -467,9 +483,11 @@ app.use(
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-      return callback(new Error("CORS not allowed"));
+      return callback(null, false);
     },
-    credentials: true
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Session-Id"]
   })
 );
 app.use(express.json({ limit: "50mb" }));
