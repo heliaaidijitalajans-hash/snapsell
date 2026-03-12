@@ -7,6 +7,13 @@ console.log("SnapSell start.js running, PORT=" + (process.env.PORT || "3006"));
 require("dotenv").config();
 const PORT = parseInt(process.env.PORT, 10) || 3006;
 
+process.on("unhandledRejection", function (err) {
+  console.error("Unhandled rejection:", err);
+});
+process.on("uncaughtException", function (err) {
+  console.error("Uncaught exception:", err);
+});
+
 function listenMinimal(err) {
   const http = require("http");
   const msg = JSON.stringify({

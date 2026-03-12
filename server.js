@@ -487,7 +487,7 @@ app.get("/favicon.ico", function (req, res) {
   res.status(204).end();
 });
 app.get("/ping", function (req, res) {
-  res.send("OK");
+  res.send("pong");
 });
 app.get("/api/track-visit", function (req, res) {
   try { incrementDailyStat("visitors"); } catch (_) {}
