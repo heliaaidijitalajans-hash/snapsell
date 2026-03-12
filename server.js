@@ -302,6 +302,8 @@ async function getOrCreateUser(sessionIdOrUid, opts) {
         };
       }
     }
+    // Session (X-Session-Id) ile gelip kullanıcı yoksa yeni oluşturma; ücretsiz 3 hak sadece POST /api/register ile verilsin
+    if (opts.email == null && opts.displayName == null) return null;
     const plan = resolvePlan("free");
     const insertRow = {
       id: sessionIdOrUid,
@@ -345,6 +347,7 @@ async function getOrCreateUser(sessionIdOrUid, opts) {
     }
   }
   if (!memoryUsers.has(sessionIdOrUid)) {
+    if (opts.email == null && opts.displayName == null) return null;
     memoryUsers.set(sessionIdOrUid, {
       credits: FREE_CREDITS,
       plan: "free",

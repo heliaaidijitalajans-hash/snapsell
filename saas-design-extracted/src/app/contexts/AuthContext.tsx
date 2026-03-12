@@ -107,16 +107,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (cancelled) return;
+      let pendingNullTimeout: ReturnType<typeof setTimeout> | null = null;
       unsubRef.current = onAuthStateChanged(auth, async (u) => {
         if (cancelled) return;
+        if (pendingNullTimeout) {
+          clearTimeout(pendingNullTimeout);
+          pendingNullTimeout = null;
+        }
         setUser(u || null);
         if (!u) {
-          const sid = await ensureSession();
-          setSessionId(sid || null);
+          pendingNullTimeout = setTimeout(() => {
+            if (cancelled) return;
+            pendingNullTimeout = null;
+            ensureSession().then((sid) => {
+              if (!cancelled) setSessionId(sid || null);
+            });
+            setLoading(false);
+          }, 600);
         } else {
           setSessionId(null);
           localStorage.removeItem(SESSION_KEY);
-          // Backend’de hesap oluştur/güncelle ve girişi kaydet (aynı e-posta = aynı hesap)
           try {
             const token = await u.getIdToken();
             await fetch(`${getApiBase()}/api/auth/google`, {
@@ -124,11 +134,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ idToken: token }),
             });
-          } catch (_) {
-            // Ağ hatası; hesap ilk API çağrısında getRequestUser ile oluşturulacak
-          }
+          } catch (_) {}
+          setLoading(false);
         }
-        setLoading(false); // Auth ready; safe to redirect / show login or app
       });
       if (cancelled && unsubRef.current) {
         unsubRef.current();
