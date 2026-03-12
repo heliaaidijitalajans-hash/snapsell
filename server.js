@@ -475,7 +475,7 @@ app.get("/", function (req, res) {
   res.json({
     status: "ok",
     service: "SnapSell API",
-    message: "SnapSell backend is running"
+    message: "SnapSell backend running"
   });
 });
 

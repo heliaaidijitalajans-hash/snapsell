@@ -36,7 +36,7 @@ try {
     return;
   }
   const server = app.listen(PORT, "0.0.0.0", function () {
-    console.log("SnapSell API listening on port", PORT, "(Ready)");
+    console.log(`SnapSell API listening on port ${PORT}`);
   });
   server.on("error", function (err) {
     console.error("Listen error:", err);
