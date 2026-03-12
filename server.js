@@ -230,6 +230,42 @@ function initFirebaseAuth() {
 }
 
 const memoryUsers = new Map();
+const MEMORY_USERS_FILE = "users_memory.json";
+
+function saveMemoryUsers() {
+  if (supabase) return;
+  const obj = {};
+  memoryUsers.forEach((u, id) => {
+    obj[id] = {
+      credits: u.credits,
+      plan: u.plan,
+      totalConversions: u.totalConversions ?? 0,
+      email: u.email || null,
+      displayName: u.displayName || null,
+      createdAt: u.createdAt != null ? u.createdAt : null
+    };
+  });
+  saveJsonFile(MEMORY_USERS_FILE, obj);
+}
+
+function loadMemoryUsers() {
+  if (supabase) return;
+  const obj = loadJsonFile(MEMORY_USERS_FILE, {});
+  Object.keys(obj).forEach((id) => {
+    const u = obj[id];
+    memoryUsers.set(id, {
+      credits: u.credits != null ? u.credits : FREE_CREDITS,
+      plan: u.plan || "free",
+      totalConversions: u.totalConversions != null ? u.totalConversions : 0,
+      email: u.email || null,
+      displayName: u.displayName || null,
+      createdAt: u.createdAt != null ? u.createdAt : null
+    });
+  });
+  if (memoryUsers.size > 0) console.log("Bellek kullanicilar yuklendi:", memoryUsers.size);
+}
+loadMemoryUsers();
+
 const processedImages = new Map();
 const PROCESSED_IMAGE_TTL_MS = 5 * 60 * 1000;
 
@@ -261,6 +297,7 @@ async function updateUserInDb(userId, data) {
     if (data.totalConversions != null) u.totalConversions = data.totalConversions;
     if (data.email != null) u.email = data.email;
     if (data.displayName != null) u.displayName = data.displayName;
+    saveMemoryUsers();
   }
 }
 
@@ -356,6 +393,7 @@ async function getOrCreateUser(sessionIdOrUid, opts) {
       email: opts.email != null ? String(opts.email) : null,
       displayName: opts.displayName != null ? String(opts.displayName) : null
     });
+    saveMemoryUsers();
     try { incrementDailyStat("signups"); } catch (_) {}
   } else if (opts.email != null || opts.displayName != null) {
     const existing = memoryUsers.get(sessionIdOrUid);
@@ -1385,6 +1423,7 @@ app.post("/api/register", async (req, res) => {
       if (error) throw new Error(error.message);
     } else {
       memoryUsers.set(sessionId, { credits: FREE_CREDITS, plan: "free", createdAt: Date.now(), totalConversions: 0 });
+      saveMemoryUsers();
     }
     res.json({ sessionId, credits: FREE_CREDITS, plan: resolvePlan("free") });
   } catch (err) {

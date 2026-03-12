@@ -123,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               if (!cancelled) setSessionId(sid || null);
             });
             setLoading(false);
-          }, 600);
+          }, 1200);
         } else {
           setSessionId(null);
           localStorage.removeItem(SESSION_KEY);
