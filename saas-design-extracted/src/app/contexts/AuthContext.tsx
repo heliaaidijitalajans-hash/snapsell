@@ -50,6 +50,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true); // Do NOT consider auth ready until onAuthStateChanged has fired
 
   const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
+    // Giriş yapmış kullanıcı varsa her zaman Bearer kullan (sayfa yenilenince eski session ile 3 hak dönmesin)
+    if (user) {
+      const token = await user.getIdToken();
+      return { Authorization: "Bearer " + token };
+    }
     const auth = getFirebaseAuth();
     const u = auth.currentUser;
     if (u) {
@@ -63,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { "X-Session-Id": sid };
     }
     return {};
-  }, [sessionId]);
+  }, [user, sessionId]);
 
   const logout = useCallback(async () => {
     const auth = getFirebaseAuth();
@@ -95,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (credential?.user) {
           setUser(credential.user);
           setSessionId(null);
+          localStorage.removeItem(SESSION_KEY);
         }
       } catch (err) {
         if (!cancelled) console.warn("Firebase redirect result:", err);
@@ -109,6 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSessionId(sid || null);
         } else {
           setSessionId(null);
+          localStorage.removeItem(SESSION_KEY);
           // Backend’de hesap oluştur/güncelle ve girişi kaydet (aynı e-posta = aynı hesap)
           try {
             const token = await u.getIdToken();
