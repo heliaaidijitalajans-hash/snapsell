@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { Check, Sparkles } from "lucide-react";
 import { getApiBase, apiJson } from "../config";
 import { useLanguage } from "../contexts/LanguageContext";
@@ -100,8 +100,8 @@ function PlanCard({
 
 export default function PricingPage() {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const [plans, setPlans] = useState<PlanItem[]>([]);
-  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -151,7 +151,7 @@ export default function PricingPage() {
               key={plan.id || plan.name}
               plan={plan}
               t={t}
-              onCtaClick={() => setShowModal(true)}
+              onCtaClick={() => navigate("/odeme", { state: { plan } })}
             />
           ))}
         </div>
@@ -167,29 +167,6 @@ export default function PricingPage() {
         </p>
       </section>
 
-      {showModal && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50"
-          onClick={() => setShowModal(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-label={t("pricing.modalClose")}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="text-gray-800 whitespace-pre-line">{t("pricing.comingSoon")}</p>
-            <button
-              type="button"
-              onClick={() => setShowModal(false)}
-              className="mt-6 w-full py-3.5 px-4 rounded-xl font-semibold text-white bg-[#FF5A5F] hover:bg-[#e54d52] transition-colors"
-            >
-              {t("pricing.modalClose")}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

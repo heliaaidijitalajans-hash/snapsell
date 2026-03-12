@@ -11,6 +11,7 @@ function RedirectDashboardToRoot() {
 
 const HomePage = lazy(() => import("./pages/HomePage").then((m) => ({ default: m.HomePage })));
 const PricingPage = lazy(() => import("./pages/PricingPage").then((m) => ({ default: m.default })));
+const CheckoutPage = lazy(() => import("./pages/CheckoutPage").then((m) => ({ default: m.default })));
 const ExamplesPage = lazy(() => import("./pages/ExamplesPage").then((m) => ({ default: m.ExamplesPage })));
 const SupportPage = lazy(() => import("./pages/SupportPage").then((m) => ({ default: m.SupportPage })));
 const FAQPage = lazy(() => import("./pages/FAQPage").then((m) => ({ default: m.FAQPage })));
@@ -51,6 +52,7 @@ export const router = createBrowserRouter(
         { path: "admin", element: <Suspense fallback={<PageFallback />}><AdminPage /></Suspense> },
         { path: "ornekler", element: <Suspense fallback={<PageFallback />}><ExamplesPage /></Suspense> },
         { path: "fiyatlandirma", element: <Suspense fallback={<PageFallback />}><PricingPage /></Suspense> },
+        { path: "odeme", element: <Suspense fallback={<PageFallback />}><CheckoutPage /></Suspense> },
         { path: "destek", element: <Suspense fallback={<PageFallback />}><SupportPage /></Suspense> },
         { path: "sss", element: <Suspense fallback={<PageFallback />}><FAQPage /></Suspense> },
         { path: "editor", element: <Navigate to="/gorsel-duzenleme" replace /> },
