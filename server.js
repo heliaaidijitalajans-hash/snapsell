@@ -440,11 +440,13 @@ async function getRequestUser(req) {
 const APP_DOMAIN = (process.env.APP_DOMAIN || "").trim();
 const cors = require("cors");
 
+const CORS_ALLOWED_ORIGINS = [
+  "https://snapsell.website",
+  "https://www.snapsell.website"
+];
+
 const corsOptions = {
-  origin: [
-    "https://snapsell.website",
-    "https://www.snapsell.website"
-  ],
+  origin: CORS_ALLOWED_ORIGINS,
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Session-Id"]
@@ -453,7 +455,23 @@ const corsOptions = {
 const app = express();
 app.disable("x-powered-by");
 
-// 1) CORS first, before any routes
+// 0) Explicit preflight handler first – ensures OPTIONS always gets CORS headers (avoids 502/no header)
+app.use(function (req, res, next) {
+  const origin = req.headers.origin;
+  if (req.method === "OPTIONS") {
+    if (origin && CORS_ALLOWED_ORIGINS.includes(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Session-Id");
+      res.setHeader("Access-Control-Max-Age", "86400");
+    }
+    return res.status(204).end();
+  }
+  next();
+});
+
+// 1) CORS for non-OPTIONS requests
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 

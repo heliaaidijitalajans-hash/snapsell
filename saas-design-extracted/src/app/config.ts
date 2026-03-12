@@ -1,11 +1,20 @@
-/** Full backend URL. All API requests use this; no relative paths. Set VITE_API_BASE_URL (e.g. https://your-api.railway.app). */
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || "").toString().replace(/\/$/, "");
+const envApiBase = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || "").toString().replace(/\/$/, "");
 
+function isSnapsellWebsite(): boolean {
+  if (typeof window === "undefined" || !window.location?.hostname) return false;
+  const h = window.location.hostname.toLowerCase();
+  return h === "snapsell.website" || h === "www.snapsell.website";
+}
+
+/** Base URL for API. Empty on snapsell.website = same-origin /api (proxy → Railway, no CORS). */
+const API_BASE_URL = envApiBase || (typeof window !== "undefined" && isSnapsellWebsite() ? "" : envApiBase);
 export { API_BASE_URL };
 
-/** Returns full API base URL for fetch( getApiBase() + "/api/..." ). */
+/** Returns full API base URL for fetch( getApiBase() + "/api/..." ). Empty = same-origin /api. */
 export function getApiBase(): string {
-  return API_BASE_URL;
+  if (envApiBase) return envApiBase;
+  if (isSnapsellWebsite()) return "";
+  return envApiBase;
 }
 
 /** Parse JSON from response. Returns {} for empty/non-JSON; throws only for HTML (wrong host). */
