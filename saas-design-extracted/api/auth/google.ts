@@ -16,6 +16,14 @@ export default async function handler(req: VercelReq, res: VercelRes) {
     return;
   }
 
+  // GET ile doğrudan tarayıcıdan çağrılırsa (adres çubuğuna yazmak, linke tıklamak vs.)
+  // konsolda 405 hatası göstermemek için basit bir 200 cevabı döndür.
+  if (req.method === "GET") {
+    res.setHeader("Access-Control-Allow-Origin", (req.headers?.origin as string) || "*");
+    res.status(200).send(JSON.stringify({ ok: true, message: "Google auth endpoint is POST-only. Browser GET requests are ignored." }));
+    return;
+  }
+
   if (req.method !== "POST") {
     res.status(405).send(JSON.stringify({ error: "Method Not Allowed" }));
     return;
