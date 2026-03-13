@@ -530,14 +530,16 @@ function canUsePixian(user) {
 function canUsePhotoRoom(user) {
   if (!user) return false;
   const email = (user.email || "").trim().toLowerCase();
-  if (REPLICATE_ALLOWED_EMAILS.indexOf(email) >= 0) return true;
-  if (isEditorPlan(user.plan || "free") || isAdminUser(user)) return true;
+  // Admin ve özel izinli e-postalar limit dışı
+  if (REPLICATE_ALLOWED_EMAILS.indexOf(email) >= 0 || isAdminUser(user)) return true;
   const plan = user.plan || "free";
-  if (plan === "free") {
-    const credits = user.credits ?? FREE_CREDITS;
-    return credits >= CREDITS_PER_CONVERSION;
-  }
-  return false;
+  const credits = user.credits ?? FREE_CREDITS;
+  // Herhangi bir kullanıcı için, plan ne olursa olsun en az bir dönüşüm kredisi olmalı
+  if (credits < CREDITS_PER_CONVERSION) return false;
+  // Ücretsiz planda: 3 deneme limiti / krediler başka yerde kontrol ediliyor, burada sadece erişime izin ver
+  if (plan === "free") return true;
+  // Ücretli planlarda da kredi temelli kullanım: editor/pro planı varsa ve kredisi yeterliyse izin ver
+  return isEditorPlan(plan);
 }
 function canUseLeonardo(user) {
   return isProPlan(user.plan || "free") || isAdminUser(user);
@@ -1892,7 +1894,10 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
     const baseUrl = PUBLIC_APP_URL || (req.protocol || "http") + "://" + (req.get("host") || "localhost");
     const outputUrl = baseUrl + "/api/replicate/temp/" + resultId;
 
-    if ((user.plan || "free") === "free") {
+    // Tüm planlarda dönüşüm başına krediyi düşür (admin / özel izinli kullanıcılar hariç)
+    const email = (user.email || "").trim().toLowerCase();
+    const isUnlimitedUser = REPLICATE_ALLOWED_EMAILS.indexOf(email) >= 0 || isAdminUser(user);
+    if (!isUnlimitedUser) {
       const credits = user.credits ?? FREE_CREDITS;
       const newCredits = Math.max(0, credits - CREDITS_PER_CONVERSION);
       const newTotal = (user.totalConversions ?? 0) + 1;
