@@ -36,8 +36,8 @@ if (typeof globalThis.File === "undefined") {
 process.on("uncaughtException", function (err) {
   console.error("uncaughtException:", err);
 });
-process.on("unhandledRejection", function (reason, p) {
-  console.error("unhandledRejection:", reason);
+process.on("unhandledRejection", function (reason, promise) {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
 });
 
 const CREDITS_PER_CONVERSION = 10;
@@ -484,13 +484,7 @@ app.use(express.json({ limit: "50mb" }));
 
 // 3) API routes (app.get, app.post, app.use("/api/...") etc. follow below)
 
-app.get("/", function (req, res) {
-  res.json({
-    status: "ok",
-    service: "SnapSell API",
-    message: "SnapSell backend running"
-  });
-});
+app.get("/", (req, res) => res.send("OK"));
 
 app.get("/health", function (req, res) {
   res.send("ok");
@@ -3071,6 +3065,11 @@ app.use(function (err, req, res, next) {
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, "0.0.0.0", () => {
   console.log("Server is running on port", PORT);
+  console.log("Sunucu başarıyla ayağa kalktı ve hazır!");
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.log("Unhandled Rejection at:", promise, "reason:", reason);
 });
 
 module.exports = { app };
