@@ -1897,6 +1897,28 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
     const baseUrl = PUBLIC_APP_URL || (req.protocol || "http") + "://" + (req.get("host") || "localhost");
     const outputUrl = baseUrl + "/api/replicate/temp/" + resultId;
 
+    let seoText = "";
+    if (process.env.OPENAI_API_KEY) {
+      try {
+        const imgDataUrl = typeof base64 === "string" && base64.length > 0 ? (base64.startsWith("data:") ? base64 : "data:image/png;base64," + base64) : null;
+        if (imgDataUrl) {
+          const seoRes = await getOpenAI().chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [{
+              role: "user",
+              content: [
+                { type: "text", text: "Bu ürün fotoğrafını analiz et. Kısa bir SEO başlığı (tek satır, max 60 karakter) ve ardından e-ticaret için uygun bir SEO açıklaması (2-4 cümle) yaz. Format: Başlık: ... Açıklama: ..." },
+                { type: "image_url", image_url: { url: imgDataUrl } }
+              ]
+            }]
+          });
+          seoText = (seoRes.choices && seoRes.choices[0] && seoRes.choices[0].message && seoRes.choices[0].message.content) || "";
+        }
+      } catch (seoErr) {
+        console.error("PhotoRoom pipeline SEO hatası:", seoErr.message);
+      }
+    }
+
     // Tüm planlarda dönüşüm başına krediyi düşür (admin / özel izinli kullanıcılar hariç)
     const email = (user.email || "").trim().toLowerCase();
     const isUnlimitedUser = REPLICATE_ALLOWED_EMAILS.indexOf(email) >= 0 || isAdminUser(user);
@@ -1915,7 +1937,7 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
       }
     }
 
-    return res.json({ ok: true, outputUrl, output: [outputUrl] });
+    return res.json({ ok: true, outputUrl, output: [outputUrl], seo: seoText || undefined });
   } catch (e) {
     console.error("PhotoRoom pipeline error:", e);
     const isTimeout = e && (e.name === "AbortError" || /abort|timeout|Form buffer timeout/i.test(String(e.message)));
