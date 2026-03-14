@@ -107,7 +107,7 @@ export default async function handler(req, res) {
           messages: [{
             role: "user",
             content: [
-              { type: "text", text: "Bu urun fotografini analiz et ve SEO aciklamasi yaz" },
+              { type: "text", text: "Bu ürün fotoğrafını analiz et. Önce kısa bir SEO başlığı yaz (tek satır, en fazla 60 karakter). Sonra e-ticaret için 2-4 cümlelik bir SEO açıklaması yaz. Tam olarak şu formatta cevap ver:\nBaşlık: [buraya başlık]\nAçıklama: [buraya açıklama]" },
               { type: "image_url", image_url: { url: dataUrl } }
             ]
           }]
@@ -123,7 +123,7 @@ export default async function handler(req, res) {
       image: dataUrl,
       outputUrl: dataUrl,
       output: [dataUrl],
-      seo: seoText || undefined
+      seo: seoText || ""
     };
     return res.status(200).json(json);
   } catch (e) {

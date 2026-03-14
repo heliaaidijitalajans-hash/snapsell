@@ -1898,25 +1898,32 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
     const outputUrl = baseUrl + "/api/replicate/temp/" + resultId;
 
     let seoText = "";
-    if (process.env.OPENAI_API_KEY) {
+    if (process.env.OPENAI_API_KEY && buf && buf.length > 0) {
       try {
-        const imgDataUrl = typeof base64 === "string" && base64.length > 0 ? (base64.startsWith("data:") ? base64 : "data:image/png;base64," + base64) : null;
-        if (imgDataUrl) {
-          const seoRes = await getOpenAI().chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [{
-              role: "user",
-              content: [
-                { type: "text", text: "Bu ürün fotoğrafını analiz et. Kısa bir SEO başlığı (tek satır, max 60 karakter) ve ardından e-ticaret için uygun bir SEO açıklaması (2-4 cümle) yaz. Format: Başlık: ... Açıklama: ..." },
-                { type: "image_url", image_url: { url: imgDataUrl } }
-              ]
-            }]
-          });
-          seoText = (seoRes.choices && seoRes.choices[0] && seoRes.choices[0].message && seoRes.choices[0].message.content) || "";
-        }
+        let seoBuf = buf;
+        try {
+          const sharp = getSharp();
+          seoBuf = await sharp(buf).resize(1024, 1024, { fit: "inside", withoutEnlargement: true }).png().toBuffer();
+        } catch (_) { /* sharp yok veya hata, orijinal buf kullan */ }
+        const b64 = seoBuf.toString("base64");
+        const imgDataUrl = "data:image/png;base64," + b64;
+        const seoRes = await getOpenAI().chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [{
+            role: "user",
+            content: [
+              { type: "text", text: "Bu ürün fotoğrafını analiz et. Önce kısa bir SEO başlığı yaz (tek satır, en fazla 60 karakter). Sonra e-ticaret için 2-4 cümlelik bir SEO açıklaması yaz. Tam olarak şu formatta cevap ver, başka ekleme yapma:\nBaşlık: [buraya başlık]\nAçıklama: [buraya açıklama]" },
+              { type: "image_url", image_url: { url: imgDataUrl } }
+            ]
+          }]
+        });
+        const raw = (seoRes.choices && seoRes.choices[0] && seoRes.choices[0].message && seoRes.choices[0].message.content) || "";
+        seoText = typeof raw === "string" ? raw.trim() : "";
       } catch (seoErr) {
         console.error("PhotoRoom pipeline SEO hatası:", seoErr.message);
       }
+    } else if (!process.env.OPENAI_API_KEY) {
+      console.warn("PhotoRoom pipeline: OPENAI_API_KEY tanımlı değil, SEO atlanıyor.");
     }
 
     // Tüm planlarda dönüşüm başına krediyi düşür (admin / özel izinli kullanıcılar hariç)
@@ -1937,7 +1944,7 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
       }
     }
 
-    return res.json({ ok: true, outputUrl, output: [outputUrl], seo: seoText || undefined });
+    return res.json({ ok: true, outputUrl, output: [outputUrl], seo: seoText || "" });
   } catch (e) {
     console.error("PhotoRoom pipeline error:", e);
     const isTimeout = e && (e.name === "AbortError" || /abort|timeout|Form buffer timeout/i.test(String(e.message)));

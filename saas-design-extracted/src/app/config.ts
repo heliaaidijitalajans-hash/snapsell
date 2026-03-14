@@ -1,10 +1,11 @@
+const RAILWAY_API_BASE = "https://snapsell-production.up.railway.app";
 const envApiBase = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || "").toString().trim().replace(/\/$/, "");
 
-/** Base URL for API – build sırasında .env'deki VITE_API_BASE_URL kullanılır (Vercel'de de tanımlayın). */
-const API_BASE_URL = envApiBase;
-export { API_BASE_URL };
+/** Base URL for API – env'de yoksa Railway kullanılır (SEO ve pipeline istekleri her zaman backend'e gitsin). */
+const API_BASE_URL = envApiBase || RAILWAY_API_BASE;
+export { API_BASE_URL, RAILWAY_API_BASE };
 
-/** Returns full API base URL for fetch( getApiBase() + "/api/..." ). */
+/** Returns full API base URL for fetch( getApiBase() + "/api/..." ). API istekleri Railway'e gider. */
 export function getApiBase(): string {
   return API_BASE_URL;
 }

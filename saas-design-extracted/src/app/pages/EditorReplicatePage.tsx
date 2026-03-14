@@ -3,15 +3,16 @@ import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import { Upload, Sparkles, ImageIcon, Check, Store } from "lucide-react";
 import { Link } from "react-router";
-import { getApiBase } from "../config";
+import { RAILWAY_API_BASE } from "../config";
 import { saveGeneratedImageToLibrary } from "../lib/libraryImages";
 
-const APP_BASE_URL = (import.meta.env.VITE_APP_URL || import.meta.env.VITE_API_BASE_URL || "https://www.snapsell.website").toString().trim().replace(/\/$/, "");
+/** Görsel düzenleme ve SEO pipeline istekleri her zaman Railway API'ye gitsin (VITE_API_BASE_URL). */
+const EDITOR_API_BASE = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || RAILWAY_API_BASE).toString().trim().replace(/\/$/, "");
+const APP_BASE_URL = (import.meta.env.VITE_APP_URL || "https://www.snapsell.website").toString().trim().replace(/\/$/, "");
 
-/** Backend bazen yourdomain.com döndürüyor; ERR_CERT önlemek için gerçek API/app URL ile değiştir. */
+/** Backend bazen yourdomain.com döndürüyor; ERR_CERT önlemek için Railway API origin ile değiştir. */
 function normalizeImageUrl(url: string): string {
-  const base = getApiBase() || APP_BASE_URL;
-  const origin = base.replace(/\/$/, "");
+  const origin = (EDITOR_API_BASE || APP_BASE_URL).replace(/\/$/, "");
   return url.replace(/https?:\/\/[^/]*yourdomain\.com/gi, origin);
 }
 
@@ -70,7 +71,7 @@ export function EditorReplicatePage() {
       } else {
         headers = await getAuthHeaders();
       }
-      const r = await fetch(`${getApiBase()}/api/replicate/status`, { headers });
+      const r = await fetch(`${EDITOR_API_BASE}/api/replicate/status`, { headers });
       const data = await r.json().catch(() => ({}));
       if (cancelled) return;
       if (!r.ok) {
@@ -124,7 +125,7 @@ export function EditorReplicatePage() {
       });
       const controller = new AbortController();
       const timeoutId = window.setTimeout(() => controller.abort(), 100000);
-      const res = await fetch(`${getApiBase()}/api/photoroom/pipeline`, {
+      const res = await fetch(`${EDITOR_API_BASE}/api/photoroom/pipeline`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({
@@ -162,7 +163,7 @@ export function EditorReplicatePage() {
         if (!imageUrl.startsWith("http") && !imageUrl.startsWith("data:image")) {
           imageUrl = `data:image/png;base64,${imageUrl}`;
         }
-        const apiOrigin = (getApiBase() || APP_BASE_URL).replace(/\/$/, "");
+        const apiOrigin = (EDITOR_API_BASE || APP_BASE_URL).replace(/\/$/, "");
         if (imageUrl.includes("yourdomain.com")) {
           imageUrl = imageUrl.replace(/https?:\/\/[^/]*yourdomain\.com/gi, apiOrigin);
         }
@@ -177,7 +178,13 @@ export function EditorReplicatePage() {
           saveGeneratedImageToLibrary(user.uid, imageUrl, userPrompt).catch((err) => console.warn("Library save failed:", err));
         }
       }
-      if (data.seo && typeof data.seo === "string") setSeoDescription(data.seo);
+      const seoFromApi =
+        (typeof (data as any).seo === "string" && (data as any).seo.trim())
+          ? (data as any).seo.trim()
+          : (typeof (data as any).seoTitle === "string" && typeof (data as any).seoDescription === "string")
+            ? `Başlık: ${(data as any).seoTitle.trim()}\nAçıklama: ${(data as any).seoDescription.trim()}`
+            : "";
+      if (seoFromApi) setSeoDescription(seoFromApi);
       if (freeEditorUsesRemaining !== null) {
         setFreeEditorUsesRemaining(Math.max(0, freeEditorUsesRemaining - 1));
       }
@@ -434,7 +441,7 @@ export function EditorReplicatePage() {
       )}
 
       {outputUrl && (() => {
-        const apiOrigin = (getApiBase() || APP_BASE_URL).replace(/\/$/, "");
+        const apiOrigin = (EDITOR_API_BASE || APP_BASE_URL).replace(/\/$/, "");
         let displayUrl = outputUrl;
         if (displayUrl.includes("yourdomain.com")) {
           displayUrl = displayUrl.replace(/https?:\/\/[^/]*yourdomain\.com/gi, apiOrigin);
