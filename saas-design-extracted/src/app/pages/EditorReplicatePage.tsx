@@ -192,12 +192,13 @@ export function EditorReplicatePage() {
           saveGeneratedImageToLibrary(user.uid, imageUrl, userPrompt).catch((err) => console.warn("Library save failed:", err));
         }
       }
-      const rawSeo = (data as any).seo;
+      const d = data as Record<string, unknown>;
+      const rawSeo = typeof d.seo === "string" ? d.seo : (d.data && typeof d.data === "object" && typeof (d.data as Record<string, unknown>).seo === "string" ? (d.data as Record<string, unknown>).seo as string : "");
       const seoFromApi =
         (typeof rawSeo === "string" && rawSeo.trim())
           ? rawSeo.trim()
-          : (typeof (data as any).seoTitle === "string" && typeof (data as any).seoDescription === "string")
-            ? `Başlık: ${(data as any).seoTitle.trim()}\nAçıklama: ${(data as any).seoDescription.trim()}`
+          : (typeof d.seoTitle === "string" && typeof d.seoDescription === "string")
+            ? `Başlık: ${String(d.seoTitle).trim()}\nAçıklama: ${String(d.seoDescription).trim()}`
             : "";
       if (seoFromApi) setSeoDescription(seoFromApi);
       if (freeEditorUsesRemaining !== null) {

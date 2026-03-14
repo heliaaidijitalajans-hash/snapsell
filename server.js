@@ -1124,9 +1124,8 @@ let _openai;
 function getOpenAI() {
   if (!_openai) {
     const OpenAI = require("openai");
-    _openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    });
+    const apiKey = (process.env.OPENAI_API_KEY || process.env.OPENAI_KEY || "").trim();
+    _openai = new OpenAI({ apiKey: apiKey || undefined });
   }
   return _openai;
 }
@@ -1898,32 +1897,40 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
     const outputUrl = baseUrl + "/api/replicate/temp/" + resultId;
 
     let seoText = "";
-    if (process.env.OPENAI_API_KEY && buf && buf.length > 0) {
+    const openaiKey = (process.env.OPENAI_API_KEY || process.env.OPENAI_KEY || "").trim();
+    if (openaiKey && buf && buf.length > 0) {
       try {
         let seoBuf = buf;
         try {
           const sharp = getSharp();
-          seoBuf = await sharp(buf).resize(1024, 1024, { fit: "inside", withoutEnlargement: true }).png().toBuffer();
+          seoBuf = await sharp(buf)
+            .resize(512, 512, { fit: "inside", withoutEnlargement: true })
+            .jpeg({ quality: 80 })
+            .toBuffer();
         } catch (_) { /* sharp yok veya hata, orijinal buf kullan */ }
         const b64 = seoBuf.toString("base64");
-        const imgDataUrl = "data:image/png;base64," + b64;
-        const seoRes = await getOpenAI().chat.completions.create({
+        const imgDataUrl = "data:image/jpeg;base64," + b64;
+        const openai = getOpenAI();
+        const seoRes = await openai.chat.completions.create({
           model: "gpt-4o-mini",
           messages: [{
             role: "user",
             content: [
               { type: "text", text: "Bu ürün fotoğrafını analiz et. Önce kısa bir SEO başlığı yaz (tek satır, en fazla 60 karakter). Sonra e-ticaret için 2-4 cümlelik bir SEO açıklaması yaz. Tam olarak şu formatta cevap ver, başka ekleme yapma:\nBaşlık: [buraya başlık]\nAçıklama: [buraya açıklama]" },
-              { type: "image_url", image_url: { url: imgDataUrl } }
+              { type: "image_url", image_url: { url: imgDataUrl, detail: "low" } }
             ]
           }]
         });
         const raw = (seoRes.choices && seoRes.choices[0] && seoRes.choices[0].message && seoRes.choices[0].message.content) || "";
         seoText = typeof raw === "string" ? raw.trim() : "";
+        if (!seoText) console.warn("PhotoRoom pipeline: OpenAI SEO yanıtı boş döndü.");
       } catch (seoErr) {
         console.error("PhotoRoom pipeline SEO hatası:", seoErr.message);
+        if (seoErr.status === 401) console.error("OpenAI API anahtarı geçersiz veya eksik. Railway OPENAI_API_KEY kontrol edin.");
+        if (seoErr.code === "ENOTFOUND" || seoErr.message && seoErr.message.includes("fetch")) console.error("OpenAI API ağ hatası.");
       }
-    } else if (!process.env.OPENAI_API_KEY) {
-      console.warn("PhotoRoom pipeline: OPENAI_API_KEY tanımlı değil, SEO atlanıyor.");
+    } else {
+      if (!openaiKey) console.warn("PhotoRoom pipeline: OPENAI_API_KEY tanımlı değil, SEO atlanıyor. Railway Environment Variables'a ekleyin.");
     }
 
     // Tüm planlarda dönüşüm başına krediyi düşür (admin / özel izinli kullanıcılar hariç)
