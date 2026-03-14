@@ -1428,7 +1428,7 @@ YAPMAN GEREKENLER:
 }
 
 /** Shopier ödeme: v1 REST API, Authorization: Bearer PAT (SHOPIER_API_KEY) */
-const SHOPIER_API_BASE = "https://api.shopier.com/v1";
+const SHOPIER_PAYMENT_LINKS_URL = "https://api.shopier.com/v1/payment-links";
 
 app.post("/api/create-payment", async (req, res) => {
   try {
@@ -1463,6 +1463,7 @@ app.post("/api/create-payment", async (req, res) => {
       });
     }
 
+    // Shopier v1 payment-links: total_order_value + platform_order_id (Order model uyumlu)
     const requestBody = {
       platform_order_id: platformOrderId,
       total_order_value: totalOrderValue,
@@ -1479,10 +1480,9 @@ app.post("/api/create-payment", async (req, res) => {
       line_items: [{ title: planName, quantity: 1, price: totalOrderValue }],
     };
 
-    // Endpoint: developer.shopier.com'dan doğrulanabilir (örn. /checkout-sessions, /payment-links, /orders)
     const shopierRes = await axios({
       method: "POST",
-      url: SHOPIER_API_BASE + "/checkout-sessions",
+      url: SHOPIER_PAYMENT_LINKS_URL,
       headers: {
         "Authorization": "Bearer " + pat,
         "Content-Type": "application/json",
