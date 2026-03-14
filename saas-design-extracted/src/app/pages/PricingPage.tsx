@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router";
 import { Check, Sparkles } from "lucide-react";
 import { getApiBase, apiJson } from "../config";
 import { useLanguage } from "../contexts/LanguageContext";
+import { useAuth } from "../contexts/AuthContext";
 
 type PlanItem = {
   id: string;
@@ -22,10 +23,12 @@ function PlanCard({
   plan,
   t,
   onCtaClick,
+  loading,
 }: {
   plan: PlanItem;
   t: (key: string) => string;
   onCtaClick: () => void;
+  loading?: boolean;
 }) {
   const currency = plan.currency === "USD" ? "$" : "₺";
   const priceDisplay =
@@ -86,13 +89,14 @@ function PlanCard({
       <button
         type="button"
         onClick={onCtaClick}
-        className={`mt-auto block w-full rounded-xl py-3.5 px-4 text-center font-semibold transition-colors ${
+        disabled={loading}
+        className={`mt-auto block w-full rounded-xl py-3.5 px-4 text-center font-semibold transition-colors disabled:opacity-70 disabled:cursor-not-allowed ${
           plan.highlighted
             ? "bg-[#FF5A5F] text-white hover:bg-[#e54d52]"
             : "bg-gray-100 text-gray-900 hover:bg-gray-200"
         }`}
       >
-        {plan.cta || t("pricing.ctaDefault")}
+        {loading ? "..." : (plan.cta || t("pricing.ctaDefault"))}
       </button>
     </div>
   );
@@ -100,8 +104,70 @@ function PlanCard({
 
 export default function PricingPage() {
   const { t } = useLanguage();
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const [plans, setPlans] = useState<PlanItem[]>([]);
+  const [paymentLoading, setPaymentLoading] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  const submitToShopier = useCallback((postUrl: string, params: Record<string, string>) => {
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = postUrl;
+    form.style.display = "none";
+    Object.entries(params).forEach(([key, value]) => {
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = key;
+      input.value = value;
+      form.appendChild(input);
+    });
+    document.body.appendChild(form);
+    form.submit();
+  }, []);
+
+  const handleCtaClick = useCallback(
+    async (plan: PlanItem) => {
+      setPaymentError(null);
+      const planId = plan.id || plan.name;
+      setPaymentLoading(planId);
+      try {
+        const price = plan.price === "—" || plan.price === "" ? 0 : Number(plan.price);
+        const res = await fetch(`${getApiBase()}/api/create-payment`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            plan: {
+              id: plan.id,
+              name: plan.name,
+              price: Number.isFinite(price) ? price : 0,
+              currency: plan.currency || "TRY",
+            },
+            buyer: {
+              name: user?.displayName ?? "",
+              email: user?.email ?? "",
+              phone: "",
+            },
+          }),
+        });
+        const data = await apiJson<{ postUrl?: string; params?: Record<string, string>; message?: string; error?: string }>(res);
+        if (!res.ok) {
+          const msg = (data && "message" in data && data.message) || (data && "error" in data && data.error) || "Ödeme sayfası açılamadı. Lütfen daha sonra tekrar deneyin veya destek ile iletişime geçin.";
+          setPaymentError(msg);
+          return;
+        }
+        if (data?.postUrl && data?.params) {
+          submitToShopier(data.postUrl, data.params);
+          return;
+        }
+        setPaymentError("Ödeme sayfası açılamadı. Lütfen daha sonra tekrar deneyin veya destek ile iletişime geçin.");
+      } catch {
+        setPaymentError("Ödeme sayfası açılamadı. Lütfen daha sonra tekrar deneyin veya destek ile iletişime geçin.");
+      } finally {
+        setPaymentLoading(null);
+      }
+    },
+    [user?.displayName, user?.email, submitToShopier]
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -144,6 +210,11 @@ export default function PricingPage() {
         </p>
       </div>
 
+      {paymentError && (
+        <div className="mb-6 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-red-800 text-sm">
+          {paymentError}
+        </div>
+      )}
       <section>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
           {plans.map((plan) => (
@@ -151,7 +222,8 @@ export default function PricingPage() {
               key={plan.id || plan.name}
               plan={plan}
               t={t}
-              onCtaClick={() => navigate("/odeme", { state: { plan } })}
+              onCtaClick={() => handleCtaClick(plan)}
+              loading={paymentLoading === (plan.id || plan.name)}
             />
           ))}
         </div>
