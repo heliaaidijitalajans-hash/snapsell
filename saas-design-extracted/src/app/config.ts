@@ -1,22 +1,12 @@
-const envApiBase = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || "").toString().replace(/\/$/, "");
+const envApiBase = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || "").toString().trim().replace(/\/$/, "");
 
-function isSnapsellWebsite(): boolean {
-  if (typeof window === "undefined" || !window.location?.hostname) return false;
-  const h = window.location.hostname.toLowerCase();
-  return h === "snapsell.website" || h === "www.snapsell.website";
-}
-
-/** Base URL for API. On snapsell.website we always use same-origin /api (proxy) to avoid CORS. */
-const API_BASE_URL = "";
+/** Base URL for API – build sırasında .env'deki VITE_API_BASE_URL kullanılır (Vercel'de de tanımlayın). */
+const API_BASE_URL = envApiBase;
 export { API_BASE_URL };
 
-/** Returns full API base URL for fetch( getApiBase() + "/api/..." ). On snapsell.website always "" = same-origin /api. */
+/** Returns full API base URL for fetch( getApiBase() + "/api/..." ). */
 export function getApiBase(): string {
-  if (typeof window !== "undefined" && window.location?.hostname) {
-    const h = window.location.hostname.toLowerCase();
-    if (h === "snapsell.website" || h === "www.snapsell.website") return "";
-  }
-  return envApiBase;
+  return API_BASE_URL;
 }
 
 /** Parse JSON from response. Returns {} for empty/non-JSON; throws only for HTML (wrong host). */
