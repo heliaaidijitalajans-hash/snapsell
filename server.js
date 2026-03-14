@@ -1427,22 +1427,92 @@ YAPMAN GEREKENLER:
   }
 }
 
-/** Shopier ödeme: v1 REST API, Authorization: Bearer PAT (SHOPIER_API_KEY) */
+/** Shopier ödeme: v1 REST API — OAuth2 (Client ID/Secret) veya PAT (SHOPIER_API_KEY) */
 const SHOPIER_API_BASE = "https://api.shopier.com/v1";
 const SHOPIER_ORDERS_URL = SHOPIER_API_BASE + "/orders";
+const SHOPIER_OAUTH_TOKEN_URLS = [
+  "https://api.shopier.com/v1/oauth/token",
+  "https://api.shopier.com/oauth/token",
+];
 
-function shopierAuthHeader(pat) {
-  const token = String(pat || "").trim();
-  return { "Authorization": "Bearer " + token };
+let shopierTokenCache = { access_token: null, expires_at: 0 };
+
+function shopierAuthHeader(token) {
+  const t = String(token || "").trim();
+  return t ? { "Authorization": "Bearer " + t } : {};
+}
+
+async function getShopierAccessToken() {
+  const clientId = (process.env.SHOPIER_CLIENT_ID || "").trim();
+  const clientSecret = (process.env.SHOPIER_CLIENT_SECRET || "").trim();
+  if (!clientId || !clientSecret) return null;
+
+  const now = Date.now();
+  if (shopierTokenCache.access_token && shopierTokenCache.expires_at > now + 60000) {
+    return shopierTokenCache.access_token;
+  }
+
+  const body = new URLSearchParams({
+    grant_type: "client_credentials",
+    client_id: clientId,
+    client_secret: clientSecret,
+  }).toString();
+
+  for (const tokenUrl of SHOPIER_OAUTH_TOKEN_URLS) {
+    try {
+      const res = await axios({
+        method: "POST",
+        url: tokenUrl,
+        headers: { "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json" },
+        data: body,
+        validateStatus: (s) => s >= 200 && s < 500,
+      });
+
+      if (res.status !== 200 || !res.data) {
+        if (res.status === 404) continue;
+        console.warn("Shopier OAuth token response:", tokenUrl, res.status, res.data);
+        return null;
+      }
+
+      const accessToken = res.data.access_token || res.data.accessToken;
+      const expiresIn = res.data.expires_in || res.data.expiresIn || 3600;
+      if (accessToken) {
+        shopierTokenCache = {
+          access_token: accessToken,
+          expires_at: now + (expiresIn * 1000),
+        };
+        return accessToken;
+      }
+    } catch (err) {
+      if (err.response && err.response.status === 404) continue;
+      console.warn("Shopier OAuth token error:", tokenUrl, err.message);
+    }
+  }
+  return null;
+}
+
+async function getShopierBearerToken() {
+  const accessToken = await getShopierAccessToken();
+  if (accessToken) return accessToken;
+  return (process.env.SHOPIER_API_KEY || "").trim() || null;
 }
 
 app.post("/api/create-payment", async (req, res) => {
   try {
-    const pat = (process.env.SHOPIER_API_KEY || "").trim();
-    if (!pat) {
+    const bearerToken = await getShopierBearerToken();
+    const clientId = (process.env.SHOPIER_CLIENT_ID || "").trim();
+    const clientSecret = (process.env.SHOPIER_CLIENT_SECRET || "").trim();
+    const hasOAuth = !!(clientId && clientSecret);
+    if (!bearerToken && !hasOAuth) {
       return res.status(503).json({
         error: "PAYMENT_NOT_CONFIGURED",
-        message: "Ödeme sistemi şu an yapılandırılmıyor. Lütfen daha sonra tekrar deneyin veya destek ile iletişime geçin.",
+        message: "Ödeme sistemi şu an yapılandırılmıyor. SHOPIER_CLIENT_ID ve SHOPIER_CLIENT_SECRET veya SHOPIER_API_KEY tanımlayın.",
+      });
+    }
+    if (hasOAuth && !bearerToken) {
+      return res.status(503).json({
+        error: "PAYMENT_NOT_CONFIGURED",
+        message: "Ödeme sistemi şu an yapılandırılmıyor. Shopier OAuth token alınamadı.",
       });
     }
 
@@ -1486,7 +1556,7 @@ app.post("/api/create-payment", async (req, res) => {
     };
 
     const headers = {
-      ...shopierAuthHeader(pat),
+      ...shopierAuthHeader(bearerToken),
       "Content-Type": "application/json",
       "Accept": "application/json",
     };
@@ -1519,7 +1589,7 @@ app.post("/api/create-payment", async (req, res) => {
           const rootRes = await axios({
             method: "GET",
             url: SHOPIER_API_BASE + "/",
-            headers: shopierAuthHeader(pat),
+            headers: shopierAuthHeader(bearerToken),
             validateStatus: () => true,
           });
           console.warn("Shopier v1 root GET response (404 fallback):", rootRes.status, JSON.stringify(rootRes.data));
