@@ -477,7 +477,7 @@ app.use(function (req, res, next) {
 
 // 1) CORS for non-OPTIONS requests
 app.use(cors(corsOptions));
-app.options("/(.*)", cors(corsOptions));
+app.options("/:path*", cors(corsOptions));
 
 // 2) Body parser
 app.use(express.json({ limit: "50mb" }));
