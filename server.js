@@ -1613,7 +1613,10 @@ app.get("/api/replicate/status", async (req, res) => {
 
 const REPLICATE_API_TOKEN = (process.env.REPLICATE_API_TOKEN || process.env.REPLICATE_API_KEY || "").trim();
 /** Replicate goruntuyu bu URL'den ceker; localhost disaridan erisilemedigi icin public URL gerekir (ngrok veya canli domain). */
-const PUBLIC_APP_URL = (process.env.PUBLIC_APP_URL || "").trim().replace(/\/$/, "");
+let PUBLIC_APP_URL = (process.env.PUBLIC_APP_URL || "").trim().replace(/\/$/, "");
+if (PUBLIC_APP_URL.toLowerCase().includes("yourdomain.com")) {
+  PUBLIC_APP_URL = (process.env.API_PUBLIC_URL || process.env.RAILWAY_STATIC_URL || "https://snapsell-production.up.railway.app").trim().replace(/\/$/, "");
+}
 const PHOTOROOM_API_KEY = (process.env.PHOTOROOM_API_KEY || "").trim();
 const replicateTempImages = new Map();
 const REPLICATE_TEMP_TTL_MS = 10 * 60 * 1000;

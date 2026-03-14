@@ -6,6 +6,15 @@ import { Link } from "react-router";
 import { getApiBase } from "../config";
 import { saveGeneratedImageToLibrary } from "../lib/libraryImages";
 
+const APP_BASE_URL = (import.meta.env.VITE_APP_URL || import.meta.env.VITE_API_BASE_URL || "https://www.snapsell.website").toString().trim().replace(/\/$/, "");
+
+/** Backend bazen yourdomain.com döndürüyor; ERR_CERT önlemek için gerçek API/app URL ile değiştir. */
+function normalizeImageUrl(url: string): string {
+  const base = getApiBase() || APP_BASE_URL;
+  const origin = base.replace(/\/$/, "");
+  return url.replace(/https?:\/\/[^/]*yourdomain\.com/gi, origin);
+}
+
 const MARKETPLACES = [
   { id: "trendyol", name: "Trendyol" },
   { id: "hepsiburada", name: "Hepsiburada" },
@@ -153,12 +162,15 @@ export function EditorReplicatePage() {
         if (!imageUrl.startsWith("http") && !imageUrl.startsWith("data:image")) {
           imageUrl = `data:image/png;base64,${imageUrl}`;
         }
+        const apiOrigin = (getApiBase() || APP_BASE_URL).replace(/\/$/, "");
+        if (imageUrl.includes("yourdomain.com")) {
+          imageUrl = imageUrl.replace(/https?:\/\/[^/]*yourdomain\.com/gi, apiOrigin);
+        }
         if (imageUrl.startsWith("/")) {
-          const apiBase = getApiBase();
-          imageUrl = `${apiBase}${imageUrl}`;
+          imageUrl = apiOrigin ? `${apiOrigin}${imageUrl}` : `${APP_BASE_URL}${imageUrl}`;
         }
         const finalUrl = imageUrl.startsWith("data:") ? imageUrl : imageUrl + (imageUrl.includes("?") ? "&" : "?") + "_t=" + Date.now();
-        console.log("Image URL type:", finalUrl.substring(0, 30));
+        console.log("Image URL type:", finalUrl.substring(0, 50));
         setOutputUrl(finalUrl);
         if (user?.uid && imageUrl.startsWith("data:")) {
           const userPrompt = prompt.trim() || (photoQuality === "luxury" ? "luxury product photography" : photoQuality === "professional" ? "commercial product shot" : "professional product photography");
@@ -422,13 +434,16 @@ export function EditorReplicatePage() {
       )}
 
       {outputUrl && (() => {
+        const apiOrigin = (getApiBase() || APP_BASE_URL).replace(/\/$/, "");
         let displayUrl = outputUrl;
+        if (displayUrl.includes("yourdomain.com")) {
+          displayUrl = displayUrl.replace(/https?:\/\/[^/]*yourdomain\.com/gi, apiOrigin);
+        }
         if (!displayUrl.startsWith("http") && !displayUrl.startsWith("data:image")) {
           displayUrl = `data:image/png;base64,${displayUrl}`;
         }
         if (displayUrl.startsWith("/")) {
-          const apiBase = getApiBase();
-          displayUrl = `${apiBase}${displayUrl}`;
+          displayUrl = apiOrigin ? `${apiOrigin}${displayUrl}` : `${APP_BASE_URL}${displayUrl}`;
         }
         return (
         <div ref={resultRef} className="mt-8 space-y-6">
