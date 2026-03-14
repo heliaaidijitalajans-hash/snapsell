@@ -14,7 +14,7 @@ const axios = require("axios");
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
-const { randomUUID, createHmac } = require("crypto");
+const { randomUUID } = require("crypto");
 const FormDataPkg = (function () { try { return require("form-data"); } catch (_) { return null; } })();
 let supabase = null;
 try {
@@ -1427,14 +1427,13 @@ YAPMAN GEREKENLER:
   }
 }
 
-/** Shopier ödeme: imza hesapla, sepet ve alıcı verilerini hazırla, postUrl + params döndür */
-const SHOPIER_PAY_URL = "https://www.shopier.com/ShowProduct/api_pay4.php";
+/** Shopier ödeme: v1 REST API, Authorization: Bearer PAT (SHOPIER_API_KEY) */
+const SHOPIER_API_BASE = "https://api.shopier.com/v1";
 
 app.post("/api/create-payment", async (req, res) => {
   try {
-    const apiKey = (process.env.SHOPIER_API_KEY || "").trim();
-    const apiSecret = (process.env.SHOPIER_API_SECRET || apiKey || "").trim();
-    if (!apiKey) {
+    const pat = (process.env.SHOPIER_API_KEY || "").trim();
+    if (!pat) {
       return res.status(503).json({
         error: "PAYMENT_NOT_CONFIGURED",
         message: "Ödeme sistemi şu an yapılandırılmıyor. Lütfen daha sonra tekrar deneyin veya destek ile iletişime geçin.",
@@ -1444,8 +1443,7 @@ app.post("/api/create-payment", async (req, res) => {
     const body = req.body || {};
     const plan = body.plan || {};
     const buyer = body.buyer || {};
-    const planId = plan.id || plan.name || "plan";
-    const planName = String(plan.name || planId);
+    const planName = String(plan.name || plan.id || "plan");
     let price = plan.price;
     if (price === undefined || price === null) price = 0;
     const numPrice = typeof price === "number" ? price : parseFloat(String(price).replace(/[^\d.-]/g, "")) || 0;
@@ -1453,14 +1451,10 @@ app.post("/api/create-payment", async (req, res) => {
     const currency = (plan.currency || "TRY").toUpperCase().slice(0, 3);
 
     const platformOrderId = "snapsell-" + Date.now() + "-" + randomUUID().slice(0, 8);
-    const randomNr = randomUUID().replace(/-/g, "").slice(0, 24);
-
-    const dataToSign = randomNr + platformOrderId + totalOrderValue + currency;
-    const signature = createHmac("sha256", apiSecret).update(dataToSign).digest("base64");
 
     const buyerName = String(buyer.name || buyer.buyer_name || buyer.displayName || "").trim() || "Müşteri";
     const buyerEmail = String(buyer.email || buyer.buyer_email || "").trim() || "";
-    const buyerPhone = String(buyer.phone || buyer.buyer_phone || "").trim() || "";
+    const buyerPhone = String(buyer.phone || buyer.buyer_phone || "").trim() || "5550000000";
 
     if (!buyerEmail) {
       return res.status(400).json({
@@ -1469,30 +1463,67 @@ app.post("/api/create-payment", async (req, res) => {
       });
     }
 
-    const basket = [{ name: planName, quantity: 1, price: totalOrderValue }];
-    const params = {
-      API_key: apiKey,
+    const requestBody = {
       platform_order_id: platformOrderId,
       total_order_value: totalOrderValue,
       currency,
-      random_nr: randomNr,
-      signature,
       buyer_name: buyerName,
       buyer_email: buyerEmail,
-      buyer_phone: buyerPhone || "5550000000",
+      buyer_phone: buyerPhone,
       billing_address: buyer.billing_address || "Türkiye",
       billing_city: buyer.billing_city || "Istanbul",
       billing_country: buyer.billing_country || "Turkey",
       shipping_address: buyer.shipping_address || buyer.billing_address || "Türkiye",
       shipping_city: buyer.shipping_city || buyer.billing_city || "Istanbul",
       shipping_country: buyer.shipping_country || buyer.billing_country || "Turkey",
-      basket: JSON.stringify(basket),
+      line_items: [{ title: planName, quantity: 1, price: totalOrderValue }],
     };
 
-    return res.status(200).json({
-      postUrl: SHOPIER_PAY_URL,
-      params,
-      platform_order_id: platformOrderId,
+    // Endpoint: developer.shopier.com'dan doğrulanabilir (örn. /checkout-sessions, /payment-links, /orders)
+    const shopierRes = await axios({
+      method: "POST",
+      url: SHOPIER_API_BASE + "/checkout-sessions",
+      headers: {
+        "Authorization": "Bearer " + pat,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      data: requestBody,
+      validateStatus: () => true,
+    }).catch((err) => {
+      if (err.response) return err.response;
+      throw err;
+    });
+
+    if (!shopierRes) throw new Error("Shopier yanıtı alınamadı");
+
+    if (shopierRes.status >= 400) {
+      const data = shopierRes.data || {};
+      const errMsg = data.message || data.error || (typeof data === "string" ? data : null) || "Ödeme sayfası açılamadı. Lütfen daha sonra tekrar deneyin veya destek ile iletişime geçin.";
+      console.warn("Shopier v1 api/create-payment response:", shopierRes.status, shopierRes.data);
+      return res.status(502).json({
+        error: "SHOPIER_ERROR",
+        message: errMsg,
+      });
+    }
+
+    const data = shopierRes.data || {};
+    const paymentUrl = data.payment_url || data.paymentUrl || data.checkout_url || data.checkoutUrl || data.url || data.redirect_url || (data.data && (data.data.payment_url || data.data.url)) || null;
+
+    if (paymentUrl) {
+      return res.status(200).json({ paymentUrl, platform_order_id: platformOrderId });
+    }
+
+    const checkoutId = data.checkout_id || data.checkoutId || data.id;
+    if (checkoutId) {
+      const fallbackUrl = "https://www.shopier.com/checkout/" + checkoutId;
+      return res.status(200).json({ paymentUrl: fallbackUrl, platform_order_id: platformOrderId });
+    }
+
+    console.warn("Shopier v1 response missing payment_url/checkout_id:", data);
+    return res.status(502).json({
+      error: "SHOPIER_ERROR",
+      message: "Ödeme sayfası alınamadı. Lütfen daha sonra tekrar deneyin veya destek ile iletişime geçin.",
     });
   } catch (err) {
     console.error("api/create-payment:", err);

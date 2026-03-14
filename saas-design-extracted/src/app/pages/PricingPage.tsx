@@ -149,10 +149,14 @@ export default function PricingPage() {
             },
           }),
         });
-        const data = await apiJson<{ postUrl?: string; params?: Record<string, string>; message?: string; error?: string }>(res);
+        const data = await apiJson<{ paymentUrl?: string; postUrl?: string; params?: Record<string, string>; message?: string; error?: string }>(res);
         if (!res.ok) {
           const msg = (data && "message" in data && data.message) || (data && "error" in data && data.error) || "Ödeme sayfası açılamadı. Lütfen daha sonra tekrar deneyin veya destek ile iletişime geçin.";
           setPaymentError(msg);
+          return;
+        }
+        if (data?.paymentUrl) {
+          window.location.href = data.paymentUrl;
           return;
         }
         if (data?.postUrl && data?.params) {
