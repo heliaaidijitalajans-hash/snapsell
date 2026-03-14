@@ -475,9 +475,8 @@ app.use(function (req, res, next) {
   next();
 });
 
-// 1) CORS for non-OPTIONS requests
+// 1) CORS (OPTIONS ve tüm istekler cors middleware ile; app.options kaldırıldı - path-to-regexp hatası önlenir)
 app.use(cors(corsOptions));
-app.options("/:path*", cors(corsOptions));
 
 // 2) Body parser
 app.use(express.json({ limit: "50mb" }));
@@ -486,9 +485,7 @@ app.use(express.json({ limit: "50mb" }));
 
 app.get("/", (req, res) => res.send("OK"));
 
-app.get("/health", function (req, res) {
-  res.send("ok");
-});
+app.get("/health", (req, res) => res.status(200).send("OK"));
 
 app.get("/favicon.ico", function (req, res) {
   res.status(204).end();
