@@ -2,10 +2,10 @@
  * Railway / production giris noktasi.
  * Express veya server.js hata verirse bile Node http ile dinleyip 503 doner.
  */
-console.log("SnapSell start.js running, PORT=" + (process.env.PORT || "3006"));
+console.log("SnapSell start.js running, PORT=" + (process.env.PORT || "8080"));
 
 require("dotenv").config();
-const PORT = parseInt(process.env.PORT, 10) || 3006;
+const PORT = parseInt(process.env.PORT, 10) || 8080;
 
 process.on("unhandledRejection", function (err) {
   console.error("Unhandled rejection:", err);
@@ -42,8 +42,8 @@ try {
     listenMinimal(e);
     return;
   }
-  const server = app.listen(PORT, "0.0.0.0", function () {
-    console.log(`SnapSell API listening on port ${PORT}`);
+  app.listen(PORT, "0.0.0.0", function () {
+    console.log("Server is running on port", PORT);
   });
   server.on("error", function (err) {
     console.error("Listen error:", err);

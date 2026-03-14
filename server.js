@@ -7,6 +7,10 @@ const dotenv = require("dotenv");
 dotenv.config();
 console.log("SnapSell API starting...");
 
+if (typeof globalThis.fetch !== "function") {
+  globalThis.fetch = require("node-fetch");
+}
+const axios = require("axios");
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
@@ -2915,24 +2919,34 @@ app.post("/api/seo", async (req, res) => {
     if (!apiKey) {
       return res.status(503).json({ error: "OPENAI_API_KEY not configured" });
     }
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + apiKey
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: "You are an SEO expert writing product descriptions." },
-          { role: "user", content: "Write an SEO optimized product description for: " + productStr }
-        ]
-      })
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      console.error("SEO generation OpenAI error:", response.status, data);
-      return res.status(response.status >= 500 ? 502 : response.status).json({ error: "SEO generation failed" });
+    let data = {};
+    try {
+      const response = await axios.post(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: "You are an SEO expert writing product descriptions." },
+            { role: "user", content: "Write an SEO optimized product description for: " + productStr }
+          ]
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + apiKey
+          },
+          timeout: 60000,
+          validateStatus: function () { return true; }
+        }
+      );
+      data = response.data || {};
+      if (response.status !== 200) {
+        console.error("SEO generation OpenAI error:", response.status, data);
+        return res.status(response.status >= 500 ? 502 : response.status).json({ error: "SEO generation failed" });
+      }
+    } catch (openaiErr) {
+      console.error("SEO generation OpenAI request error:", openaiErr.message);
+      return res.status(500).json({ error: "SEO generation failed" });
     }
     const text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "";
     res.json({ text });
