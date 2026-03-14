@@ -1428,7 +1428,13 @@ YAPMAN GEREKENLER:
 }
 
 /** Shopier ödeme: v1 REST API, Authorization: Bearer PAT (SHOPIER_API_KEY) */
-const SHOPIER_PAYMENT_LINKS_URL = "https://api.shopier.com/v1/payment-links";
+const SHOPIER_API_BASE = "https://api.shopier.com/v1";
+const SHOPIER_ORDERS_URL = SHOPIER_API_BASE + "/orders";
+
+function shopierAuthHeader(pat) {
+  const token = String(pat || "").trim();
+  return { "Authorization": "Bearer " + token };
+}
 
 app.post("/api/create-payment", async (req, res) => {
   try {
@@ -1463,7 +1469,6 @@ app.post("/api/create-payment", async (req, res) => {
       });
     }
 
-    // Shopier v1 payment-links: total_order_value + platform_order_id (Order model uyumlu)
     const requestBody = {
       platform_order_id: platformOrderId,
       total_order_value: totalOrderValue,
@@ -1480,20 +1485,49 @@ app.post("/api/create-payment", async (req, res) => {
       line_items: [{ title: planName, quantity: 1, price: totalOrderValue }],
     };
 
-    const shopierRes = await axios({
+    const headers = {
+      ...shopierAuthHeader(pat),
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    };
+
+    let shopierRes = await axios({
       method: "POST",
-      url: SHOPIER_PAYMENT_LINKS_URL,
-      headers: {
-        "Authorization": "Bearer " + pat,
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
+      url: SHOPIER_ORDERS_URL,
+      headers,
       data: requestBody,
       validateStatus: () => true,
     }).catch((err) => {
       if (err.response) return err.response;
       throw err;
     });
+
+    if (shopierRes && shopierRes.status === 404) {
+      const checkoutUrl = SHOPIER_API_BASE + "/checkout";
+      shopierRes = await axios({
+        method: "POST",
+        url: checkoutUrl,
+        headers,
+        data: requestBody,
+        validateStatus: () => true,
+      }).catch((err) => {
+        if (err.response) return err.response;
+        throw err;
+      });
+      if (shopierRes && shopierRes.status === 404) {
+        try {
+          const rootRes = await axios({
+            method: "GET",
+            url: SHOPIER_API_BASE + "/",
+            headers: shopierAuthHeader(pat),
+            validateStatus: () => true,
+          });
+          console.warn("Shopier v1 root GET response (404 fallback):", rootRes.status, JSON.stringify(rootRes.data));
+        } catch (e) {
+          console.warn("Shopier v1 root GET error:", e.message);
+        }
+      }
+    }
 
     if (!shopierRes) throw new Error("Shopier yanıtı alınamadı");
 
