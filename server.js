@@ -2904,6 +2904,44 @@ app.post("/api/process", async (req, res) => {
   }
 });
 
+app.post("/api/seo", async (req, res) => {
+  try {
+    const { product } = req.body || {};
+    const productStr = typeof product === "string" ? product.trim() : (product ? String(product) : "");
+    if (!productStr) {
+      return res.status(400).json({ error: "product is required in body" });
+    }
+    const apiKey = (process.env.OPENAI_API_KEY || process.env.OPENAI_KEY || "").trim();
+    if (!apiKey) {
+      return res.status(503).json({ error: "OPENAI_API_KEY not configured" });
+    }
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + apiKey
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: "You are an SEO expert writing product descriptions." },
+          { role: "user", content: "Write an SEO optimized product description for: " + productStr }
+        ]
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error("SEO generation OpenAI error:", response.status, data);
+      return res.status(response.status >= 500 ? 502 : response.status).json({ error: "SEO generation failed" });
+    }
+    const text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "";
+    res.json({ text });
+  } catch (error) {
+    console.error("SEO generation error:", error);
+    res.status(500).json({ error: "SEO generation failed" });
+  }
+});
+
 app.post("/seo", async (req, res) => {
   try {
     const { imageUrl } = req.body;
