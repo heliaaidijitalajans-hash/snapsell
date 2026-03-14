@@ -1905,29 +1905,38 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
           const sharp = getSharp();
           seoBuf = await sharp(buf)
             .resize(512, 512, { fit: "inside", withoutEnlargement: true })
-            .jpeg({ quality: 80 })
+            .jpeg({ quality: 75 })
             .toBuffer();
-        } catch (_) { /* sharp yok veya hata, orijinal buf kullan */ }
-        const b64 = seoBuf.toString("base64");
-        const imgDataUrl = "data:image/jpeg;base64," + b64;
-        const openai = getOpenAI();
-        const seoRes = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: [{
-            role: "user",
-            content: [
-              { type: "text", text: "Bu ürün fotoğrafını analiz et. Önce kısa bir SEO başlığı yaz (tek satır, en fazla 60 karakter). Sonra e-ticaret için 2-4 cümlelik bir SEO açıklaması yaz. Tam olarak şu formatta cevap ver, başka ekleme yapma:\nBaşlık: [buraya başlık]\nAçıklama: [buraya açıklama]" },
-              { type: "image_url", image_url: { url: imgDataUrl, detail: "low" } }
-            ]
-          }]
-        });
-        const raw = (seoRes.choices && seoRes.choices[0] && seoRes.choices[0].message && seoRes.choices[0].message.content) || "";
-        seoText = typeof raw === "string" ? raw.trim() : "";
-        if (!seoText) console.warn("PhotoRoom pipeline: OpenAI SEO yanıtı boş döndü.");
+        } catch (sharpErr) {
+          console.warn("PhotoRoom pipeline: sharp resize hatası, orijinal kullanılıyor:", sharpErr.message);
+        }
+        if (seoBuf.length > 800 * 1024) {
+          console.warn("PhotoRoom pipeline: Görsel 800KB üzeri, SEO atlanıyor (OpenAI limit).");
+        } else {
+          const b64 = seoBuf.toString("base64");
+          const imgDataUrl = "data:image/jpeg;base64," + b64;
+          const OpenAI = require("openai");
+          const openai = new OpenAI({ apiKey: openaiKey });
+          const seoRes = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [{
+              role: "user",
+              content: [
+                { type: "text", text: "Bu ürün fotoğrafını analiz et. Önce kısa bir SEO başlığı yaz (tek satır, en fazla 60 karakter). Sonra e-ticaret için 2-4 cümlelik bir SEO açıklaması yaz. Tam olarak şu formatta cevap ver, başka ekleme yapma:\nBaşlık: [buraya başlık]\nAçıklama: [buraya açıklama]" },
+                { type: "image_url", image_url: { url: imgDataUrl, detail: "low" } }
+              ]
+            }]
+          });
+          const raw = (seoRes.choices && seoRes.choices[0] && seoRes.choices[0].message && seoRes.choices[0].message.content) || "";
+          seoText = typeof raw === "string" ? raw.trim() : "";
+          if (seoText) console.log("PhotoRoom pipeline: SEO üretildi, uzunluk:", seoText.length);
+          else console.warn("PhotoRoom pipeline: OpenAI SEO yanıtı boş döndü.");
+        }
       } catch (seoErr) {
         console.error("PhotoRoom pipeline SEO hatası:", seoErr.message);
-        if (seoErr.status === 401) console.error("OpenAI API anahtarı geçersiz veya eksik. Railway OPENAI_API_KEY kontrol edin.");
-        if (seoErr.code === "ENOTFOUND" || seoErr.message && seoErr.message.includes("fetch")) console.error("OpenAI API ağ hatası.");
+        if (seoErr.status === 401) console.error("OpenAI API anahtarı geçersiz. Railway OPENAI_API_KEY kontrol edin.");
+        if (seoErr.status === 429) console.error("OpenAI rate limit. Biraz bekleyip tekrar deneyin.");
+        if (seoErr.code === "ENOTFOUND" || (seoErr.message && seoErr.message.includes("fetch"))) console.error("OpenAI API ağ hatası.");
       }
     } else {
       if (!openaiKey) console.warn("PhotoRoom pipeline: OPENAI_API_KEY tanımlı değil, SEO atlanıyor. Railway Environment Variables'a ekleyin.");

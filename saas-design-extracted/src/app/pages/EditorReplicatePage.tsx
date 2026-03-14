@@ -193,11 +193,17 @@ export function EditorReplicatePage() {
         }
       }
       const d = data as Record<string, unknown>;
-      const rawSeo = typeof d.seo === "string" ? d.seo : (d.data && typeof d.data === "object" && typeof (d.data as Record<string, unknown>).seo === "string" ? (d.data as Record<string, unknown>).seo as string : "");
+      const rawSeo =
+        typeof d.seo === "string" ? d.seo
+          : typeof (d as any).SEO === "string" ? (d as any).SEO
+          : d.data && typeof d.data === "object" && typeof (d.data as Record<string, unknown>).seo === "string"
+            ? (d.data as Record<string, unknown>).seo as string
+            : "";
+      const seoStr = (typeof rawSeo === "string" ? rawSeo : String(rawSeo || "")).trim();
       const seoFromApi =
-        (typeof rawSeo === "string" && rawSeo.trim())
-          ? rawSeo.trim()
-          : (typeof d.seoTitle === "string" && typeof d.seoDescription === "string")
+        seoStr
+          ? seoStr
+          : typeof d.seoTitle === "string" && typeof d.seoDescription === "string"
             ? `Başlık: ${String(d.seoTitle).trim()}\nAçıklama: ${String(d.seoDescription).trim()}`
             : "";
       if (seoFromApi) setSeoDescription(seoFromApi);
