@@ -10,10 +10,24 @@ import { saveGeneratedImageToLibrary } from "../lib/libraryImages";
 const EDITOR_API_BASE = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || RAILWAY_API_BASE).toString().trim().replace(/\/$/, "");
 const APP_BASE_URL = (import.meta.env.VITE_APP_URL || "https://www.snapsell.website").toString().trim().replace(/\/$/, "");
 
+/** /api/replicate/temp/ görselleri sadece Railway'de; URL snapsell.website ise Railway origin'e çevir ki görsel yüklensin. */
+function ensureReplicateImageFromRailway(url: string): string {
+  if (!url || !url.includes("/api/replicate/temp/")) return url;
+  const rail = EDITOR_API_BASE.replace(/\/$/, "");
+  if (url.startsWith(rail)) return url;
+  try {
+    const path = new URL(url).pathname + new URL(url).search;
+    return path.startsWith("/") ? rail + path : url;
+  } catch {
+    return url.replace(/^https?:\/\/[^/]+/, rail);
+  }
+}
+
 /** Backend bazen yourdomain.com döndürüyor; ERR_CERT önlemek için Railway API origin ile değiştir. */
 function normalizeImageUrl(url: string): string {
   const origin = (EDITOR_API_BASE || APP_BASE_URL).replace(/\/$/, "");
-  return url.replace(/https?:\/\/[^/]*yourdomain\.com/gi, origin);
+  let u = url.replace(/https?:\/\/[^/]*yourdomain\.com/gi, origin);
+  return ensureReplicateImageFromRailway(u);
 }
 
 const MARKETPLACES = [
@@ -170,17 +184,18 @@ export function EditorReplicatePage() {
         if (imageUrl.startsWith("/")) {
           imageUrl = apiOrigin ? `${apiOrigin}${imageUrl}` : `${APP_BASE_URL}${imageUrl}`;
         }
+        imageUrl = ensureReplicateImageFromRailway(imageUrl);
         const finalUrl = imageUrl.startsWith("data:") ? imageUrl : imageUrl + (imageUrl.includes("?") ? "&" : "?") + "_t=" + Date.now();
-        console.log("Image URL type:", finalUrl.substring(0, 50));
         setOutputUrl(finalUrl);
         if (user?.uid && imageUrl.startsWith("data:")) {
           const userPrompt = prompt.trim() || (photoQuality === "luxury" ? "luxury product photography" : photoQuality === "professional" ? "commercial product shot" : "professional product photography");
           saveGeneratedImageToLibrary(user.uid, imageUrl, userPrompt).catch((err) => console.warn("Library save failed:", err));
         }
       }
+      const rawSeo = (data as any).seo;
       const seoFromApi =
-        (typeof (data as any).seo === "string" && (data as any).seo.trim())
-          ? (data as any).seo.trim()
+        (typeof rawSeo === "string" && rawSeo.trim())
+          ? rawSeo.trim()
           : (typeof (data as any).seoTitle === "string" && typeof (data as any).seoDescription === "string")
             ? `Başlık: ${(data as any).seoTitle.trim()}\nAçıklama: ${(data as any).seoDescription.trim()}`
             : "";
@@ -446,6 +461,7 @@ export function EditorReplicatePage() {
         if (displayUrl.includes("yourdomain.com")) {
           displayUrl = displayUrl.replace(/https?:\/\/[^/]*yourdomain\.com/gi, apiOrigin);
         }
+        displayUrl = ensureReplicateImageFromRailway(displayUrl);
         if (!displayUrl.startsWith("http") && !displayUrl.startsWith("data:image")) {
           displayUrl = `data:image/png;base64,${displayUrl}`;
         }
@@ -499,15 +515,15 @@ export function EditorReplicatePage() {
             </a>
           </div>
 
-          {seoDescription && (
-            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-              <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                <span className="w-1 h-5 rounded-full bg-blue-500" />
-                {t("editor.seoDescription")}
-              </h3>
-              <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">{seoDescription}</p>
-            </div>
-          )}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+            <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+              <span className="w-1 h-5 rounded-full bg-blue-500" />
+              {t("editor.seoDescription")}
+            </h3>
+            <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">
+              {seoDescription || t("editor.seoLoadingOrUnavailable")}
+            </p>
+          </div>
 
         </div>
       );
