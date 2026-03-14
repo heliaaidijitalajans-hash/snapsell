@@ -1920,7 +1920,7 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
             messages: [{
               role: "user",
               content: [
-                { type: "text", text: "Bu ürün fotoğrafını analiz et. Önce kısa bir SEO başlığı yaz (tek satır, en fazla 60 karakter). Sonra e-ticaret için 2-4 cümlelik bir SEO açıklaması yaz. Tam olarak şu formatta cevap ver, başka ekleme yapma:\nBaşlık: [buraya başlık]\nAçıklama: [buraya açıklama]" },
+                { type: "text", text: "Sen profesyonel bir e-ticaret ve SEO uzmanısın. Sana gönderilen görseldeki ürünü detaylıca analiz et.\n\nBaşlık: Ürünün markasını, modelini, rengini ve en belirgin özelliğini içeren, tıklanma oranı yüksek bir başlık oluştur.\n\nAçıklama: Ürünün materyalini, tarzını, kullanım alanlarını ve neden satın alınması gerektiğini anlatan, müşteri odaklı, ikna edici ve SEO uyumlu (anahtar kelime zengini) uzun bir açıklama yaz.\n\nTon: Samimi ama profesyonel bir dil kullan. Eğer ürünün üzerinde bir kusur veya spesifik bir detay varsa ona da değin.\n\nTam olarak şu formatta cevap ver:\nBaşlık: [buraya başlık]\nAçıklama: [buraya açıklama]" },
                 { type: "image_url", image_url: { url: imgDataUrl, detail: "low" } }
               ]
             }]
@@ -2823,7 +2823,7 @@ app.post("/api/process", async (req, res) => {
         messages: [{
           role: "user",
           content: [
-            { type: "text", text: "Bu urun fotografini analiz et ve SEO aciklamasi yaz" },
+            { type: "text", text: "Sen profesyonel bir e-ticaret ve SEO uzmanısın. Görseldeki ürünü detaylıca analiz et. Başlık: marka, model, renk ve belirgin özellik içeren tıklanma oranı yüksek başlık. Açıklama: materyal, tarz, kullanım alanları ve neden alınmalı anlatan, müşteri odaklı, ikna edici, SEO uyumlu (anahtar kelime zengini) uzun açıklama. Samimi ama profesyonel dil; kusur veya özel detay varsa değin. Cevabı şu formatta ver: Başlık: [başlık] ve Açıklama: [açıklama]" },
             { type: "image_url", image_url: { url: imgUrl } }
           ]
         }]
@@ -2917,8 +2917,8 @@ app.post("/api/seo", async (req, res) => {
         {
           model: "gpt-4o-mini",
           messages: [
-            { role: "system", content: "You are an SEO expert writing product descriptions." },
-            { role: "user", content: "Write an SEO optimized product description for: " + productStr }
+            { role: "system", content: "Sen profesyonel bir e-ticaret ve SEO uzmanısın. Sana gönderilen ürün bilgisini detaylıca analiz edip etkileyici pazarlama diliyle sunarsın." },
+            { role: "user", content: "Aşağıdaki ürün için detaylı SEO içeriği üret.\n\nBaşlık: Marka, model, renk ve en belirgin özelliği içeren, tıklanma oranı yüksek bir başlık.\n\nAçıklama: Materyal, tarz, kullanım alanları ve neden satın alınmalı anlatan, müşteri odaklı, ikna edici, SEO uyumlu (anahtar kelime zengini) uzun açıklama. Samimi ama profesyonel dil kullan.\n\nÜrün: " + productStr + "\n\nTam olarak şu formatta cevap ver:\nBaşlık: [buraya başlık]\nAçıklama: [buraya açıklama]" }
           ]
         },
         {
@@ -2955,7 +2955,7 @@ app.post("/seo", async (req, res) => {
       messages: [{
         role: "user",
         content: [
-          { type: "text", text: "Bu urun fotografini analiz et ve SEO aciklamasi yaz" },
+          { type: "text", text: "Sen profesyonel bir e-ticaret ve SEO uzmanısın. Görseldeki ürünü detaylıca analiz et. Başlık: marka, model, renk ve belirgin özellik içeren tıklanma oranı yüksek başlık. Açıklama: materyal, tarz, kullanım alanları ve neden alınmalı anlatan, müşteri odaklı, ikna edici, SEO uyumlu (anahtar kelime zengini) uzun açıklama. Samimi ama profesyonel dil; kusur veya özel detay varsa değin. Formatta cevap ver: Başlık: [başlık] ve ardından yeni satırda Açıklama: [açıklama]" },
           { type: "image_url", image_url: { url: imageUrl } }
         ]
       }]
