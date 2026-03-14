@@ -12,25 +12,17 @@ const firebaseConfig = {
   appId: "1:503663017163:web:8d02525549bd7f58f0af4e",
 };
 
-/** Single Firebase app instance. Call initializeApp() only once using getApps(). */
-function getFirebaseApp(): FirebaseApp {
-  if (!getApps().length) {
-    return initializeApp(firebaseConfig);
-  }
-  return getApp();
-}
+const app: FirebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+export const auth: Auth = getAuth(app);
 
 export function getFirebaseAuth(): Auth {
-  return getAuth(getFirebaseApp());
+  return auth;
 }
 
 export function getFirebaseStorage(): FirebaseStorage {
-  return getStorage(getFirebaseApp());
+  return getStorage(app);
 }
 
 export function getFirebaseFirestore(): Firestore {
-  return getFirestore(getFirebaseApp());
+  return getFirestore(app);
 }
-
-/** For code that needs the app instance directly. */
-export const firebaseApp = getFirebaseApp();

@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { onAuthStateChanged, getRedirectResult, setPersistence, browserLocalPersistence, type User } from "firebase/auth";
-import { getFirebaseAuth } from "../lib/firebase";
+import { auth } from "../lib/firebase";
 import { getApiBase, apiJson } from "../config";
 
 type AuthContextValue = {
@@ -55,7 +55,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const token = await user.getIdToken();
       return { Authorization: "Bearer " + token };
     }
-    const auth = getFirebaseAuth();
     const u = auth.currentUser;
     if (u) {
       const token = await u.getIdToken();
@@ -71,7 +70,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, sessionId]);
 
   const logout = useCallback(async () => {
-    const auth = getFirebaseAuth();
     await auth.signOut();
     localStorage.removeItem(SESSION_KEY);
     setSessionId(null);
@@ -82,7 +80,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const unsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    const auth = getFirebaseAuth();
     let cancelled = false;
 
     (async () => {

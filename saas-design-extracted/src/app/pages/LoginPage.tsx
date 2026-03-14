@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { signInWithPopup, GoogleAuthProvider, setPersistence, browserLocalPersistence } from "firebase/auth";
-import { getFirebaseAuth } from "../lib/firebase";
+import { auth } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 
@@ -23,7 +23,6 @@ export function LoginPage() {
     setError(null);
     setSigningIn(true);
     try {
-      const auth = getFirebaseAuth();
       const provider = new GoogleAuthProvider();
       await setPersistence(auth, browserLocalPersistence);
       await signInWithPopup(auth, provider);
