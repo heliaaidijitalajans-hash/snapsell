@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node start.js",
+    "start": "node server.js",
     "dev": "node server.js",
     "build": "npm run build:design",
     "deploy:firebase": "npm run build && echo. && echo [KURULUM] Firebase icin dist/config.json apiUrl gerekirse ayarlayin, sonra: firebase deploy && echo.",
