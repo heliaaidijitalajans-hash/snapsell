@@ -446,7 +446,8 @@ const cors = require("cors");
 
 const CORS_ALLOWED_ORIGINS = [
   "https://snapsell.website",
-  "https://www.snapsell.website"
+  "https://www.snapsell.website",
+  "https://snapsell-one.vercel.app",
 ];
 
 const corsOptions = {
@@ -1427,7 +1428,7 @@ YAPMAN GEREKENLER:
   }
 }
 
-/** Shopier ödeme: v1 REST API — OAuth2 (SHOPIER_CLIENT_ID / SHOPIER_CLIENT_SECRET) veya PAT */
+/** Shopier ödeme: v1 REST API — OAuth2 (SHOPIER_CLIENT_ID / SHOPIER_CLIENT_SECRET) */
 const SHOPIER_API_BASE = "https://api.shopier.com/v1";
 const SHOPIER_OAUTH_TOKEN_PRIMARY = "https://api.shopier.com/v1/oauth/token";
 const SHOPIER_OAUTH_TOKEN_FALLBACK = "https://api.shopier.com/oauth/token";
@@ -1435,6 +1436,7 @@ const SHOPIER_PAYMENT_URLS = [
   "https://api.shopier.com/v1/checkout",
   "https://api.shopier.com/v1/orders",
 ];
+const SHOPIER_REDIRECT_URI = "https://snapsell.website";
 
 let shopierTokenCache = { access_token: null, expires_at: 0 };
 
@@ -1565,6 +1567,9 @@ app.post("/api/create-payment", async (req, res) => {
       shipping_city: buyer.shipping_city || buyer.billing_city || "Istanbul",
       shipping_country: buyer.shipping_country || buyer.billing_country || "Turkey",
       line_items: [{ title: planName, quantity: 1, price: totalOrderValue }],
+      redirect_uri: SHOPIER_REDIRECT_URI,
+      success_url: SHOPIER_REDIRECT_URI,
+      return_url: SHOPIER_REDIRECT_URI,
     };
 
     const headers = {
@@ -1645,6 +1650,18 @@ app.post("/api/create-payment", async (req, res) => {
     });
   }
 });
+
+/** Shopier ödeme bildirimi (callback): Ödeme onaylandığında Shopier bu URL'ye istek atar. Shopier panelinde bu adresi (Railway base URL + /api/shopier/callback) bildirim URL'si olarak kaydedin. */
+function handleShopierCallback(req, res) {
+  const payload = req.body && Object.keys(req.body).length ? req.body : req.query || {};
+  console.warn("[Shopier] Callback alındı:", JSON.stringify(payload).slice(0, 500));
+  const orderId = payload.platform_order_id || payload.order_id || payload.id;
+  const status = payload.status || payload.payment_status;
+  if (orderId) console.warn("[Shopier] Sipariş:", orderId, "Durum:", status);
+  res.status(200).send("OK");
+}
+app.get("/api/shopier/callback", handleShopierCallback);
+app.post("/api/shopier/callback", express.urlencoded({ extended: true }), handleShopierCallback);
 
 app.post("/api/register", async (req, res) => {
   try {
