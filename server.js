@@ -1451,8 +1451,8 @@ function shopierAuthHeader(token) {
 }
 
 async function getShopierAccessToken() {
-  const clientId = (process.env.SHOPIER_CLIENT_ID || "").trim();
-  const clientSecret = (process.env.SHOPIER_CLIENT_SECRET || "").trim();
+  const clientId = String(process.env.SHOPIER_CLIENT_ID || "").trim();
+  const clientSecret = String(process.env.SHOPIER_CLIENT_SECRET || "").trim();
   if (!clientId || !clientSecret) return null;
 
   const now = Date.now();
@@ -1505,32 +1505,26 @@ async function getShopierAccessToken() {
 }
 
 async function getShopierBearerToken() {
-  const accessToken = await getShopierAccessToken();
-  if (accessToken) return accessToken;
-  return (process.env.SHOPIER_API_KEY || "").trim() || null;
+  return await getShopierAccessToken();
 }
 
 app.post("/api/create-payment", async (req, res) => {
   try {
-    const clientId = (process.env.SHOPIER_CLIENT_ID || "").trim();
-    const clientSecret = (process.env.SHOPIER_CLIENT_SECRET || "").trim();
-    const hasOAuth = !!(clientId && clientSecret);
-    const bearerToken = await getShopierBearerToken();
-    if (hasOAuth) {
-      console.warn("[Shopier] OAuth2 kullanılıyor (CLIENT_ID tanımlı, token " + (bearerToken ? "alındı" : "alınamadı") + ")");
-    } else if (bearerToken) {
-      console.warn("[Shopier] PAT (SHOPIER_API_KEY) kullanılıyor");
-    }
-    if (!bearerToken && !hasOAuth) {
+    const clientId = String(process.env.SHOPIER_CLIENT_ID || "").trim();
+    const clientSecret = String(process.env.SHOPIER_CLIENT_SECRET || "").trim();
+    if (!clientId || !clientSecret) {
       return res.status(503).json({
         error: "PAYMENT_NOT_CONFIGURED",
-        message: "Ödeme sistemi şu an yapılandırılmıyor. SHOPIER_CLIENT_ID ve SHOPIER_CLIENT_SECRET veya SHOPIER_API_KEY tanımlayın.",
+        message: "Ödeme sistemi yapılandırılmadı. Railway'de SHOPIER_CLIENT_ID ve SHOPIER_CLIENT_SECRET tanımlayın (başındaki/sonundaki boşluklar otomatik temizlenir).",
       });
     }
-    if (hasOAuth && !bearerToken) {
+
+    const bearerToken = await getShopierBearerToken();
+    if (!bearerToken) {
+      console.warn("[Shopier] OAuth token alınamadı. CLIENT_ID/CLIENT_SECRET kontrol edin.");
       return res.status(503).json({
-        error: "PAYMENT_NOT_CONFIGURED",
-        message: "Ödeme sistemi şu an yapılandırılmıyor. Shopier OAuth token alınamadı.",
+        error: "SHOPIER_TOKEN_FAILED",
+        message: "Shopier OAuth token alınamadı. SHOPIER_CLIENT_ID ve SHOPIER_CLIENT_SECRET değerlerini kontrol edin; token URL'leri erişilebilir olmalı.",
       });
     }
 
