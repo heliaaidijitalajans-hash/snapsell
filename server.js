@@ -1427,19 +1427,27 @@ YAPMAN GEREKENLER:
   }
 }
 
-/** Shopier ödeme: v1 REST API — OAuth2 (Client ID/Secret) veya PAT (SHOPIER_API_KEY) */
+/** Shopier ödeme: v1 REST API — OAuth2 (SHOPIER_CLIENT_ID / SHOPIER_CLIENT_SECRET) veya PAT */
 const SHOPIER_API_BASE = "https://api.shopier.com/v1";
-const SHOPIER_ORDERS_URL = SHOPIER_API_BASE + "/orders";
-const SHOPIER_OAUTH_TOKEN_URLS = [
-  "https://api.shopier.com/v1/oauth/token",
-  "https://api.shopier.com/oauth/token",
+const SHOPIER_OAUTH_TOKEN_PRIMARY = "https://api.shopier.com/v1/oauth/token";
+const SHOPIER_OAUTH_TOKEN_FALLBACK = "https://api.shopier.com/oauth/token";
+const SHOPIER_PAYMENT_URLS = [
+  "https://api.shopier.com/v1/checkout",
+  "https://api.shopier.com/v1/orders",
 ];
 
 let shopierTokenCache = { access_token: null, expires_at: 0 };
 
+function shopierErrorLog(err, context) {
+  const msg = err && err.message;
+  const url = err && err.config && err.config.url;
+  console.warn("[Shopier] Error: " + (msg || "unknown") + " - URL: " + (url || "N/A") + (context ? " (" + context + ")" : ""));
+}
+
 function shopierAuthHeader(token) {
   const t = String(token || "").trim();
-  return t ? { "Authorization": "Bearer " + t } : {};
+  if (!t) return {};
+  return { "Authorization": "Bearer " + t };
 }
 
 async function getShopierAccessToken() {
@@ -1458,7 +1466,8 @@ async function getShopierAccessToken() {
     client_secret: clientSecret,
   }).toString();
 
-  for (const tokenUrl of SHOPIER_OAUTH_TOKEN_URLS) {
+  const tokenUrls = [SHOPIER_OAUTH_TOKEN_PRIMARY, SHOPIER_OAUTH_TOKEN_FALLBACK];
+  for (const tokenUrl of tokenUrls) {
     try {
       const res = await axios({
         method: "POST",
@@ -1468,9 +1477,12 @@ async function getShopierAccessToken() {
         validateStatus: (s) => s >= 200 && s < 500,
       });
 
+      if (res.status === 404) {
+        console.warn("[Shopier] Token 404, fallback deneniyor: " + tokenUrl);
+        continue;
+      }
       if (res.status !== 200 || !res.data) {
-        if (res.status === 404) continue;
-        console.warn("Shopier OAuth token response:", tokenUrl, res.status, res.data);
+        console.warn("[Shopier] Token response: " + tokenUrl + " -> " + res.status, res.data);
         return null;
       }
 
@@ -1484,8 +1496,9 @@ async function getShopierAccessToken() {
         return accessToken;
       }
     } catch (err) {
+      shopierErrorLog(err, "TOKEN " + tokenUrl);
       if (err.response && err.response.status === 404) continue;
-      console.warn("Shopier OAuth token error:", tokenUrl, err.message);
+      return null;
     }
   }
   return null;
@@ -1499,10 +1512,15 @@ async function getShopierBearerToken() {
 
 app.post("/api/create-payment", async (req, res) => {
   try {
-    const bearerToken = await getShopierBearerToken();
     const clientId = (process.env.SHOPIER_CLIENT_ID || "").trim();
     const clientSecret = (process.env.SHOPIER_CLIENT_SECRET || "").trim();
     const hasOAuth = !!(clientId && clientSecret);
+    const bearerToken = await getShopierBearerToken();
+    if (hasOAuth) {
+      console.warn("[Shopier] OAuth2 kullanılıyor (CLIENT_ID tanımlı, token " + (bearerToken ? "alındı" : "alınamadı") + ")");
+    } else if (bearerToken) {
+      console.warn("[Shopier] PAT (SHOPIER_API_KEY) kullanılıyor");
+    }
     if (!bearerToken && !hasOAuth) {
       return res.status(503).json({
         error: "PAYMENT_NOT_CONFIGURED",
@@ -1561,42 +1579,34 @@ app.post("/api/create-payment", async (req, res) => {
       "Accept": "application/json",
     };
 
-    let shopierRes = await axios({
-      method: "POST",
-      url: SHOPIER_ORDERS_URL,
-      headers,
-      data: requestBody,
-      validateStatus: () => true,
-    }).catch((err) => {
-      if (err.response) return err.response;
-      throw err;
-    });
+    let shopierRes = null;
+    let lastTriedUrl = null;
+    let lastStatus = null;
+    let lastResponseBody = null;
 
-    if (shopierRes && shopierRes.status === 404) {
-      const checkoutUrl = SHOPIER_API_BASE + "/checkout";
-      shopierRes = await axios({
-        method: "POST",
-        url: checkoutUrl,
-        headers,
-        data: requestBody,
-        validateStatus: () => true,
-      }).catch((err) => {
-        if (err.response) return err.response;
-        throw err;
-      });
-      if (shopierRes && shopierRes.status === 404) {
-        try {
-          const rootRes = await axios({
-            method: "GET",
-            url: SHOPIER_API_BASE + "/",
-            headers: shopierAuthHeader(bearerToken),
-            validateStatus: () => true,
-          });
-          console.warn("Shopier v1 root GET response (404 fallback):", rootRes.status, JSON.stringify(rootRes.data));
-        } catch (e) {
-          console.warn("Shopier v1 root GET error:", e.message);
-        }
+    for (const paymentUrl of SHOPIER_PAYMENT_URLS) {
+      lastTriedUrl = paymentUrl;
+      try {
+        shopierRes = await axios({
+          method: "POST",
+          url: paymentUrl,
+          headers,
+          data: requestBody,
+          validateStatus: () => true,
+        });
+      } catch (err) {
+        shopierRes = err.response || null;
+        lastStatus = err.response && err.response.status;
+        lastResponseBody = err.response && err.response.data;
+        shopierErrorLog(err, "PAYMENT " + paymentUrl);
       }
+      if (shopierRes) {
+        lastStatus = shopierRes.status;
+        lastResponseBody = shopierRes.data;
+        console.warn("[Shopier] POST " + paymentUrl + " -> " + lastStatus);
+      }
+      if (shopierRes && shopierRes.status >= 200 && shopierRes.status < 400) break;
+      if (shopierRes && shopierRes.status === 404) continue;
     }
 
     if (!shopierRes) throw new Error("Shopier yanıtı alınamadı");
@@ -1604,10 +1614,12 @@ app.post("/api/create-payment", async (req, res) => {
     if (shopierRes.status >= 400) {
       const data = shopierRes.data || {};
       const errMsg = data.message || data.error || (typeof data === "string" ? data : null) || "Ödeme sayfası açılamadı. Lütfen daha sonra tekrar deneyin veya destek ile iletişime geçin.";
-      console.warn("Shopier v1 api/create-payment response:", shopierRes.status, shopierRes.data);
+      console.warn("[Shopier] create-payment failed. Son URL: " + (lastTriedUrl || "?") + " -> HTTP " + (lastStatus || "?"));
       return res.status(502).json({
         error: "SHOPIER_ERROR",
         message: errMsg,
+        lastUrl: lastTriedUrl,
+        lastStatus: lastStatus,
       });
     }
 
@@ -1630,7 +1642,9 @@ app.post("/api/create-payment", async (req, res) => {
       message: "Ödeme sayfası alınamadı. Lütfen daha sonra tekrar deneyin veya destek ile iletişime geçin.",
     });
   } catch (err) {
-    console.error("api/create-payment:", err);
+    const errMsg = err && err.message;
+    const errUrl = err && err.config && err.config.url;
+    console.warn("[Shopier] Error: " + (errMsg || "unknown") + " - URL: " + (errUrl || "N/A"));
     return res.status(500).json({
       error: "PAYMENT_ERROR",
       message: "Ödeme sayfası açılamadı. Lütfen daha sonra tekrar deneyin veya destek ile iletişime geçin.",
