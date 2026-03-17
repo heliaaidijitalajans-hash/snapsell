@@ -1511,6 +1511,9 @@ function shopierAuthHeader(token) {
 }
 
 async function getShopierAccessToken() {
+  const pat = String(process.env.SHOPIER_PAT || "").trim();
+  if (pat) return pat;
+
   const clientId = String(process.env.SHOPIER_CLIENT_ID || "").trim();
   const clientSecret = String(process.env.SHOPIER_CLIENT_SECRET || "").trim();
   if (!clientId || !clientSecret) return null;
@@ -1542,7 +1545,7 @@ async function getShopierAccessToken() {
         continue;
       }
       if (res.status !== 200 || !res.data) {
-        console.warn("[Shopier] Token response: " + tokenUrl + " -> " + res.status, res.data);
+        console.warn("[Shopier] Token response: " + tokenUrl + " -> " + res.status, JSON.stringify(res.data).slice(0, 300));
         return null;
       }
 
@@ -1557,6 +1560,9 @@ async function getShopierAccessToken() {
       }
     } catch (err) {
       shopierErrorLog(err, "TOKEN " + tokenUrl);
+      if (err.response) {
+        console.warn("[Shopier] Token hata detayı:", err.response.status, err.response.data ? JSON.stringify(err.response.data).slice(0, 200) : "");
+      }
       if (err.response && err.response.status === 404) continue;
       return null;
     }
@@ -1570,21 +1576,23 @@ async function getShopierBearerToken() {
 
 app.post("/api/create-payment", async (req, res) => {
   try {
+    const hasPat = Boolean(String(process.env.SHOPIER_PAT || "").trim());
     const clientId = String(process.env.SHOPIER_CLIENT_ID || "").trim();
     const clientSecret = String(process.env.SHOPIER_CLIENT_SECRET || "").trim();
-    if (!clientId || !clientSecret) {
+    const hasOAuth = Boolean(clientId && clientSecret);
+    if (!hasPat && !hasOAuth) {
       return res.status(503).json({
         error: "PAYMENT_NOT_CONFIGURED",
-        message: "Ödeme sistemi yapılandırılmadı. Railway'de SHOPIER_CLIENT_ID ve SHOPIER_CLIENT_SECRET tanımlayın (başındaki/sonundaki boşluklar otomatik temizlenir).",
+        message: "Ödeme sistemi yapılandırılmadı. SHOPIER_PAT (önerilen) veya SHOPIER_CLIENT_ID + SHOPIER_CLIENT_SECRET tanımlayın. Shopier Geliştirici Panelinden PAT oluşturabilirsiniz.",
       });
     }
 
     const bearerToken = await getShopierBearerToken();
     if (!bearerToken) {
-      console.warn("[Shopier] OAuth token alınamadı. CLIENT_ID/CLIENT_SECRET kontrol edin.");
+      console.warn("[Shopier] Token alınamadı. SHOPIER_PAT kullanıyorsanız doğrulayın; OAuth kullanıyorsanız CLIENT_ID/CLIENT_SECRET ve token URL erişimini kontrol edin.");
       return res.status(503).json({
         error: "SHOPIER_TOKEN_FAILED",
-        message: "Shopier OAuth token alınamadı. SHOPIER_CLIENT_ID ve SHOPIER_CLIENT_SECRET değerlerini kontrol edin; token URL'leri erişilebilir olmalı.",
+        message: "Shopier token alınamadı. SHOPIER_PAT kullanıyorsanız değeri kontrol edin. OAuth kullanıyorsanız SHOPIER_CLIENT_ID ve SHOPIER_CLIENT_SECRET doğru olmalı; sunucunuz api.shopier.com adresine erişebilmeli. Detay için sunucu loglarına bakın.",
       });
     }
 
