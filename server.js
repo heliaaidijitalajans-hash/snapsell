@@ -1798,6 +1798,59 @@ app.post("/api/shopier-webhook", async (req, res) => {
   }
 });
 
+/** Yıllık plan aylık kredi yükleme (Firestore). Cron ile tetiklenir; CRON_SECRET gerekir. Vercel limiti için burada. */
+const REFILL_YEARLY_CREDITS = 100;
+const REFILL_MAX_MONTHS = 12;
+app.get("/api/cron/refill-yearly-credits", refillYearlyCreditsHandler);
+app.post("/api/cron/refill-yearly-credits", refillYearlyCreditsHandler);
+async function refillYearlyCreditsHandler(req, res) {
+  res.setHeader("Content-Type", "application/json");
+  const secret = process.env.CRON_SECRET;
+  const auth = req.headers && (req.headers.authorization || req.headers.Authorization);
+  if (!secret || auth !== "Bearer " + secret) {
+    return res.status(401).json({ success: false, error: "Unauthorized" });
+  }
+  try {
+    if (!adminAuth) initFirebaseAuth();
+    const admin = require("firebase-admin");
+    const db = admin.firestore();
+    const { FieldValue } = require("firebase-admin/firestore");
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const snapshot = await db.collection("users")
+      .where("plan", "==", "pro_yearly")
+      .where("next_refill_at", "<=", nowIso)
+      .get();
+    const refilled = [];
+    const errors = [];
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      const subscriptionEnd = data.subscription_end ? new Date(data.subscription_end) : null;
+      const monthsRefilled = Number(data.months_refilled) || 0;
+      if (monthsRefilled >= REFILL_MAX_MONTHS || (subscriptionEnd && subscriptionEnd <= now)) continue;
+      const nextRefillAt = data.next_refill_at ? new Date(data.next_refill_at) : now;
+      const nextRefillDate = new Date(nextRefillAt);
+      nextRefillDate.setMonth(nextRefillDate.getMonth() + 1);
+      try {
+        await doc.ref.update({
+          credits: FieldValue.increment(REFILL_YEARLY_CREDITS),
+          months_refilled: monthsRefilled + 1,
+          next_refill_at: nextRefillDate.toISOString(),
+          updatedAt: nowIso
+        });
+        refilled.push({ userId: doc.id, email: data.email || null });
+      } catch (e) {
+        errors.push({ userId: doc.id, error: e.message });
+      }
+    }
+    console.log("[refill-yearly] refilled:", refilled.length, "errors:", errors.length);
+    return res.status(200).json({ success: true, refilled: refilled.length, errors: errors.length, details: { refilled, errors } });
+  } catch (err) {
+    console.error("[refill-yearly] error:", err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+}
+
 app.post("/api/register", async (req, res) => {
   try {
     const sessionId = randomUUID();
