@@ -24,22 +24,24 @@ function PlanCard({
   t,
   onCtaClick,
   loading,
+  displayCurrency,
+  displayPrice,
 }: {
   plan: PlanItem;
   t: (key: string) => string;
   onCtaClick: () => void;
   loading?: boolean;
+  displayCurrency?: "TRY" | "USD";
+  displayPrice?: number | string;
 }) {
-  const currency = plan.currency === "USD" ? "$" : "₺";
+  const currency = (displayCurrency || plan.currency) === "USD" ? "$" : "₺";
+  const price = displayPrice !== undefined ? displayPrice : plan.price;
   const priceDisplay =
-    plan.price === "—" || plan.price === ""
+    price === "—" || price === "" || (typeof price === "number" && !Number.isFinite(price))
       ? t("pricing.custom")
-      : `${currency}${plan.price}`;
+      : `${currency}${typeof price === "number" ? (currency === "$" ? price.toFixed(2) : price) : price}`;
   const showPeriod =
-    plan.price !== "—" &&
-    plan.price !== "" &&
-    plan.period &&
-    t("pricing.perPeriod");
+    price !== "—" && price !== "" && plan.period && t("pricing.perPeriod");
 
   return (
     <div
@@ -108,6 +110,21 @@ export default function PricingPage() {
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [isTurkey, setIsTurkey] = useState<boolean>(true);
+  const [usdToTry, setUsdToTry] = useState<number>(34);
+
+  useEffect(() => {
+    const c = new AbortController();
+    fetch(`${getApiBase()}/api/geo`, { signal: c.signal })
+      .then((r) => r.json())
+      .then((d) => setIsTurkey(d.isTurkey === true))
+      .catch(() => setIsTurkey(true));
+    fetch(`${getApiBase()}/api/exchange-rate`, { signal: c.signal })
+      .then((r) => r.json())
+      .then((d) => setUsdToTry(typeof d.usdToTry === "number" && d.usdToTry > 0 ? d.usdToTry : 34))
+      .catch(() => setUsdToTry(34));
+    return () => c.abort();
+  }, []);
 
   const submitToShopier = useCallback((postUrl: string, params: Record<string, string>) => {
     const form = document.createElement("form");
@@ -126,28 +143,34 @@ export default function PricingPage() {
   }, []);
 
   const handleCtaClick = useCallback(
-    async (plan: PlanItem) => {
+    async (
+      plan: PlanItem,
+      payment: { price: number; currency: "TRY" | "USD"; usdToTryRate?: number }
+    ) => {
       setPaymentError(null);
       const planId = plan.id || plan.name;
       setPaymentLoading(planId);
       try {
-        const price = plan.price === "—" || plan.price === "" ? 0 : Number(plan.price);
+        const payload: Record<string, unknown> = {
+          plan: {
+            id: plan.id,
+            name: plan.name,
+            price: payment.price,
+            currency: payment.currency,
+          },
+          buyer: {
+            name: user?.displayName ?? "",
+            email: user?.email ?? "",
+            phone: "",
+          },
+        };
+        if (payment.currency === "USD" && payment.usdToTryRate) {
+          payload.usdToTryRate = payment.usdToTryRate;
+        }
         const res = await fetch(`${getApiBase()}/api/create-payment`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            plan: {
-              id: plan.id,
-              name: plan.name,
-              price: Number.isFinite(price) ? price : 0,
-              currency: plan.currency || "TRY",
-            },
-            buyer: {
-              name: user?.displayName ?? "",
-              email: user?.email ?? "",
-              phone: "",
-            },
-          }),
+          body: JSON.stringify(payload),
         });
         const data = await apiJson<{ paymentUrl?: string; postUrl?: string; params?: Record<string, string>; message?: string; error?: string }>(res);
         if (!res.ok) {
@@ -173,6 +196,32 @@ export default function PricingPage() {
     [user?.displayName, user?.email, submitToShopier]
   );
 
+  const getPaymentPayload = useCallback(
+    (plan: PlanItem) => {
+      const raw = plan.price === "—" || plan.price === "" ? 0 : Number(plan.price);
+      const tlPrice = Number.isFinite(raw) ? raw : 0;
+      if (isTurkey) {
+        return { price: tlPrice, currency: "TRY" as const };
+      }
+      const usdPrice = usdToTry > 0 ? tlPrice / usdToTry : tlPrice;
+      return { price: Math.round(usdPrice * 100) / 100, currency: "USD" as const, usdToTryRate: usdToTry };
+    },
+    [isTurkey, usdToTry]
+  );
+
+  const getDisplayForPlan = useCallback(
+    (plan: PlanItem) => {
+      const raw = plan.price === "—" || plan.price === "" ? null : Number(plan.price);
+      const tlPrice = raw != null && Number.isFinite(raw) ? raw : null;
+      if (isTurkey || tlPrice == null) {
+        return { displayCurrency: "TRY" as const, displayPrice: plan.price };
+      }
+      const usdPrice = usdToTry > 0 ? tlPrice / usdToTry : tlPrice;
+      return { displayCurrency: "USD" as const, displayPrice: Math.round(usdPrice * 100) / 100 };
+    },
+    [isTurkey, usdToTry]
+  );
+
   useEffect(() => {
     const controller = new AbortController();
     fetch(`${getApiBase()}/api/site-plans`, { signal: controller.signal })
@@ -182,7 +231,7 @@ export default function PricingPage() {
           return (data as { plans: PlanItem[] }).plans.map((p) => ({
             ...p,
             features: p.features || [],
-            currency: p.currency || "USD",
+            currency: p.currency || "TRY",
           }));
         }
         if (Array.isArray(data)) return data;
@@ -221,15 +270,21 @@ export default function PricingPage() {
       )}
       <section>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
-          {plans.map((plan) => (
-            <PlanCard
-              key={plan.id || plan.name}
-              plan={plan}
-              t={t}
-              onCtaClick={() => handleCtaClick(plan)}
-              loading={paymentLoading === (plan.id || plan.name)}
-            />
-          ))}
+          {plans.map((plan) => {
+            const display = getDisplayForPlan(plan);
+            const payment = getPaymentPayload(plan);
+            return (
+              <PlanCard
+                key={plan.id || plan.name}
+                plan={plan}
+                t={t}
+                onCtaClick={() => handleCtaClick(plan, payment)}
+                loading={paymentLoading === (plan.id || plan.name)}
+                displayCurrency={display.displayCurrency}
+                displayPrice={display.displayPrice}
+              />
+            );
+          })}
         </div>
         <p className="text-center text-gray-500 mt-10 text-sm">
           {t("pricing.autoRenew")}

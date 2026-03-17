@@ -120,8 +120,8 @@ const DEFAULT_SITE_PLANS = [
   { id: "free", name: "Ücretsiz", price: "0", period: "ay", description: "3 dönüşüm, temel özellikler", features: ["3 dönüşüm", "Temel özellikler"], cta: "Ücretsiz başla", href: "/register", highlighted: false, planType: "conversion", credits: 30 },
   { id: "monthly_plan", name: "Aylık plan", price: "40", period: "ay", description: "30 dönüşüm", features: ["30 dönüşüm", "Tüm özellikler", "SEO açıklama", "Fiyat analizi"], cta: "Başla", href: "/register?plan=monthly_plan", highlighted: true, planType: "conversion", credits: 300 },
   { id: "monthly_plan_pro", name: "Aylık plan Pro", price: "65", period: "ay", description: "80 dönüşüm", features: ["80 dönüşüm", "Tüm özellikler", "SEO açıklama", "Fiyat analizi"], cta: "Pro'ya geç", href: "/register?plan=monthly_plan_pro", highlighted: false, planType: "conversion", credits: 800 },
-  { id: "yearly_plan", name: "Yıllık plan", price: "440", period: "yıl", description: "1200 dönüşüm, aylık 100 yüklenecek", features: ["1200 dönüşüm", "Aylık 100 dönüşüm yüklenecek", "Tüm özellikler", "SEO açıklama", "Fiyat analizi", "Özellik gelişmeleri dahil"], cta: "Yıllık seç", href: "/register?plan=yearly_plan", highlighted: false, planType: "conversion", credits: 12000 },
-  { id: "enterprise", name: "Kurumsal", price: "—", period: "yıl", description: "Bize ulaşın", features: ["Ekibiniz ile takım kurma ayrıcalığı", "Tüm özellikler", "SEO açıklama", "Fiyat analizi", "Yüklenecek özellik gelişmeleri dahil", "Yıllık faturalandırma"], cta: "Bize ulaşın", href: "/destek", highlighted: false, planType: "conversion", credits: 0 },
+  { id: "yearly_plan", name: "Yıllık plan", price: "440", period: "yıl", description: "1200 dönüşüm, aylık 100 yüklenecek", features: ["1200 dönüşüm", "Aylık 100 dönüşüm yüklenecek", "Tüm özellikler", "SEO açıklama", "Fiyat analizi", "Yüklenecek özellik geliştirmeleri dahil"], cta: "Yıllık seç", href: "/register?plan=yearly_plan", highlighted: false, planType: "conversion", credits: 12000 },
+  { id: "enterprise", name: "Kurumsal", price: "—", period: "yıl", description: "Bize ulaşın", features: ["Ekibiniz ile takım kurma ayrıcalığı", "Tüm özellikler", "SEO açıklama", "Fiyat analizi", "Yüklenecek özellik geliştirmeleri dahil", "Yıllık faturalandırma"], cta: "Bize ulaşın", href: "/destek", highlighted: false, planType: "conversion", credits: 0 },
   { id: "addon", name: "Ek paket", price: "15", period: "ay", description: "25 dönüşüm", features: ["25 dönüşüm", "Tüm özellikler dahil"], cta: "Ek paket al", href: "/register?plan=addon", highlighted: false, planType: "addon", credits: 250 }
 ];
 
@@ -280,6 +280,23 @@ function cleanupProcessedImages() {
   }
 }
 
+/** E-posta ile kullanıcı bul (Supabase veya bellek). Webhook için. */
+async function getUserByEmail(email) {
+  if (!email || String(email).trim() === "") return null;
+  const emailNorm = String(email).trim().toLowerCase();
+  if (supabase) {
+    const { data: row, error } = await supabase.from("users").select("*").ilike("email", emailNorm).maybeSingle();
+    if (error || !row) return null;
+    return { id: row.id, credits: row.credits ?? FREE_CREDITS, plan: row.plan || "free", email: row.email, displayName: row.display_name };
+  }
+  for (const [id, u] of memoryUsers.entries()) {
+    if (u.email && String(u.email).trim().toLowerCase() === emailNorm) {
+      return { id, credits: u.credits ?? FREE_CREDITS, plan: u.plan || "free", email: u.email, displayName: u.displayName };
+    }
+  }
+  return null;
+}
+
 /** Veritabanında kullanıcı güncelle (Supabase veya bellek). */
 async function updateUserInDb(userId, data) {
   const payload = {};
@@ -288,6 +305,8 @@ async function updateUserInDb(userId, data) {
   if (data.totalConversions != null) payload.total_conversions = data.totalConversions;
   if (data.email != null) payload.email = data.email;
   if (data.displayName != null) payload.display_name = data.displayName;
+  if (data.subscription_start != null) payload.subscription_start = data.subscription_start;
+  if (data.subscription_end != null) payload.subscription_end = data.subscription_end;
   if (Object.keys(payload).length === 0) return;
   if (supabase) {
     const { error } = await supabase.from("users").update(payload).eq("id", userId);
@@ -301,6 +320,8 @@ async function updateUserInDb(userId, data) {
     if (data.totalConversions != null) u.totalConversions = data.totalConversions;
     if (data.email != null) u.email = data.email;
     if (data.displayName != null) u.displayName = data.displayName;
+    if (data.subscription_start != null) u.subscription_start = data.subscription_start;
+    if (data.subscription_end != null) u.subscription_end = data.subscription_end;
     saveMemoryUsers();
   }
 }
@@ -605,6 +626,43 @@ app.get("/api/plans", async function (req, res) {
 
 app.get("/api/stripe", (req, res) => {
   res.status(200).json({ message: "Payment system coming soon" });
+});
+
+/** Konum: IP ile ülke (ip-api.com, ücretsiz). Hata durumunda varsayılan TR (TL). */
+app.get("/api/geo", async (req, res) => {
+  try {
+    const forwarded = req.headers["x-forwarded-for"];
+    const clientIp = forwarded ? String(forwarded).split(",")[0].trim() : (req.socket && req.socket.remoteAddress) || req.ip || "";
+    const ip = clientIp && clientIp !== "::1" && clientIp !== "127.0.0.1" ? clientIp : "";
+    const url = ip ? "http://ip-api.com/json/" + encodeURIComponent(ip) + "?fields=countryCode" : "http://ip-api.com/json/?fields=countryCode";
+    const ax = await axios.get(url, { timeout: 5000, validateStatus: () => true });
+    const code = (ax.data && ax.data.countryCode) ? String(ax.data.countryCode).toUpperCase().slice(0, 2) : null;
+    const countryCode = code || "TR";
+    const isTurkey = countryCode === "TR";
+    return res.json({ countryCode, isTurkey });
+  } catch (err) {
+    return res.json({ countryCode: "TR", isTurkey: true });
+  }
+});
+
+/** Döviz kuru: USD -> TRY (ücretsiz API, cache 1 saat). */
+let exchangeRateCache = { usdToTry: 34, expiresAt: 0 };
+const EXCHANGE_CACHE_MS = 60 * 60 * 1000;
+
+app.get("/api/exchange-rate", async (req, res) => {
+  const now = Date.now();
+  if (exchangeRateCache.expiresAt > now) {
+    return res.json({ usdToTry: exchangeRateCache.usdToTry });
+  }
+  try {
+    const ax = await axios.get("https://api.exchangerate-api.com/v4/latest/USD", { timeout: 8000, validateStatus: () => true });
+    const rate = ax.data && ax.data.rates && typeof ax.data.rates.TRY === "number" ? ax.data.rates.TRY : null;
+    if (rate && rate > 0) {
+      exchangeRateCache = { usdToTry: rate, expiresAt: now + EXCHANGE_CACHE_MS };
+      return res.json({ usdToTry: rate });
+    }
+  } catch (err) {}
+  res.json({ usdToTry: exchangeRateCache.usdToTry });
 });
 
 /** Railway/deploy doğrulama: bu endpoint 200 dönerse admin route'ları yüklü demektir. */
@@ -1536,9 +1594,14 @@ app.post("/api/create-payment", async (req, res) => {
     const planName = String(plan.name || plan.id || "plan");
     let price = plan.price;
     if (price === undefined || price === null) price = 0;
-    const numPrice = typeof price === "number" ? price : parseFloat(String(price).replace(/[^\d.-]/g, "")) || 0;
+    let numPrice = typeof price === "number" ? price : parseFloat(String(price).replace(/[^\d.-]/g, "")) || 0;
+    let currency = (plan.currency || "TRY").toUpperCase().slice(0, 3);
+    const usdToTryRate = typeof body.usdToTryRate === "number" && body.usdToTryRate > 0 ? body.usdToTryRate : null;
+    if (currency === "USD" && usdToTryRate) {
+      numPrice = numPrice * usdToTryRate;
+      currency = "TRY";
+    }
     const totalOrderValue = numPrice.toFixed(2);
-    const currency = (plan.currency || "TRY").toUpperCase().slice(0, 3);
 
     const platformOrderId = "snapsell-" + Date.now() + "-" + randomUUID().slice(0, 8);
 
@@ -1662,6 +1725,78 @@ function handleShopierCallback(req, res) {
 }
 app.get("/api/shopier/callback", handleShopierCallback);
 app.post("/api/shopier/callback", express.urlencoded({ extended: true }), handleShopierCallback);
+
+/** Shopier webhook: ödeme onayı sonrası plan / kredi güncelleme. */
+const SHOPIER_CREDIT_PACK_CREDITS = 250;
+
+app.post("/api/shopier-webhook", async (req, res) => {
+  console.log("[Shopier webhook] webhook received");
+  if (req.method !== "POST") {
+    return res.status(405).json({ success: false });
+  }
+  try {
+    const body = req.body || {};
+    const order_id = body.order_id ?? body.orderId ?? body.platform_order_id ?? body.id;
+    const product_name = body.product_name ?? body.productName ?? body.title ?? "";
+    const buyer_email = body.buyer_email ?? body.buyerEmail ?? body.email ?? "";
+    const total_price = body.total_price ?? body.totalPrice ?? body.total_order_value ?? body.amount ?? 0;
+
+    console.log("[Shopier webhook] order info:", { order_id, product_name, buyer_email, total_price });
+
+    if (!buyer_email) {
+      console.warn("[Shopier webhook] missing buyer_email");
+      return res.status(200).json({ success: false });
+    }
+
+    const user = await getUserByEmail(buyer_email);
+    if (!user) {
+      console.warn("[Shopier webhook] user not found for email:", buyer_email);
+      return res.status(200).json({ success: true });
+    }
+
+    const name = String(product_name).toLowerCase();
+    const now = new Date();
+    const nowIso = now.toISOString();
+
+    if (name.includes("credit pack")) {
+      const addCredits = SHOPIER_CREDIT_PACK_CREDITS;
+      const newCredits = (user.credits ?? FREE_CREDITS) + addCredits;
+      await updateUserInDb(user.id, { credits: newCredits });
+      console.log("[Shopier webhook] user updated: credits added", addCredits, "userId:", user.id);
+      return res.status(200).json({ success: true });
+    }
+
+    let plan = user.plan;
+    let subscription_end = null;
+
+    if (name.includes("starter")) {
+      plan = "starter";
+      const end = new Date(now);
+      end.setMonth(end.getMonth() + 1);
+      subscription_end = end.toISOString();
+    } else if (name.includes("pro monthly")) {
+      plan = "pro_monthly";
+      const end = new Date(now);
+      end.setMonth(end.getMonth() + 1);
+      subscription_end = end.toISOString();
+    } else if (name.includes("pro yearly")) {
+      plan = "pro_yearly";
+      const end = new Date(now);
+      end.setFullYear(end.getFullYear() + 1);
+      subscription_end = end.toISOString();
+    }
+
+    const updateData = { plan, subscription_start: nowIso };
+    if (subscription_end) updateData.subscription_end = subscription_end;
+    await updateUserInDb(user.id, updateData);
+
+    console.log("[Shopier webhook] user updated:", { userId: user.id, plan, subscription_start: nowIso, subscription_end });
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    console.error("[Shopier webhook] error:", err.message);
+    return res.status(200).json({ success: false });
+  }
+});
 
 app.post("/api/register", async (req, res) => {
   try {
