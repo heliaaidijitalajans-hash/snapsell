@@ -1494,7 +1494,9 @@ const SHOPIER_PAYMENT_URLS = [
   "https://api.shopier.com/v1/checkout",
   "https://api.shopier.com/v1/orders",
 ];
-const SHOPIER_REDIRECT_URI = "https://snapsell.website";
+// Shopier: ödeme sonrası tarayıcı dönüşü için callback endpoint.
+// Bu endpoint Vercel'de /api/shopier-callback'e gider ve oradan /dashboard veya /pricing'e redirect edilir.
+const SHOPIER_REDIRECT_URI = String(process.env.SHOPIER_CALLBACK_URL || "https://snapsell.website/api/shopier-callback").trim();
 
 let shopierTokenCache = { access_token: null, expires_at: 0 };
 
@@ -1580,6 +1582,7 @@ app.post("/api/create-payment", async (req, res) => {
     const clientId = String(process.env.SHOPIER_CLIENT_ID || "").trim();
     const clientSecret = String(process.env.SHOPIER_CLIENT_SECRET || "").trim();
     const hasOAuth = Boolean(clientId && clientSecret);
+    console.log("[Shopier] token config:", { hasPat, hasOAuth });
     if (!hasPat && !hasOAuth) {
       return res.status(503).json({
         error: "PAYMENT_NOT_CONFIGURED",
@@ -1733,6 +1736,13 @@ function handleShopierCallback(req, res) {
 }
 app.get("/api/shopier/callback", handleShopierCallback);
 app.post("/api/shopier/callback", express.urlencoded({ extended: true }), handleShopierCallback);
+
+// Bazı Shopier kurulumlarında callback URL yolu farklı path'e set edilebiliyor.
+// Bu alias route'lar, "Endpoint not found" hatalarını önlemek için aynı handler'ı paylaşır.
+app.get("/api/callback", handleShopierCallback);
+app.post("/api/callback", express.urlencoded({ extended: true }), handleShopierCallback);
+app.get("/callback", handleShopierCallback);
+app.post("/callback", express.urlencoded({ extended: true }), handleShopierCallback);
 
 /** Shopier webhook: ödeme onayı sonrası plan / kredi güncelleme. */
 const SHOPIER_CREDIT_PACK_CREDITS = 250;
