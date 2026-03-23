@@ -29,10 +29,11 @@ export default async function handler(req, res) {
   const status = q.status ?? q.payment_status ?? q.paymentStatus ?? q.result ?? null;
 
   const hasOrder = orderId != null && String(orderId).trim().length > 0;
-  const hasStatus = status != null && String(status).trim().length > 0;
+  const statusNorm = String(status || "").toLowerCase();
+  const isSuccess = ["success", "ok", "paid", "approved", "1", "true"].includes(statusNorm);
 
   const frontendBase = getFrontendBaseUrl();
-  const targetPath = hasOrder && hasStatus ? "/dashboard" : "/pricing";
+  const targetPath = hasOrder && isSuccess ? "/dashboard" : "/pricing";
   const targetUrl = frontendBase + targetPath;
 
   res.status(302).setHeader("Location", targetUrl).end();

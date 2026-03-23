@@ -15,16 +15,12 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const { randomUUID } = require("crypto");
+const { createServiceClient } = require("./lib/supabase");
 const FormDataPkg = (function () { try { return require("form-data"); } catch (_) { return null; } })();
 let supabase = null;
 try {
-  const url = (process.env.SUPABASE_URL || "").trim();
-  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "").trim();
-  if (url && key) {
-    const { createClient } = require("@supabase/supabase-js");
-    supabase = createClient(url, key);
-    console.log("Supabase hazir.");
-  }
+  supabase = createServiceClient();
+  console.log("Supabase hazir.");
 } catch (err) {
   console.warn("Supabase yuklenemedi:", err.message);
 }
@@ -41,7 +37,7 @@ process.on("unhandledRejection", function (reason, promise) {
 });
 
 const CREDITS_PER_CONVERSION = 10;
-const FREE_CREDITS = 30;
+const FREE_CREDITS = 100;
 const DEMO_REFILL_CREDITS = 100;
 const USERS_COLLECTION = "users";
 
@@ -209,27 +205,14 @@ function resolvePlan(plan) {
   return plan || "free";
 }
 
-let adminAuth = null;
-let firebaseAuthInitDone = false;
-
-/** Firebase: sadece Auth (Google token doğrulama). Veritabanı Supabase. */
-function initFirebaseAuth() {
-  if (firebaseAuthInitDone) return;
-  firebaseAuthInitDone = true;
+async function getSupabaseAuthUserFromToken(token) {
+  if (!supabase || !token) return null;
   try {
-    const admin = require("firebase-admin");
-    if (!admin.apps.length) {
-      if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-        const cred = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
-        admin.initializeApp({ credential: admin.credential.cert(cred) });
-      } else {
-        admin.initializeApp({ credential: admin.credential.applicationDefault() });
-      }
-    }
-    adminAuth = admin.auth();
-    console.log("Firebase Auth hazir.");
-  } catch (err) {
-    console.warn("Firebase Auth baslatilamadi:", err.message);
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data || !data.user) return null;
+    return data.user;
+  } catch (_) {
+    return null;
   }
 }
 
@@ -373,10 +356,51 @@ async function getOrCreateUser(sessionIdOrUid, opts) {
       credits: FREE_CREDITS,
       total_conversions: 0
     };
-    if (opts.email != null) insertRow.email = String(opts.email);
+    if (opts.email != null) insertRow.email = String(opts.email).trim().toLowerCase();
     if (opts.displayName != null) insertRow.display_name = String(opts.displayName);
+    console.log("👤 Creating Supabase user");
     const { error: insertErr } = await supabase.from("users").insert(insertRow);
-    if (insertErr) throw new Error(insertErr.message);
+    if (insertErr) {
+      if (insertErr.code === "23505") {
+        const { data: again, error: fetchAgain } = await supabase.from("users").select("*").eq("id", sessionIdOrUid).maybeSingle();
+        if (!fetchAgain && again) {
+          const planResolved = resolvePlan(again.plan);
+          const createdAt = again.created_at ? new Date(again.created_at) : null;
+          console.log("✅ User created");
+          return {
+            id: sessionIdOrUid,
+            ref: { update: async (d) => updateUserInDb(sessionIdOrUid, d) },
+            credits: again.credits ?? FREE_CREDITS,
+            plan: planResolved,
+            email: again.email || null,
+            displayName: again.display_name || null,
+            createdAt,
+            totalConversions: again.total_conversions ?? 0
+          };
+        }
+        if (opts.email) {
+          const emailNorm = String(opts.email).trim().toLowerCase();
+          const { data: byEmail, error: emailFetchErr } = await supabase.from("users").select("*").eq("email", emailNorm).maybeSingle();
+          if (!emailFetchErr && byEmail) {
+            const planResolved = resolvePlan(byEmail.plan);
+            const createdAt = byEmail.created_at ? new Date(byEmail.created_at) : null;
+            console.log("✅ User created");
+            return {
+              id: byEmail.id,
+              ref: { update: async (d) => updateUserInDb(byEmail.id, d) },
+              credits: byEmail.credits ?? FREE_CREDITS,
+              plan: planResolved,
+              email: byEmail.email || null,
+              displayName: byEmail.display_name || null,
+              createdAt,
+              totalConversions: byEmail.total_conversions ?? 0
+            };
+          }
+        }
+      }
+      throw new Error(insertErr.message);
+    }
+    console.log("✅ User created");
     try { incrementDailyStat("signups"); } catch (_) {}
     return {
       id: sessionIdOrUid,
@@ -444,16 +468,15 @@ async function getRequestUser(req) {
   if (authHeader && typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
     const token = authHeader.slice(7).trim();
     if (!token) return null;
-    if (!adminAuth) initFirebaseAuth();
-    if (!adminAuth) return null;
     try {
-      const decoded = await adminAuth.verifyIdToken(token);
-      const uid = decoded.uid;
-      const email = decoded.email || null;
-      const displayName = decoded.name || decoded.email || null;
+      const supabaseUser = await getSupabaseAuthUserFromToken(token);
+      if (!supabaseUser) return null;
+      const uid = supabaseUser.id;
+      const email = supabaseUser.email || null;
+      const displayName = (supabaseUser.user_metadata && (supabaseUser.user_metadata.full_name || supabaseUser.user_metadata.name)) || supabaseUser.email || null;
       return await getOrCreateUser(uid, { email, displayName });
     } catch (e) {
-      console.warn("Firebase token verify:", e.message);
+      console.warn("Supabase token verify:", e.message);
       return null;
     }
   }
@@ -579,12 +602,9 @@ async function requireAdmin(req, res, next) {
   if (token === ADMIN_PASSWORD) return next();
   if (bearerToken && bearerToken !== ADMIN_PASSWORD) {
     try {
-      initFirebaseAuth();
-      if (adminAuth) {
-        const decoded = await adminAuth.verifyIdToken(bearerToken);
-        const email = (decoded.email || "").toLowerCase();
-        if (email === ADMIN_EMAIL) return next();
-      }
+      const sbUser = await getSupabaseAuthUserFromToken(bearerToken);
+      const email = (sbUser && sbUser.email ? sbUser.email : "").toLowerCase();
+      if (email === ADMIN_EMAIL) return next();
     } catch (e) { /* token gecersiz */ }
   }
   if (!ADMIN_PASSWORD) return res.status(403).json({ error: "Admin sifresi .env icinde ADMIN_PASSWORD olarak ayarlanmali." });
@@ -910,7 +930,7 @@ app.get("/admin/subscribers", requireAdmin, async function (req, res) {
   res.json({ monthly, yearly, all: list });
 });
 
-/** Admin: Görsel düzenleme kayıtları. Şimdilik boş dizi; ileride data/image-edits.json veya Firestore ile doldurulabilir. */
+/** Admin: Görsel düzenleme kayıtları. Şimdilik boş dizi; ileride data/image-edits.json ile doldurulabilir. */
 app.get("/admin/image-edits", requireAdmin, function (req, res) {
   const loaded = loadJsonFile("image-edits.json", null);
   const edits = Array.isArray(loaded) ? loaded : [];
@@ -1816,7 +1836,7 @@ app.post("/api/shopier-webhook", async (req, res) => {
   }
 });
 
-/** Yıllık plan aylık kredi yükleme (Firestore). Cron ile tetiklenir; CRON_SECRET gerekir. Vercel limiti için burada. */
+/** Yıllık plan aylık kredi yükleme (Supabase). Cron ile tetiklenir; CRON_SECRET gerekir. Vercel limiti için burada. */
 const REFILL_YEARLY_CREDITS = 100;
 const REFILL_MAX_MONTHS = 12;
 app.get("/api/cron/refill-yearly-credits", refillYearlyCreditsHandler);
@@ -1829,36 +1849,35 @@ async function refillYearlyCreditsHandler(req, res) {
     return res.status(401).json({ success: false, error: "Unauthorized" });
   }
   try {
-    if (!adminAuth) initFirebaseAuth();
-    const admin = require("firebase-admin");
-    const db = admin.firestore();
-    const { FieldValue } = require("firebase-admin/firestore");
     const now = new Date();
     const nowIso = now.toISOString();
-    const snapshot = await db.collection("users")
-      .where("plan", "==", "pro_yearly")
-      .where("next_refill_at", "<=", nowIso)
-      .get();
+    if (!supabase) return res.status(503).json({ success: false, error: "Supabase not configured" });
+    const { data: rows, error: listErr } = await supabase
+      .from("users")
+      .select("id, email, credits, subscription_end, months_refilled, next_refill_at")
+      .eq("plan", "pro_yearly")
+      .lte("next_refill_at", nowIso);
+    if (listErr) throw new Error(listErr.message);
     const refilled = [];
     const errors = [];
-    for (const doc of snapshot.docs) {
-      const data = doc.data();
-      const subscriptionEnd = data.subscription_end ? new Date(data.subscription_end) : null;
-      const monthsRefilled = Number(data.months_refilled) || 0;
+    for (const row of (rows || [])) {
+      const subscriptionEnd = row.subscription_end ? new Date(row.subscription_end) : null;
+      const monthsRefilled = Number(row.months_refilled) || 0;
       if (monthsRefilled >= REFILL_MAX_MONTHS || (subscriptionEnd && subscriptionEnd <= now)) continue;
-      const nextRefillAt = data.next_refill_at ? new Date(data.next_refill_at) : now;
+      const nextRefillAt = row.next_refill_at ? new Date(row.next_refill_at) : now;
       const nextRefillDate = new Date(nextRefillAt);
       nextRefillDate.setMonth(nextRefillDate.getMonth() + 1);
       try {
-        await doc.ref.update({
-          credits: FieldValue.increment(REFILL_YEARLY_CREDITS),
+        const { error: updateErr } = await supabase.from("users").update({
+          credits: Number(row.credits || 0) + REFILL_YEARLY_CREDITS,
           months_refilled: monthsRefilled + 1,
           next_refill_at: nextRefillDate.toISOString(),
-          updatedAt: nowIso
-        });
-        refilled.push({ userId: doc.id, email: data.email || null });
+          updated_at: nowIso
+        }).eq("id", row.id);
+        if (updateErr) throw updateErr;
+        refilled.push({ userId: row.id, email: row.email || null });
       } catch (e) {
-        errors.push({ userId: doc.id, error: e.message });
+        errors.push({ userId: row.id, error: e.message });
       }
     }
     console.log("[refill-yearly] refilled:", refilled.length, "errors:", errors.length);
@@ -1891,21 +1910,20 @@ app.post("/api/register", async (req, res) => {
   }
 });
 
-app.post("/api/auth/google", async (req, res) => {
+async function syncSupabaseUserHandler(req, res) {
   try {
-    console.log("Received Google auth request");
-    const idToken = (req.body && req.body.idToken) ? String(req.body.idToken).trim() : "";
-    if (!idToken) {
-      return res.status(400).json({ error: "Missing idToken", message: "idToken gerekli" });
+    const authHeader = req.headers.authorization || "";
+    if (!authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Missing bearer token" });
     }
-    if (!adminAuth) initFirebaseAuth();
-    if (!adminAuth) {
-      return res.status(503).json({ error: "Google giris yapilandirilmadi" });
+    const accessToken = authHeader.slice(7).trim();
+    const sbUser = await getSupabaseAuthUserFromToken(accessToken);
+    if (!sbUser) {
+      return res.status(401).json({ error: "Invalid token" });
     }
-    const decoded = await adminAuth.verifyIdToken(idToken);
-    const uid = decoded.uid;
-    const email = decoded.email || null;
-    const displayName = decoded.name || decoded.email || null;
+    const uid = sbUser.id;
+    const email = sbUser.email || null;
+    const displayName = (sbUser.user_metadata && (sbUser.user_metadata.full_name || sbUser.user_metadata.name)) || sbUser.email || null;
     const user = await getOrCreateUser(uid, { email, displayName });
     try {
       await recordLogin(uid, email, displayName);
@@ -1924,15 +1942,14 @@ app.post("/api/auth/google", async (req, res) => {
       isAdmin: !!isAdmin
     });
   } catch (error) {
-    console.error("Google auth error:", error);
+    console.error("Supabase auth sync error:", error);
     if (res.headersSent) return;
-    const isTokenError = error && (error.code === "auth/id-token-expired" || error.code === "auth/argument-error" || error.message && /token|invalid|expired/i.test(error.message));
-    if (isTokenError) {
-      return res.status(401).json({ error: "Gecersiz token", message: error.message || "Token verification failed" });
-    }
-    return res.status(500).json({ error: "Google authentication failed", message: error.message || "Internal error" });
+    return res.status(500).json({ error: "Supabase authentication failed", message: error.message || "Internal error" });
   }
-});
+}
+
+app.post("/api/auth/supabase", syncSupabaseUserHandler);
+app.post("/api/auth/google", syncSupabaseUserHandler);
 
 app.get("/api/credits", async (req, res) => {
   const user = await getRequestUser(req);

@@ -9,22 +9,12 @@
  *  - "✅ User updated"
  */
 
-import { getFirestore } from "../lib/firebase-admin.js";
+import supabaseLib from "../lib/supabase.js";
 
-const USERS_COLLECTION = "users";
+const { createServiceClient } = supabaseLib;
 
-// Internal credits unit matches pricing endpoint (addon/ek paket = 250 credits).
 const CREDIT_PACK_CREDITS = 250;
-
-// Credits granted/used for plan activation.
-const PLAN_CREDITS = {
-  starter: 300,
-  pro_monthly: 800,
-  // For yearly: keep "first month" behavior (monthly 100 refill).
-  pro_yearly: 100,
-};
-
-// Allow Credit Pack only for paid plans.
+const PLAN_CREDITS = { starter: 300, pro_monthly: 800, pro_yearly: 100 };
 const ADDON_ALLOWED_PLANS = ["starter", "pro_monthly", "pro_yearly"];
 
 function normalizeEmail(email) {
@@ -70,7 +60,7 @@ export default async function handler(req, res) {
     }
     if (!body || typeof body !== "object") body = {};
 
-    console.log("📦 Shopier body:", body);
+    console.log("📦 Data:", body);
 
     // Parse attempts (fields requested by the user).
     const order_id = body.order_id ?? body.orderId ?? body.platform_order_id ?? body.id ?? null;
@@ -85,21 +75,24 @@ export default async function handler(req, res) {
     if (!buyer_email) throw new Error("Missing buyer_email");
     if (!action) throw new Error("Unknown product_name: " + String(product_name));
 
-    const db = getFirestore();
-    const emailNorm = buyer_email;
-    const snapshot = await db
-      .collection(USERS_COLLECTION)
-      .where("email", "==", emailNorm)
-      .limit(1)
-      .get();
-
-    if (snapshot.empty) {
-      throw new Error("User not found for buyer_email: " + buyer_email);
+    let supabase;
+    try {
+      supabase = createServiceClient();
+    } catch (e) {
+      console.error("Shopier webhook: Supabase not configured", e && e.message ? e.message : e);
+      return res.status(503).json({ success: false, error: "SUPABASE_NOT_CONFIGURED" });
     }
 
-    const doc = snapshot.docs[0];
-    const userId = doc.id;
-    const userData = doc.data() || {};
+    const emailNorm = buyer_email;
+    const { data: userData, error: findErr } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", emailNorm)
+      .maybeSingle();
+    if (findErr || !userData) {
+      throw new Error("User not found for buyer_email: " + buyer_email);
+    }
+    const userId = userData.id;
 
     console.log("👤 User found:", userId);
 
@@ -112,7 +105,7 @@ export default async function handler(req, res) {
       credits: userData.credits ?? 0,
       subscription_start: userData.subscription_start ?? null,
       subscription_end: userData.subscription_end ?? null,
-      updatedAt: nowIso,
+      updated_at: nowIso,
     };
 
     if (action.type === "credits") {
@@ -152,9 +145,9 @@ export default async function handler(req, res) {
     updateData.plan = updateData.plan ?? "free";
     updateData.credits = Number(updateData.credits) || 0;
 
-    // Persist.
-    await doc.ref.update(updateData);
-    console.log("✅ User updated");
+    const { error: updateErr } = await supabase.from("users").update(updateData).eq("id", userId);
+    if (updateErr) throw new Error(updateErr.message || "Failed to update user");
+    console.log("✅ Plan updated");
 
     return res.status(200).json({ success: true });
   } catch (err) {

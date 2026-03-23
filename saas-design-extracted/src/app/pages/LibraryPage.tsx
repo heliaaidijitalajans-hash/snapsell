@@ -1,14 +1,13 @@
 import { useState, useEffect } from "react";
 import { useLanguage } from "../contexts/LanguageContext";
 import { useAuth } from "../contexts/AuthContext";
-import { getFirebaseFirestore } from "../lib/firebase";
-import { collection, query, where, orderBy, onSnapshot, type Unsubscribe } from "firebase/firestore";
+import { supabase } from "../lib/supabase";
 import { Link } from "react-router";
 
 export type LibraryImage = {
   id: string;
   imageUrl: string;
-  createdAt: { seconds: number } | null;
+  createdAt: string | null;
   source?: string;
   prompt?: string;
 };
@@ -20,43 +19,39 @@ export function LibraryPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user?.uid) {
+    if (!user?.id) {
       setImages([]);
       setLoading(false);
       return;
     }
 
-    const db = getFirebaseFirestore();
-    const q = query(
-      collection(db, "images"),
-      where("userId", "==", user.uid),
-      orderBy("createdAt", "desc")
-    );
-
-    const unsub: Unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const list: LibraryImage[] = snapshot.docs.map((doc) => {
-          const d = doc.data();
-          return {
-            id: doc.id,
-            imageUrl: d.imageUrl || "",
-            createdAt: d.createdAt && typeof d.createdAt.seconds === "number" ? { seconds: d.createdAt.seconds } : null,
-            source: d.source,
-            prompt: d.prompt,
-          };
-        });
-        setImages(list);
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("images")
+        .select("id, image_url, created_at, source, prompt")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      if (cancelled) return;
+      if (error) {
+        console.warn("Library Supabase error:", error);
         setLoading(false);
-      },
-      (err) => {
-        console.warn("Library Firestore error:", err);
-        setLoading(false);
+        return;
       }
-    );
-
-    return () => unsub();
-  }, [user?.uid]);
+      const list: LibraryImage[] = (data || []).map((row) => ({
+        id: row.id,
+        imageUrl: row.image_url || "",
+        createdAt: row.created_at || null,
+        source: row.source || "",
+        prompt: row.prompt || "",
+      }));
+      setImages(list);
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">

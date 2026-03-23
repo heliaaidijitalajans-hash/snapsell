@@ -45,13 +45,7 @@ export function AccountPage() {
   useEffect(() => {
     let cancelled = false;
     const fetchAccount = async () => {
-      let headers: Record<string, string> = {};
-      if (user) {
-        const token = await user.getIdToken();
-        headers = { Authorization: "Bearer " + token };
-      } else {
-        headers = await getAuthHeaders();
-      }
+      const headers = await getAuthHeaders();
       const r = await fetch(`${getApiBase()}/api/account`, { headers });
       const parsed = await apiJson<AccountData | { success?: boolean; data?: AccountData; error?: string }>(r);
       if (cancelled) return;
@@ -78,12 +72,7 @@ export function AccountPage() {
     setCancelLoading(true);
     try {
       let headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (user) {
-        const token = await user.getIdToken();
-        headers.Authorization = "Bearer " + token;
-      } else {
-        Object.assign(headers, await getAuthHeaders());
-      }
+      Object.assign(headers, await getAuthHeaders());
       const res = await fetch(`${getApiBase()}/api/account/cancel-subscription`, {
         method: "POST",
         headers,
@@ -128,7 +117,7 @@ export function AccountPage() {
   }
 
   const displayEmail = data.email || user?.email || "—";
-  const displayName = data.displayName || user?.displayName || "—";
+  const displayName = data.displayName || (user?.user_metadata?.full_name as string | undefined) || (user?.user_metadata?.name as string | undefined) || "—";
   const isFreePlan =
     String(data.plan || "").toLowerCase().trim() === "free" ||
     (!data.hasEditor && !data.hasLeonardo);

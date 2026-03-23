@@ -78,13 +78,7 @@ export function EditorReplicatePage() {
   useEffect(() => {
     let cancelled = false;
     const fetchStatus = async () => {
-      let headers: Record<string, string> = {};
-      if (user) {
-        const token = await user.getIdToken();
-        headers = { Authorization: "Bearer " + token };
-      } else {
-        headers = await getAuthHeaders();
-      }
+      const headers = await getAuthHeaders();
       const r = await fetch(`${EDITOR_API_BASE}/api/replicate/status`, { headers });
       const data = await r.json().catch(() => ({}));
       if (cancelled) return;
@@ -187,9 +181,9 @@ export function EditorReplicatePage() {
         imageUrl = ensureReplicateImageFromRailway(imageUrl);
         const finalUrl = imageUrl.startsWith("data:") ? imageUrl : imageUrl + (imageUrl.includes("?") ? "&" : "?") + "_t=" + Date.now();
         setOutputUrl(finalUrl);
-        if (user?.uid && imageUrl.startsWith("data:")) {
+        if (user?.id && imageUrl.startsWith("data:")) {
           const userPrompt = prompt.trim() || (photoQuality === "luxury" ? "luxury product photography" : photoQuality === "professional" ? "commercial product shot" : "professional product photography");
-          saveGeneratedImageToLibrary(user.uid, imageUrl, userPrompt).catch((err) => console.warn("Library save failed:", err));
+          saveGeneratedImageToLibrary(user.id, imageUrl, userPrompt).catch((err) => console.warn("Library save failed:", err));
         }
       }
       const d = data as Record<string, unknown>;
@@ -223,7 +217,7 @@ export function EditorReplicatePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedFile, prompt, photoQuality, hasEditor, getAuthHeaders, t, freeEditorUsesRemaining, user?.uid]);
+  }, [selectedFile, prompt, photoQuality, hasEditor, getAuthHeaders, t, freeEditorUsesRemaining, user?.id]);
 
   const clearSelection = useCallback(() => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);

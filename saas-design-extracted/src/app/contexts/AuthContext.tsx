@@ -4,11 +4,10 @@ import {
   useEffect,
   useState,
   useCallback,
-  useRef,
   type ReactNode,
 } from "react";
-import { onAuthStateChanged, getRedirectResult, setPersistence, browserLocalPersistence, type User } from "firebase/auth";
-import { auth } from "../lib/firebase";
+import type { User } from "@supabase/supabase-js";
+import { supabase } from "../lib/supabase";
 import { getApiBase, apiJson } from "../config";
 
 type AuthContextValue = {
@@ -47,19 +46,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [sessionId, setSessionId] = useState<string | null>(() =>
     typeof window !== "undefined" ? localStorage.getItem(SESSION_KEY) : null
   );
-  const [loading, setLoading] = useState(true); // Do NOT consider auth ready until onAuthStateChanged has fired
+  const [loading, setLoading] = useState(true);
 
   const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
-    // Giriş yapmış kullanıcı varsa her zaman Bearer kullan (sayfa yenilenince eski session ile 3 hak dönmesin)
-    if (user) {
-      const token = await user.getIdToken();
-      return { Authorization: "Bearer " + token };
-    }
-    const u = auth.currentUser;
-    if (u) {
-      const token = await u.getIdToken();
-      return { Authorization: "Bearer " + token };
-    }
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token || "";
+    if (token) return { Authorization: "Bearer " + token };
     let sid = sessionId || localStorage.getItem(SESSION_KEY);
     if (!sid) sid = await ensureSession();
     if (sid) {
@@ -67,86 +59,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { "X-Session-Id": sid };
     }
     return {};
-  }, [user, sessionId]);
+  }, [sessionId]);
 
   const logout = useCallback(async () => {
-    await auth.signOut();
+    await supabase.auth.signOut();
     localStorage.removeItem(SESSION_KEY);
     setSessionId(null);
     setUser(null);
     window.location.href = "/login";
   }, []);
 
-  const unsubRef = useRef<(() => void) | null>(null);
-
   useEffect(() => {
     let cancelled = false;
+    const safetyTimer = globalThis.setTimeout(() => {
+      if (!cancelled) setLoading(false);
+    }, 5000);
 
-    (async () => {
-      // Oturumun tarayıcı kapatıldıktan sonra da kalması için persistence'ı uygulama açılışında da ayarla.
-      try {
-        await setPersistence(auth, browserLocalPersistence);
-      } catch (err) {
-        if (!cancelled) console.warn("Firebase persistence:", err);
-      }
-
-      // Redirect ile dönüldüyse sonucu al (popup kullanıyorsak genelde boş döner).
-      try {
-        const credential = await getRedirectResult(auth);
-        if (cancelled) return;
-        if (credential?.user) {
-          setUser(credential.user);
-          setSessionId(null);
-          localStorage.removeItem(SESSION_KEY);
-        }
-      } catch (err) {
-        if (!cancelled) console.warn("Firebase redirect result:", err);
-      }
-
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (cancelled) return;
-      let pendingNullTimeout: ReturnType<typeof setTimeout> | null = null;
-      unsubRef.current = onAuthStateChanged(auth, async (u) => {
-        if (cancelled) return;
-        if (pendingNullTimeout) {
-          clearTimeout(pendingNullTimeout);
-          pendingNullTimeout = null;
-        }
-        setUser(u || null);
-        if (!u) {
-          pendingNullTimeout = setTimeout(() => {
-            if (cancelled) return;
-            pendingNullTimeout = null;
-            ensureSession().then((sid) => {
-              if (!cancelled) setSessionId(sid || null);
-            });
-            setLoading(false);
-          }, 1200);
-        } else {
-          setSessionId(null);
-          localStorage.removeItem(SESSION_KEY);
-          try {
-            const token = await u.getIdToken();
-            await fetch(`${getApiBase()}/api/auth/google`, {
+      globalThis.clearTimeout(safetyTimer);
+      const nextUser = session?.user ?? null;
+      setUser(nextUser);
+      if (!nextUser) {
+        const sid = await ensureSession();
+        if (!cancelled) setSessionId(sid || null);
+      } else {
+        setSessionId(null);
+        localStorage.removeItem(SESSION_KEY);
+        try {
+          const token = session?.access_token;
+          if (token) {
+            await fetch(`${getApiBase()}/api/auth/supabase`, {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ idToken: token }),
+              headers: { Authorization: "Bearer " + token },
             });
-          } catch (_) {}
-          setLoading(false);
-        }
-      });
-      if (cancelled && unsubRef.current) {
-        unsubRef.current();
-        unsubRef.current = null;
+          }
+        } catch (_) {}
       }
-    })();
+      setLoading(false);
+    });
 
     return () => {
       cancelled = true;
-      if (unsubRef.current) {
-        unsubRef.current();
-        unsubRef.current = null;
-      }
+      globalThis.clearTimeout(safetyTimer);
+      listener.subscription.unsubscribe();
     };
   }, []);
 
@@ -158,7 +114,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logout,
   };
 
-  // Do NOT redirect to /login until loading === false. Only redirect if !loading && !user.
   return (
     <AuthContext.Provider value={value}>
       {loading ? null : children}

@@ -159,7 +159,7 @@ export default function PricingPage() {
             currency: payment.currency,
           },
           buyer: {
-            name: user?.displayName ?? "",
+            name: (user?.user_metadata?.full_name as string | undefined) || (user?.user_metadata?.name as string | undefined) || "",
             email: user?.email ?? "",
             phone: "",
           },
@@ -193,7 +193,7 @@ export default function PricingPage() {
         setPaymentLoading(null);
       }
     },
-    [user?.displayName, user?.email, submitToShopier]
+    [user?.user_metadata, user?.email, submitToShopier]
   );
 
   const getPaymentPayload = useCallback(

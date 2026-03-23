@@ -1,4 +1,4 @@
-import "./app/lib/firebase";
+import "./app/lib/supabase";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router";

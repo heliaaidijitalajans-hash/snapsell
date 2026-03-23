@@ -1,7 +1,4 @@
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { getFirebaseStorage } from "./firebase";
-import { getFirebaseFirestore } from "./firebase";
+import { supabase } from "./supabase";
 
 /**
  * Converts a data URL (e.g. data:image/png;base64,...) to a Blob.
@@ -16,32 +13,34 @@ function dataUrlToBlob(dataUrl: string): Blob {
 }
 
 /**
- * Uploads the processed image to Firebase Storage and saves a record to Firestore.
- * Path: generated-images/{userId}/{timestamp}.png
+ * Uploads processed image to Supabase Storage and records metadata.
  */
 export async function saveGeneratedImageToLibrary(
   userId: string,
   imageDataUrl: string,
   prompt: string
 ): Promise<string | null> {
-  const storage = getFirebaseStorage();
-  const db = getFirebaseFirestore();
   const timestamp = Date.now();
-  const path = `generated-images/${userId}/${timestamp}.png`;
+  const path = `${userId}/${timestamp}.png`;
 
   const blob = dataUrlToBlob(imageDataUrl);
-  const storageRef = ref(storage, path);
+  const { error: uploadErr } = await supabase.storage
+    .from("generated-images")
+    .upload(path, blob, { contentType: "image/png", upsert: false });
+  if (uploadErr) throw uploadErr;
 
-  await uploadBytes(storageRef, blob, { contentType: "image/png" });
-  const downloadURL = await getDownloadURL(storageRef);
+  const { data: publicUrlData } = supabase.storage
+    .from("generated-images")
+    .getPublicUrl(path);
+  const downloadURL = publicUrlData.publicUrl;
 
-  const docRef = await addDoc(collection(db, "images"), {
-    userId,
-    imageUrl: downloadURL,
-    createdAt: serverTimestamp(),
+  const { data, error } = await supabase.from("images").insert({
+    user_id: userId,
+    image_url: downloadURL,
+    created_at: new Date().toISOString(),
     source: "photoroom",
     prompt: prompt || "",
-  });
-
-  return docRef.id;
+  }).select("id").single();
+  if (error) throw error;
+  return data?.id || null;
 }
