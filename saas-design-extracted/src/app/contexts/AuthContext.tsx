@@ -51,8 +51,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
     if (isSupabaseConfigured) {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token || "";
+      let { data } = await supabase.auth.getSession();
+      let token = data.session?.access_token || "";
+      if (!token) {
+        try {
+          const { data: ref } = await supabase.auth.refreshSession();
+          token = ref.session?.access_token || "";
+        } catch (_) {}
+      }
       if (token) return { Authorization: "Bearer " + token };
     }
     let sid = sessionId || localStorage.getItem(SESSION_KEY);
@@ -74,9 +80,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    let subscription: { unsubscribe: () => void } | null = null;
     const safetyTimer = globalThis.setTimeout(() => {
       if (!cancelled) setLoading(false);
-    }, 5000);
+    }, 8000);
 
     if (!isSupabaseConfigured) {
       globalThis.clearTimeout(safetyTimer);
@@ -84,9 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (cancelled) return;
-      globalThis.clearTimeout(safetyTimer);
+    async function applySession(session: import("@supabase/supabase-js").Session | null) {
       const nextUser = session?.user ?? null;
       setUser(nextUser);
       if (!nextUser) {
@@ -105,13 +110,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         } catch (_) {}
       }
-      setLoading(false);
-    });
+      if (!cancelled) setLoading(false);
+    }
+
+    /** Önce OAuth PKCE kodunu takas et, sonra mevcut oturumu oku; abonelik en sonda (yarış önlenir). */
+    void (async () => {
+      if (typeof window !== "undefined") {
+        const search = window.location.search || "";
+        if (search.includes("code=")) {
+          try {
+            const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+            if (error) console.warn("[Auth] exchangeCodeForSession:", error.message);
+          } catch (e) {
+            console.warn("[Auth] exchangeCodeForSession failed:", e);
+          }
+        }
+      }
+      const { data } = await supabase.auth.getSession();
+      if (cancelled) return;
+      await applySession(data.session ?? null);
+      globalThis.clearTimeout(safetyTimer);
+
+      const { data: subData } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        if (cancelled) return;
+        globalThis.clearTimeout(safetyTimer);
+        await applySession(session);
+      });
+      subscription = subData.subscription;
+    })();
 
     return () => {
       cancelled = true;
       globalThis.clearTimeout(safetyTimer);
-      listener.subscription.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, []);
 

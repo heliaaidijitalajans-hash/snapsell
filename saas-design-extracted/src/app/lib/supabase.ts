@@ -38,6 +38,11 @@ export const supabase: SupabaseClient = createClient(
   isSupabaseConfigured ? supabaseUrl : PLACEHOLDER_URL,
   isSupabaseConfigured ? supabaseAnonKey : PLACEHOLDER_KEY,
   {
-    auth: { persistSession: true, autoRefreshToken: true },
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      /** OAuth (Google) dönüşünde URL/hash içindeki oturumu okur */
+      detectSessionInUrl: true,
+    },
   }
 );
