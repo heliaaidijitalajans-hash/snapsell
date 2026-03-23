@@ -504,6 +504,44 @@ const corsOptions = {
 const app = express();
 app.disable("x-powered-by");
 
+// Vercel: tüm /api/* istekleri tek serverless fonksiyonuna (api/index.js) yönlendirilir;
+// Express route'larının doğru eşleşmesi için orijinal path'i geri yükler.
+if (process.env.VERCEL) {
+  app.use(function vercelRestoreUrl(req, res, next) {
+    const full = req.url || "";
+    const rawPath = full.split("?")[0];
+    const qstr = full.includes("?") ? "?" + full.split("?").slice(1).join("?") : "";
+    if (rawPath !== "/api" && rawPath !== "/api/") {
+      return next();
+    }
+    const raw =
+      req.headers["x-vercel-forwarded-url"] ||
+      req.headers["x-forwarded-uri"] ||
+      (req.headers["x-forwarded-host"] && req.headers["x-forwarded-path"]
+        ? (req.headers["x-forwarded-proto"] || "https") +
+          "://" +
+          String(req.headers["x-forwarded-host"]) +
+          String(req.headers["x-forwarded-path"])
+        : null) ||
+      (req.headers["x-forwarded-host"] && req.headers["x-invoke-path"]
+        ? (req.headers["x-forwarded-proto"] || "https") +
+          "://" +
+          String(req.headers["x-forwarded-host"]) +
+          String(req.headers["x-invoke-path"])
+        : null);
+    if (raw && typeof raw === "string") {
+      try {
+        const u = new URL(raw, "http://localhost");
+        req.url = u.pathname + (u.search || "");
+      } catch (_) {}
+    } else if (req.headers["x-invoke-path"] && typeof req.headers["x-invoke-path"] === "string") {
+      const ip = String(req.headers["x-invoke-path"]);
+      if (ip.startsWith("/")) req.url = ip + qstr;
+    }
+    next();
+  });
+}
+
 // 0) Explicit preflight handler first – ensures OPTIONS always gets CORS headers (avoids 502/no header)
 app.use(function (req, res, next) {
   const origin = req.headers.origin;
@@ -1518,6 +1556,32 @@ const SHOPIER_PAYMENT_URLS = [
 // Bu endpoint Vercel'de /api/shopier-callback'e gider ve oradan /dashboard veya /pricing'e redirect edilir.
 const SHOPIER_REDIRECT_URI = String(process.env.SHOPIER_CALLBACK_URL || "https://snapsell.website/api/shopier-callback").trim();
 
+const SHOPIER_DEFAULT_FRONTEND_BASE = "https://snapsell.website";
+
+function getShopierFrontendBaseUrl() {
+  const v = process.env.PUBLIC_APP_URL || process.env.APP_DOMAIN || "";
+  if (typeof v === "string" && v.trim()) return v.trim().replace(/\/$/, "");
+  return SHOPIER_DEFAULT_FRONTEND_BASE;
+}
+
+/** Tarayıcı dönüşü (Shopier success URL): /api/shopier-callback → dashboard veya pricing. */
+function handleShopierBrowserReturn(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ success: false, error: "Method not allowed" });
+  }
+  console.log("↩️ Shopier callback hit");
+  console.log("Shopier callback query:", req.query);
+  const q = (req && req.query) || {};
+  const orderId = q.platform_order_id ?? q.order_id ?? q.id ?? q.orderId ?? null;
+  const status = q.status ?? q.payment_status ?? q.paymentStatus ?? q.result ?? null;
+  const hasOrder = orderId != null && String(orderId).trim().length > 0;
+  const statusNorm = String(status || "").toLowerCase();
+  const isSuccess = ["success", "ok", "paid", "approved", "1", "true"].includes(statusNorm);
+  const frontendBase = getShopierFrontendBaseUrl();
+  const targetPath = hasOrder && isSuccess ? "/dashboard" : "/pricing";
+  res.status(302).setHeader("Location", frontendBase + targetPath).end();
+}
+
 let shopierTokenCache = { access_token: null, expires_at: 0 };
 
 function shopierErrorLog(err, context) {
@@ -1745,7 +1809,10 @@ app.post("/api/create-payment", async (req, res) => {
   }
 });
 
-/** Shopier ödeme bildirimi (callback): Ödeme onaylandığında Shopier bu URL'ye istek atar. Shopier panelinde bu adresi (Railway base URL + /api/shopier/callback) bildirim URL'si olarak kaydedin. */
+/** Tarayıcı dönüşü: Shopier success URL (çoğunlukla /api/shopier-callback). */
+app.get("/api/shopier-callback", handleShopierBrowserReturn);
+
+/** Shopier sunucu bildirimi (callback): Shopier bu URL'ye POST/GET atar. Panelde bildirim URL'si olarak (örn. base + /api/shopier/callback) kaydedin. */
 function handleShopierCallback(req, res) {
   const payload = req.body && Object.keys(req.body).length ? req.body : req.query || {};
   console.warn("[Shopier] Callback alındı:", JSON.stringify(payload).slice(0, 500));
@@ -3519,10 +3586,12 @@ app.use(function (err, req, res, next) {
 });
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("Server is running on port", PORT);
-  console.log("Sunucu başarıyla ayağa kalktı ve hazır!");
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log("Server is running on port", PORT);
+    console.log("Sunucu başarıyla ayağa kalktı ve hazır!");
+  });
+}
 
 process.on("unhandledRejection", (reason, promise) => {
   console.log("Unhandled Rejection at:", promise, "reason:", reason);

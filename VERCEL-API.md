@@ -5,7 +5,10 @@ Tüm API çağrıları artık **aynı origin** üzerinden `/api/...` yapılıyor
 ## Nasıl çalışıyor
 
 - **Frontend:** `getApiBase()` boş döner → istekler `https://your-app.vercel.app/api/...` olur.
-- **Backend:** `api/[[...path]].js` tüm `/api/*` isteklerini `server.js` içindeki Express uygulamasına iletir.
+- **Backend (Hobby plan):** Vercel’de **her** `api/*.js` dosyası ayrı bir Serverless Function sayılır (limit **12**). Bu yüzden tek giriş noktası kullanılıyor:
+  - **`api/index.js`** → `serverless-http` ile `server.js` içindeki Express `app`’e bağlanır.
+  - **`vercel.json`** → `/api` ve `/api/:path*` istekleri `/api` hedefine yönlendirilir (yani aynı fonksiyon).
+  - **`server.js`** → `process.env.VERCEL` varken `app.listen` çalışmaz; Vercel’de gelen istekte path bazen `/api` olarak gelir — Express route’ları için URL, uygun header’lardan geri yüklenir.
 
 ## Vercel proje ayarı
 
