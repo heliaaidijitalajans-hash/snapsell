@@ -2,62 +2,46 @@
 
 - **Frontend + API:** Vercel (aynı origin’de `/api/*` route’ları)
 - **Veritabanı:** Supabase (PostgreSQL)
-- **Auth:** Firebase (Google ile giriş; sadece token doğrulama)
+- **Auth:** Supabase Auth (e-posta + şifre)
+
+Detaylı kontrol listesi: **SUPABASE_SETUP.md**
 
 ---
 
 ## 1. Supabase veritabanını hazırlayın
 
-1. [supabase.com](https://supabase.com) → Giriş → **New Project** (organizasyon + proje adı, şifre).
-2. Proje açıldıktan sonra **SQL Editor** → **New query**.
-3. `supabase/migrations/001_create_users.sql` içeriğini yapıştırıp **Run** ile çalıştırın (veya Supabase CLI ile `supabase db push`).
-4. **Settings → API** bölümünden kopyalayın:
+1. [supabase.com](https://supabase.com) → Giriş → **New Project**.
+2. **SQL Editor** → `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (veya `supabase db push`).
+3. **Settings → API**:
    - **Project URL** → `SUPABASE_URL`
-   - **service_role** (anon değil!) → `SUPABASE_SERVICE_ROLE_KEY`
+   - **anon public** → `SUPABASE_ANON_KEY` ve `VITE_SUPABASE_ANON_KEY`
+   - **service_role** → `SUPABASE_SERVICE_ROLE_KEY` (sadece sunucu; gizli)
 
 ---
 
 ## 2. Frontend + API’yi Vercel’de deploy edin
 
-1. [vercel.com](https://vercel.com) → GitHub ile giriş → **Add New** → **Project** → `snapsell-app` reposunu seçin.
-2. **Root Directory:** boş (repo kökü; `server.js` ve `api/` burada olmalı).
-3. **Build Command:** `npm run build` (varsayılan).
-4. **Output Directory:** `saas-design-extracted/dist`.
-5. **Environment Variables** ekleyin (Supabase, Firebase, Admin vb. – aynı proje kökündeki `.env` değişkenleri):
-   - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `FIREBASE_SERVICE_ACCOUNT_JSON`, `ADMIN_PASSWORD`, `PUBLIC_APP_URL`, `OPENAI_API_KEY` vb.
-6. **Deploy** edin. API istekleri aynı origin’de `/api/*` olarak çalışır (CORS gerekmez).
+1. [vercel.com](https://vercel.com) → Proje ekleyin.
+2. **Build Command:** `npm run build`
+3. **Output Directory:** `saas-design-extracted/dist`
+4. **Environment Variables:** `.env.example` ile hizalayın (`SUPABASE_*`, `VITE_SUPABASE_*`, `ADMIN_*`, vb.)
 
 ---
 
 ## 3. config.json (opsiyonel)
 
-API adresini runtime’da değiştirmek isterseniz `public/config.json` içinde `apiUrl` kullanılabilir. Varsayılan boş = aynı origin (`/api/...`).
+API adresini runtime’da değiştirmek için `public/config.json` içinde `apiUrl` kullanılabilir. Varsayılan boş = aynı origin.
 
 ---
 
-## 4. Firebase Console’da domain’i yetkilendirin
+## 4. Supabase Auth
 
-- [Firebase Console](https://console.firebase.google.com) → Projeniz → **Authentication** → **Authorized domains**
-- Vercel domain’inizi ekleyin (örn. `snapsell-app.vercel.app`).
+**Authentication → Providers:** Email açık olsun.  
+**Authentication → URL Configuration:** Site URL ve redirect URL’leriniz (Vercel domain) tanımlı olsun.
 
 ---
 
 ## 5. Kontrol
 
-- Tarayıcıda Vercel URL’inizi açın.
-- Google ile giriş yapın; **Hesap Ayarları** sayfası açılıyorsa backend + Supabase’e bağlanıyorsunuz demektir.
-
----
-
-## Özet
-
-| Bileşen      | Nerede / Ne yapılır |
-|-------------|----------------------|
-| Veritabanı  | Supabase: `users` tablosu (migration SQL çalıştırın) |
-| Backend API | Vercel’de `/api/*` (aynı origin) |
-| Frontend    | Vercel’de deploy; API aynı origin’de |
-| Auth        | Firebase (Google); Authorized domains’e Vercel domain ekleyin |
-
----
-
-API adresini değiştirmek isterseniz **config.json** veya **VITE_API_URL** ile override edebilirsiniz.
+- Site açılıyor, `/login` ile kayıt / giriş yapılabiliyor.
+- **Hesap Ayarları** ve API çağrıları çalışıyorsa Supabase bağlantısı tamamdır.

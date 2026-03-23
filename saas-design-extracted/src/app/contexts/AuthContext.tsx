@@ -8,6 +8,7 @@ import {
 } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
+import { signOut as supabaseSignOut } from "../lib/supabaseAuth";
 import { getApiBase, apiJson } from "../config";
 
 type AuthContextValue = {
@@ -62,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [sessionId]);
 
   const logout = useCallback(async () => {
-    await supabase.auth.signOut();
+    await supabaseSignOut();
     localStorage.removeItem(SESSION_KEY);
     setSessionId(null);
     setUser(null);

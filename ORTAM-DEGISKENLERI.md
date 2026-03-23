@@ -30,7 +30,7 @@ Vercel Dashboard → Proje → Settings → Environment Variables bölümünde a
 
 ## server.js (Railway / Node backend)
 
-Tam backend (Supabase, Firebase, admin, kredi takibi vb.) kullanıyorsanız `.env` veya Railway/env ortamında aşağıdakileri tanımlayın.
+Tam backend (Supabase, admin, kredi takibi vb.) kullanıyorsanız `.env` veya Railway/env ortamında aşağıdakileri tanımlayın.
 
 ### Zorunlu
 
@@ -40,10 +40,12 @@ Tam backend (Supabase, Firebase, admin, kredi takibi vb.) kullanıyorsanız `.en
 | `PUBLIC_APP_URL` | Frontend adresi (örn. https://snapsell.website). |
 | `ALLOWED_ORIGINS` | CORS için izin verilen origin’ler (virgülle ayrılmış). |
 | `SUPABASE_URL` | Supabase proje URL. |
-| `SUPABASE_SERVICE_ROLE_KEY` veya `SUPABASE_ANON_KEY` | Supabase API anahtarı. |
+| `SUPABASE_ANON_KEY` | Supabase anon public key (`lib/supabase.js` anon istemci). |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service_role (sunucu: `users` yazma, JWT doğrulama; gizli tutun). |
 | `ADMIN_PASSWORD` | Admin panel giriş şifresi. |
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | Firebase Admin SDK için service account JSON (Google giriş doğrulama). |
 | `PHOTOROOM_API_KEY` | PhotoRoom API anahtarı (server üzerinden pipeline için). |
+
+Frontend build için ayrıca: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
 
 ### Opsiyonel
 

@@ -9,57 +9,29 @@ Kodda yaptığın değişiklikler **otomatik** yansımaz. Aşağıdaki adımlar�
 Terminalde proje klasöründe (`snapsell-app`):
 
 ```bash
-# Frontend'i derle (React/Vite değişiklikleri dist/ klasörüne yazılır)
 npm run build
 ```
 
-Backend’i yeniden başlat (server.js değişiklikleri için):
+Backend’i yeniden başlat (`server.js` değişiklikleri için):
 
-- Çalışan `node server.js` varsa **Ctrl+C** ile durdur, sonra tekrar:
 ```bash
 node server.js
 ```
-veya
-```bash
-npm start
-```
 
-Frontend’i tarayıcıda açmak için:
-- `dist/index.html`’i doğrudan açabilirsin **veya**
-- Bir static sunucu kullan (örn. `npx serve dist` — `http://localhost:3000` gibi bir adres verir).
+veya `npm start`
 
 ---
 
-## 2) Canlı sitede görünmesi (snapsell.website + Vercel)
-
-Sitede ve API’de güncellemelerin görünmesi için **hem frontend hem backend deploy** edilmeli.
-
-### A) Backend (Vercel)
+## 2) Canlı sitede görünmesi (Vercel)
 
 1. Değişiklikleri Git’e gönder:
 ```bash
 git add .
-git commit -m "Planlar ve fiyatlar güncellendi"
+git commit -m "Guncelleme"
 git push
 ```
-2. Vercel projeyi otomatik deploy eder (Git’e bağlıysa). Bittikten sonra Admin’e girip **「Planları varsayılana sıfırla」** butonuna bas; böylece sunucudaki `data/` dosyaları güncel planlarla güncellenir.
-
-### B) Frontend (Firebase Hosting)
-
-1. Önce build al:
-```bash
-npm run build
-```
-2. `dist/config.json` içinde `apiUrl`’in backend adresine (örn. Vercel API URL; aynı origin kullanıyorsanız boş bırakın) işaret ettiğinden emin ol.
-3. Firebase’e deploy et:
-```bash
-firebase deploy
-```
-veya
-```bash
-npm run deploy:firebase
-```
-(Bu script build alır, sen sadece `dist/config.json`’ı kontrol edip `firebase deploy` yaparsın.)
+2. Vercel projeyi otomatik deploy eder (Git’e bağlıysa).
+3. Frontend için `VITE_*` değişkenleri değiştiyse mutlaka yeni **build** tetiklenmiş olmalı.
 
 ---
 
@@ -67,9 +39,7 @@ npm run deploy:firebase
 
 | Nerede test ediyorsun? | Ne yapmalısın? |
 |------------------------|----------------|
-| Sadece kendi bilgisayarında | `npm run build` + backend’i yeniden başlat (`node server.js`) |
-| Canlı site (snapsell.website) | Backend: `git push` (Vercel deploy) → Admin’de 「Planları varsayılana sıfırla」. Frontend: `npm run build` → `firebase deploy` |
+| Lokal | `npm run build` + `node server.js` |
+| Canlı (Vercel) | `git push` → Vercel deploy |
 
-**Hiçbir şey görünmüyorsa** büyük ihtimalle:
-- Canlı sitede eski build / eski backend çalışıyordur → yukarıdaki deploy adımlarını uygula.
-- Lokal test ediyorsan → `npm run build` ve backend’i yeniden başlatmayı unutma.
+**Hiçbir şey görünmüyorsa:** Eski deploy çalışıyor olabilir; Vercel’de son deployment’ı ve ortam değişkenlerini kontrol et.

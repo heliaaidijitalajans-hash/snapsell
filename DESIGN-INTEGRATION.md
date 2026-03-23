@@ -16,7 +16,7 @@ Bu projeye **SaaS E-commerce Platform Design** zip içeriği entegre edilmiştir
 - **Fiyatlandırma**: Ana sitedeki `/pricing` sayfasına gider.
 - **Giriş / Kayıt**: Ana sitedeki `/login` ve `/register` sayfalarına gider. Giriş sonrası tekrar `/design` adresine dönebilirsiniz.
 
-Aynı oturum (cookie / Firebase) kullanıldığı için iframe içindeki dashboard giriş yapmış kullanıcıyı tanır.
+Aynı origin ve oturum (Supabase Auth / session) kullanıldığı için iframe içindeki dashboard giriş yapmış kullanıcıyı tanır.
 
 ## Tasarım uygulamasını çalıştırma (React SPA)
 

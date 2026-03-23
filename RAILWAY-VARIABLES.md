@@ -1,8 +1,8 @@
 # Railway’e eklenecek değişkenler
 
-Proje kökündeki `.env` dosyasındaki **her satırı** Railway → Variables’a tek tek ekleyin. `FIREBASE_SERVICE_ACCOUNT_JSON` tek satır olmalı (tüm JSON tek satırda).
+Proje kökündeki `.env` dosyasındaki **her satırı** Railway → Variables’a tek tek ekleyin.
 
-**SUPABASE_SERVICE_ROLE_KEY** yoksa: [SUPABASE-SERVICE-ROLE-ADIM.md](./SUPABASE-SERVICE-ROLE-ADIM.md) dosyasındaki adımlarla Supabase’ten alıp önce `.env`’e, sonra Railway’e ekleyin.
+**SUPABASE_SERVICE_ROLE_KEY** yoksa sunucu `users` tablosuna yazamaz ve token doğrulama sorunlu olur. [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) dosyasına bakın.
 
 ## Değişken listesi (isimler)
 
@@ -17,9 +17,10 @@ Proje kökündeki `.env` dosyasındaki **her satırı** Railway → Variables’
 - SUPABASE_URL
 - SUPABASE_ANON_KEY
 - SUPABASE_SERVICE_ROLE_KEY
-- FIREBASE_SERVICE_ACCOUNT_JSON
+- VITE_SUPABASE_URL (Railway’de frontend ayrı build ediliyorsa)
+- VITE_SUPABASE_ANON_KEY
 - PHOTOROOM_API_KEY
-- SERPAPI_API_KEY
-- EXA_API_KEY
+- SERPAPI_API_KEY (isteğe bağlı)
+- EXA_API_KEY (isteğe bağlı)
 
-`GOOGLE_APPLICATION_CREDENTIALS` Railway’de kullanmayın; `FIREBASE_SERVICE_ACCOUNT_JSON` yeterli.
+`GOOGLE_APPLICATION_CREDENTIALS` veya Firebase anahtarları artık kullanılmıyor.

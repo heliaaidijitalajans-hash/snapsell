@@ -1,9 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
-import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
-import { getApiBase } from "../config";
+import { signIn, signUp, syncUserRowWithBackend } from "../lib/supabaseAuth";
 
 export function LoginPage() {
   const { user, loading } = useAuth();
@@ -22,37 +21,25 @@ export function LoginPage() {
     if (user) navigate("/", { replace: true });
   }, [loading, user, navigate]);
 
-  async function syncUserProfile() {
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token || "";
-    if (!token) return;
-    console.log("👤 Creating Supabase user");
-    await fetch(`${getApiBase()}/api/auth/supabase`, {
-      method: "POST",
-      headers: { Authorization: "Bearer " + token },
-    });
-    console.log("✅ User created");
-  }
-
   async function handleAuthSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setLoadingAction(true);
     try {
       if (isSignup) {
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-        });
+        const { data, error: signUpError } = await signUp({ email, password });
         if (signUpError) throw signUpError;
-        if (data.session?.access_token) await syncUserProfile();
+        if (data.session?.access_token) {
+          console.log("👤 Creating Supabase user");
+          await syncUserRowWithBackend();
+          console.log("✅ User created");
+        }
       } else {
-        const { error: loginError } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        });
+        const { error: loginError } = await signIn({ email, password });
         if (loginError) throw loginError;
-        await syncUserProfile();
+        console.log("👤 Creating Supabase user");
+        await syncUserRowWithBackend();
+        console.log("✅ User created");
       }
     } catch (e: unknown) {
       const err = e && typeof e === "object" && "message" in e ? (e as { message: string }) : null;

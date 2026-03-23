@@ -1,7 +1,7 @@
 # SnapSell – Yayına Alma Rehberi
 
-**Önerilen yapı:** Frontend + API **Vercel** (aynı origin’de `/api/*`), Veritabanı **Supabase**, Giriş **Firebase (Google)**.  
-Adım adım kurulum için **[KURULUM.md](./KURULUM.md)** ve **[VERCEL-API.md](./VERCEL-API.md)** dosyalarını takip edin.
+**Önerilen yapı:** Frontend + API **Vercel** (aynı origin’de `/api/*`), Veritabanı ve giriş **Supabase**.  
+Adım adım kurulum için **[KURULUM.md](./KURULUM.md)**, **[SUPABASE_SETUP.md](./SUPABASE_SETUP.md)** ve **[VERCEL-API.md](./VERCEL-API.md)** dosyalarını takip edin.
 
 ---
 
@@ -9,27 +9,9 @@ Adım adım kurulum için **[KURULUM.md](./KURULUM.md)** ve **[VERCEL-API.md](./
 
 - API istekleri **aynı origin** üzerinden `/api/...` yapılır (örn. `fetch("/api/plans")`).
 - Vercel’de repo kökünde `api/[[...path]].js` tüm `/api/*` isteklerini `server.js` Express uygulamasına iletir.
-- **Root Directory** repo kökü olmalı; **Environment Variables** (Supabase, Firebase, Admin vb.) Vercel’e ekleyin.
+- **Root Directory** repo kökü olmalı; **Environment Variables** (Supabase, Admin vb.) Vercel’e ekleyin.
 
-**Firebase Hosting kullanıyorsanız:** `dist/config.json` içinde `apiUrl` ile ayrı bir backend adresi belirtebilirsiniz (örn. Vercel API URL’i).
-
----
-
-## Önemli: Firebase Hosting API çalıştırmaz
-
-**Firebase Hosting** yalnızca **statik dosyaları** (HTML, JS, CSS, resim) sunar. **Node.js / Express çalıştıramaz.**
-
-SnapSell’in çalışması için:
-
-- **API** (`/api/config`, `/api/auth/google`, `/api/credits` vb.) → **Node (server.js)** gerekir.
-- **Firebase Auth** (Google ile giriş) → Hem tarayıcıda hem de sunucuda çalışır; **hosting nerede olursa olsun** kullanılabilir.
-
-Yani:
-
-- **Firebase Hosting** = Sadece statik site (auth.html, login.html, dashboard build). Burada **/api/** istekleri 404 verir, çünkü sunucuda Node yok.
-- **Backend (API)** = Mutlaka **Node’un çalıştığı bir yerde** (Railway, Render, VPS, Cloud Run vb.) olmalı.
-
-**Önerilen yol:** Tüm uygulamayı (Node + statik dosyalar) **tek bir yerde** çalıştırın (örn. Railway). Domain’i oraya verin. Firebase’i sadece **Auth ve Admin SDK** için kullanmaya devam edin; **hosting’i Firebase’e yapmayın**.
+İsteğe bağlı: `dist/config.json` içinde `apiUrl` ile ayrı bir API adresi belirtebilirsiniz.
 
 ---
 
@@ -50,15 +32,15 @@ Frontend ve API aynı Vercel projesinde; `/api/*` istekleri `api/[[...path]].js`
 1. Vercel’de proje → **Settings → Domains** → domain ekleyin.
 2. DNS’te CNAME veya A kaydı ile Vercel’e yönlendirin (Vercel’in verdiği değer).
 
-### 3. Firebase tarafı
+### 3. Supabase Auth
 
-- **Firebase Console** → **Authentication** → **Authorized domains** → Vercel domain’inizi ekleyin.
+- **Supabase Dashboard** → **Authentication** → **URL Configuration** → Site URL ve redirect URL’lerde Vercel domain’iniz olsun.
 
 ### 5. Sonuç
 
-- Backend API: `https://snapsell.website` → Railway’deki Node (server.js).
-- Frontend ayrı deploy edilir; CORS için `ALLOWED_ORIGINS` gerekli.
-- Firebase sadece Auth (Google giriş) için kullanılır; veritabanı Supabase’tedir; hosting Vercel’dedir.
+- Önerilen: API + frontend aynı Vercel projesinde (`/api/*` + statik build).
+- CORS için `ALLOWED_ORIGINS` gerekli.
+- Giriş ve veritabanı **Supabase**; Firebase kullanılmaz.
 
 ---
 
@@ -75,9 +57,9 @@ Mantık Railway ile aynı: Tüm trafik (API + sayfalar) Render’daki Node’a g
 
 ---
 
-## Yöntem 3: Firebase Hosting’i kullanmak istiyorsanız (API ayrı)
+## Yöntem 3: Statik hosting + API ayrı
 
-Sadece arayüzü Firebase Hosting’de, API’yi Vercel’de tutmak isterseniz: Frontend’i Firebase’e deploy edin; `config.json` veya `VITE_API_URL` ile API adresini Vercel URL’inize ayarlayın.
+Frontend’i başka bir statik host’ta tutup API’yi Vercel’de bırakmak isterseniz: `config.json` veya `VITE_API_BASE` ile API base URL’ini Vercel adresinize ayarlayın.
 
 ---
 
@@ -87,6 +69,6 @@ Sadece arayüzü Firebase Hosting’de, API’yi Vercel’de tutmak isterseniz: 
 |-------------------|--------------|
 | Frontend + API    | **Vercel**. Statik build + `/api/*` aynı origin’de. |
 | Veritabanı        | **Supabase** (PostgreSQL). Kullanıcılar, kredi, plan. |
-| Giriş (Auth)      | **Firebase** (Google). Token doğrulama backend’de. |
+| Giriş (Auth)      | **Supabase Auth** (e-posta + şifre). |
 
 **Önerilen:** Frontend + API → Vercel, Database → Supabase. Kurulum: [KURULUM.md](./KURULUM.md), [VERCEL-API.md](./VERCEL-API.md).

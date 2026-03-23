@@ -11,7 +11,7 @@ Tüm API çağrıları artık **aynı origin** üzerinden `/api/...` yapılıyor
 
 - **Root Directory:** Repo kökü (boş bırakın). `server.js`, `api/` ve `saas-design-extracted/` burada olmalı.
 - **Build:** Mevcut `vercel.json` (buildCommand, outputDirectory) aynen kullanılır.
-- **Env:** Supabase, Firebase vb. değişkenleri Vercel → Settings → Environment Variables’a ekleyin (Railway’dekiyle aynı liste).
+- **Env:** Supabase (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_*`) ve diğer `.env` değişkenlerini Vercel → Settings → Environment Variables’a ekleyin.
 
 ## Eski Railway URL’i
 

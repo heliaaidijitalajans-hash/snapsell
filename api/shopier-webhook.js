@@ -9,9 +9,7 @@
  *  - "✅ User updated"
  */
 
-import supabaseLib from "../lib/supabase.js";
-
-const { createServiceClient } = supabaseLib;
+import { createServiceClient } from "../lib/supabase.js";
 
 const CREDIT_PACK_CREDITS = 250;
 const PLAN_CREDITS = { starter: 300, pro_monthly: 800, pro_yearly: 100 };
