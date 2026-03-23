@@ -15,6 +15,7 @@ Tüm API çağrıları artık **aynı origin** üzerinden `/api/...` yapılıyor
 - **Root Directory:** Repo kökü (boş bırakın). `server.js`, `api/` ve `saas-design-extracted/` burada olmalı.
 - **Build:** Mevcut `vercel.json` (buildCommand, outputDirectory) aynen kullanılır.
 - **Env:** Supabase (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_*`) ve diğer `.env` değişkenlerini Vercel → Settings → Environment Variables’a ekleyin.
+  - **`VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` zorunlu** — Vite bunları **build** sırasında client bundle’a gömer; `SUPABASE_URL` / `SUPABASE_ANON_KEY` ile **aynı değerler** olmalı, isimler **`VITE_` ile** olmalı. Eksikse tarayıcıda auth çalışmaz. Ekledikten sonra **Redeploy** gerekir.
 
 ## Eski Railway URL’i
 

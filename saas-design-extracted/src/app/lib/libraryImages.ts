@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { supabase, isSupabaseConfigured } from "./supabase";
 
 /**
  * Converts a data URL (e.g. data:image/png;base64,...) to a Blob.
@@ -20,6 +20,10 @@ export async function saveGeneratedImageToLibrary(
   imageDataUrl: string,
   prompt: string
 ): Promise<string | null> {
+  if (!isSupabaseConfigured) {
+    console.warn("saveGeneratedImageToLibrary: Supabase VITE_* env eksik.");
+    return null;
+  }
   const timestamp = Date.now();
   const path = `${userId}/${timestamp}.png`;
 

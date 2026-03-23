@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import type { User } from "@supabase/supabase-js";
-import { supabase } from "../lib/supabase";
+import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { signOut as supabaseSignOut } from "../lib/supabaseAuth";
 import { getApiBase, apiJson } from "../config";
 
@@ -50,9 +50,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token || "";
-    if (token) return { Authorization: "Bearer " + token };
+    if (isSupabaseConfigured) {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token || "";
+      if (token) return { Authorization: "Bearer " + token };
+    }
     let sid = sessionId || localStorage.getItem(SESSION_KEY);
     if (!sid) sid = await ensureSession();
     if (sid) {
@@ -75,6 +77,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const safetyTimer = globalThis.setTimeout(() => {
       if (!cancelled) setLoading(false);
     }, 5000);
+
+    if (!isSupabaseConfigured) {
+      globalThis.clearTimeout(safetyTimer);
+      setLoading(false);
+      return;
+    }
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (cancelled) return;
