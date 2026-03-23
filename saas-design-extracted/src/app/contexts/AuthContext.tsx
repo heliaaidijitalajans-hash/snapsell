@@ -6,15 +6,20 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import type { User } from "@supabase/supabase-js";
+import type { Session, User } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { signOut as supabaseSignOut } from "../lib/supabaseAuth";
 import { getApiBase, apiJson } from "../config";
+import { authLog } from "../../lib/authConfig";
+import { AuthLoadingScreen } from "../components/AuthLoadingScreen";
 
 type AuthContextValue = {
   user: User | null;
+  session: Session | null;
   sessionId: string | null;
   loading: boolean;
+  /** İlk getSession tamamlandı mı (OAuth dönüşü sonrası dahil) */
+  initialized: boolean;
   getAuthHeaders: () => Promise<Record<string, string>>;
   logout: () => Promise<void>;
 };
@@ -36,27 +41,32 @@ async function ensureSession(): Promise<string> {
       localStorage.setItem(SESSION_KEY, sessionId);
       return sessionId;
     }
-  } catch (_) {
-    // ag hatasi veya sunucu ulasilamaz - sessizce bos session
-  }
+  } catch (_) {}
   return "";
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(() =>
     typeof window !== "undefined" ? localStorage.getItem(SESSION_KEY) : null
   );
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
 
   const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
     if (isSupabaseConfigured) {
       let { data } = await supabase.auth.getSession();
+      authLog("getAuthHeaders → getSession", {
+        hasSession: !!data.session,
+        userId: data.session?.user?.id ?? null,
+      });
       let token = data.session?.access_token || "";
       if (!token) {
         try {
           const { data: ref } = await supabase.auth.refreshSession();
           token = ref.session?.access_token || "";
+          authLog("getAuthHeaders → refreshSession", { hasToken: !!token });
         } catch (_) {}
       }
       if (token) return { Authorization: "Bearer " + token };
@@ -75,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(SESSION_KEY);
     setSessionId(null);
     setUser(null);
+    setSession(null);
     window.location.href = "/login";
   }, []);
 
@@ -82,18 +93,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     let subscription: { unsubscribe: () => void } | null = null;
     const safetyTimer = globalThis.setTimeout(() => {
-      if (!cancelled) setLoading(false);
-    }, 8000);
+      if (!cancelled) {
+        authLog("safety timeout — clearing loading");
+        setLoading(false);
+        setInitialized(true);
+      }
+    }, 12000);
 
     if (!isSupabaseConfigured) {
       globalThis.clearTimeout(safetyTimer);
       setLoading(false);
+      setInitialized(true);
       return;
     }
 
-    async function applySession(session: import("@supabase/supabase-js").Session | null) {
-      const nextUser = session?.user ?? null;
+    async function applySession(next: Session | null) {
+      setSession(next);
+      const nextUser = next?.user ?? null;
       setUser(nextUser);
+      authLog("applySession", { userId: nextUser?.id ?? null, email: nextUser?.email ?? null });
+
+      if (isSupabaseConfigured && next?.access_token) {
+        try {
+          const { data: userData, error: userErr } = await supabase.auth.getUser();
+          authLog("getUser()", { id: userData.user?.id, error: userErr?.message ?? null });
+        } catch (e) {
+          authLog("getUser() exception", e);
+        }
+      }
+
       if (!nextUser) {
         const sid = await ensureSession();
         if (!cancelled) setSessionId(sid || null);
@@ -101,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSessionId(null);
         localStorage.removeItem(SESSION_KEY);
         try {
-          const token = session?.access_token;
+          const token = next?.access_token;
           if (token) {
             await fetch(`${getApiBase()}/api/auth/supabase`, {
               method: "POST",
@@ -110,31 +138,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         } catch (_) {}
       }
-      if (!cancelled) setLoading(false);
+      if (!cancelled) {
+        setLoading(false);
+        setInitialized(true);
+      }
     }
 
-    /** Önce OAuth PKCE kodunu takas et, sonra mevcut oturumu oku; abonelik en sonda (yarış önlenir). */
     void (async () => {
       if (typeof window !== "undefined") {
         const search = window.location.search || "";
         if (search.includes("code=")) {
+          authLog("OAuth PKCE: exchangeCodeForSession …");
           try {
             const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
-            if (error) console.warn("[Auth] exchangeCodeForSession:", error.message);
+            if (error) authLog("exchangeCodeForSession error", error.message);
           } catch (e) {
-            console.warn("[Auth] exchangeCodeForSession failed:", e);
+            authLog("exchangeCodeForSession failed", e);
           }
         }
       }
-      const { data } = await supabase.auth.getSession();
+
+      const { data, error } = await supabase.auth.getSession();
+      authLog("init getSession", {
+        error: error?.message ?? null,
+        hasSession: !!data.session,
+        userId: data.session?.user?.id ?? null,
+      });
       if (cancelled) return;
       await applySession(data.session ?? null);
       globalThis.clearTimeout(safetyTimer);
 
-      const { data: subData } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const { data: subData } = supabase.auth.onAuthStateChange((event, sess) => {
+        authLog("AUTH EVENT:", event, { userId: sess?.user?.id ?? null });
         if (cancelled) return;
         globalThis.clearTimeout(safetyTimer);
-        await applySession(session);
+        void applySession(sess);
       });
       subscription = subData.subscription;
     })();
@@ -148,15 +186,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value: AuthContextValue = {
     user,
+    session,
     sessionId,
     loading,
+    initialized,
     getAuthHeaders,
     logout,
   };
 
   return (
     <AuthContext.Provider value={value}>
-      {loading ? null : children}
+      {loading ? <AuthLoadingScreen /> : children}
     </AuthContext.Provider>
   );
 }

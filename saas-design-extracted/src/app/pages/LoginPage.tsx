@@ -6,7 +6,7 @@ import { signIn, signUp, syncUserRowWithBackend } from "../lib/supabaseAuth";
 import { GoogleSignInButton } from "../components/GoogleSignInButton";
 
 export function LoginPage() {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
@@ -16,12 +16,10 @@ export function LoginPage() {
   const [isSignup, setIsSignup] = useState(false);
   const [loadingAction, setLoadingAction] = useState(false);
 
-  // Only redirect after auth is ready. Do NOT redirect to /login until loading === false.
-  // Only redirect to home when !loading && user.
+  // AuthProvider oturum yüklenene kadar bu sayfayı göstermez; user varsa ana sayfaya.
   useEffect(() => {
-    if (loading) return;
     if (user) navigate("/", { replace: true });
-  }, [loading, user, navigate]);
+  }, [user, navigate]);
 
   async function handleAuthSubmit(e: FormEvent) {
     e.preventDefault();
@@ -59,7 +57,6 @@ export function LoginPage() {
     }
   }
 
-  if (loading) return null;
   if (user) return null;
 
   return (

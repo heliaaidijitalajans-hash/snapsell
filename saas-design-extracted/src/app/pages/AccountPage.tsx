@@ -15,6 +15,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { getApiBase, apiJson } from "../config";
+import { supabase, isSupabaseConfigured } from "../lib/supabase";
+import { authLog } from "../../lib/authConfig";
 
 type AccountData = {
   email: string | null;
@@ -33,7 +35,7 @@ type AccountData = {
 };
 
 export function AccountPage() {
-  const { user, logout, getAuthHeaders } = useAuth();
+  const { user, logout, getAuthHeaders, initialized } = useAuth();
   const { t, locale } = useLanguage();
   const [data, setData] = useState<AccountData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,8 +45,13 @@ export function AccountPage() {
   const [cancelSuccess, setCancelSuccess] = useState(false);
 
   useEffect(() => {
+    if (!initialized || !user) return;
     let cancelled = false;
     const fetchAccount = async () => {
+      if (isSupabaseConfigured) {
+        const { data: u, error: guErr } = await supabase.auth.getUser();
+        authLog("AccountPage getUser()", { id: u.user?.id, err: guErr?.message ?? null });
+      }
       const headers = await getAuthHeaders();
       const r = await fetch(`${getApiBase()}/api/account`, { headers });
       const parsed = await apiJson<AccountData | { success?: boolean; data?: AccountData; error?: string }>(r);
@@ -63,7 +70,7 @@ export function AccountPage() {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [user, getAuthHeaders, t]);
+  }, [user, initialized, getAuthHeaders, t]);
 
   const handleCancelSubscription = async () => {
     if (!window.confirm(t("account.cancelConfirm"))) return;
@@ -96,6 +103,20 @@ export function AccountPage() {
       setCancelLoading(false);
     }
   };
+
+  if (!initialized || !user) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-12">
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center">
+          <p className="text-amber-900 font-medium">{t("account.sessionRequired")}</p>
+          <p className="text-sm text-amber-800 mt-2">{t("account.pleaseLogin")}</p>
+          <Link to="/login" className="inline-block mt-4 text-[#FF5A5F] font-medium hover:underline">
+            {t("nav.login")}
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

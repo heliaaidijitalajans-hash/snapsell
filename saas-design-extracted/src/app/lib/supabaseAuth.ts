@@ -4,6 +4,7 @@
  */
 import { supabase, isSupabaseConfigured } from "./supabase";
 import { getApiBase } from "../config";
+import { getOAuthRedirectUrl } from "../../lib/authConfig";
 import { isNetworkFetchError, supabaseUnreachableMessage } from "./supabaseNetworkError";
 
 export type AuthCredentials = { email: string; password: string };
@@ -74,11 +75,11 @@ export async function signInWithGoogle() {
   if (!isSupabaseConfigured) {
     return { data: { provider: null, url: null }, error: new Error("Supabase yapılandırılmadı (VITE_SUPABASE_*).") };
   }
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const redirectTo = getOAuthRedirectUrl();
   return supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: origin ? `${origin}/` : undefined,
+      redirectTo,
       skipBrowserRedirect: false,
     },
   });

@@ -39,6 +39,11 @@ Authentication > URL Configuration: sitenizin URL'leri (or. `https://snapsell.we
 
 Kayit linki dogru siteye donsun diye frontend `signUp` icinde `emailRedirectTo` (`/login`) gonderir; Redirect URLs listesinde bu origin olmalidir.
 
+### Google OAuth (PKCE)
+
+- **Redirect URLs** listesine tam adresi ekleyin: `https://snapsell.website/hesap-ayarlari` (veya `VITE_AUTH_REDIRECT_URL` ile aynı).
+- Frontend `signInWithOAuth` bu URL’ye döner; oturum URL’deki `?code=` ile tamamlanır (`exchangeCodeForSession`).
+
 ## 4. Storage
 
 `004_create_images_and_storage.sql` bucket `generated-images` olusturur. Calismadiysa: Storage > New bucket > adi `generated-images`, public okuma istiyorsaniz public secin; ardindan SQL dosyasindaki policy satirlarini calistirin.

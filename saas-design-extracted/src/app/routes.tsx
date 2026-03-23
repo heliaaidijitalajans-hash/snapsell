@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { createBrowserRouter, Navigate, useLocation } from "react-router";
 import { Layout } from "./components/Layout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 
 function RedirectDashboardToRoot() {
   const loc = useLocation();
@@ -58,7 +59,16 @@ export const router = createBrowserRouter(
         { path: "editor", element: <Navigate to="/gorsel-duzenleme" replace /> },
         { path: "gorsel-duzenleme", element: <Suspense fallback={<PageFallback />}><EditorReplicatePage /></Suspense> },
         { path: "kutuphane", element: <Suspense fallback={<PageFallback />}><LibraryPage /></Suspense> },
-        { path: "hesap-ayarlari", element: <Suspense fallback={<PageFallback />}><AccountPage /></Suspense> },
+        {
+          path: "hesap-ayarlari",
+          element: (
+            <Suspense fallback={<PageFallback />}>
+              <ProtectedRoute>
+                <AccountPage />
+              </ProtectedRoute>
+            </Suspense>
+          ),
+        },
         { path: "hakkimizda", element: <Suspense fallback={<PageFallback />}><AboutPage /></Suspense> },
         { path: "kullanim-kosullari", element: <Suspense fallback={<PageFallback />}><TermsPage /></Suspense> },
         { path: "mesafeli-satis-sozlesmesi", element: <Suspense fallback={<PageFallback />}><DistanceSalesPage /></Suspense> },

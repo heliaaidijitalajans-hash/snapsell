@@ -361,6 +361,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     "account.errorLoad": "Hesap bilgisi alınamadı",
     "account.errorGeneric": "Bir hata oluştu",
     "account.pleaseLogin": "Giriş yaptığınızdan emin olun.",
+    "account.sessionRequired": "Oturum gerekli",
     "account.loadFailed": "Hesap bilgisi yüklenemedi.",
     // Library
     "library.title": "Kütüphane",
@@ -775,6 +776,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     "account.errorLoad": "Could not load account info",
     "account.errorGeneric": "An error occurred",
     "account.pleaseLogin": "Make sure you are signed in.",
+    "account.sessionRequired": "Session required",
     "account.loadFailed": "Could not load account info.",
     // Library
     "library.title": "Library",
