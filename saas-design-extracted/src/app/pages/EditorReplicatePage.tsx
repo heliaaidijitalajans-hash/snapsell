@@ -3,18 +3,17 @@ import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import { Upload, Sparkles, ImageIcon, Check, Store } from "lucide-react";
 import { Link } from "react-router";
-import { RAILWAY_API_BASE } from "../config";
 import { saveGeneratedImageToLibrary } from "../lib/libraryImages";
 
-/** Görsel düzenleme ve SEO pipeline istekleri her zaman Railway API'ye gitsin (VITE_API_BASE_URL). */
-const EDITOR_API_BASE = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || RAILWAY_API_BASE).toString().trim().replace(/\/$/, "");
+/** Boş = aynı origin (Vercel). Farklı backend için `VITE_API_BASE_URL`. */
+const EDITOR_API_BASE = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || "").toString().trim().replace(/\/$/, "");
 const APP_BASE_URL = (import.meta.env.VITE_APP_URL || "https://www.snapsell.website").toString().trim().replace(/\/$/, "");
 
-/** /api/replicate/temp/ görselleri sadece Railway'de; URL snapsell.website ise Railway origin'e çevir ki görsel yüklensin. */
+/** /api/replicate/temp/ görselleri için API origin ile path birleştir (aynı origin veya ayrı backend). */
 function ensureReplicateImageFromRailway(url: string): string {
   if (!url || !url.includes("/api/replicate/temp/")) return url;
   const rail = EDITOR_API_BASE.replace(/\/$/, "");
-  if (url.startsWith(rail)) return url;
+  if (rail && url.startsWith(rail)) return url;
   try {
     const path = new URL(url).pathname + new URL(url).search;
     return path.startsWith("/") ? rail + path : url;

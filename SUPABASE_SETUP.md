@@ -29,7 +29,15 @@ Hata alirsaniz: onceki migrasyonlar zaten uygulanmissa, sadece eksik sutun/polic
 
 Authentication > Providers: **Email** acik olsun (email + sifre).
 
-Authentication > URL Configuration: sitenizin URL'leri (or. `https://snapsell.website`) **Site URL** ve **Redirect URLs** listesinde olsun.
+Authentication > URL Configuration: sitenizin URL'leri (or. `https://snapsell.website`) **Site URL** ve **Redirect URLs** listesinde olsun (`https://alanadiniz.com/**`, Vercel icin `https://*.vercel.app/**`).
+
+### E-posta onayi (Confirm email)
+
+**Aciksa:** Kayit sonrasi oturum acilmaz; kullanici e-postadaki linke tiklamadan giris yapamaz. Uygulama artik bunu yesil kutu ile aciklar.
+
+**Aninda giris istiyorsaniz:** Authentication > Providers > Email > **Confirm email** kapatin (gelistirme veya guvenilir kullanicilar icin).
+
+Kayit linki dogru siteye donsun diye frontend `signUp` icinde `emailRedirectTo` (`/login`) gonderir; Redirect URLs listesinde bu origin olmalidir.
 
 ## 4. Storage
 

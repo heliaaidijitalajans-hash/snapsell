@@ -6,6 +6,7 @@ import { useLanguage } from "../contexts/LanguageContext";
 import { LanguageSelector } from "./LanguageSelector";
 import { CookieBanner, hasAnalyticsConsent } from "./CookieBanner";
 import { getApiBase } from "../config";
+import { GoogleSignInButton } from "./GoogleSignInButton";
 
 export function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -87,6 +88,7 @@ export function Layout() {
                 </div>
               ) : (
                 <>
+                  <GoogleSignInButton variant="navbar" />
                   <Link to="/login" className="text-gray-700 hover:text-[#FF5A5F] transition-colors font-medium">{t("nav.login")}</Link>
                   <Link to="/register" className="px-4 py-2 bg-[#FF5A5F] text-white rounded-lg hover:bg-[#FF5A5F]/90 transition-colors font-medium">{t("nav.register")}</Link>
                   <div className="relative group">
@@ -129,6 +131,9 @@ export function Layout() {
               <div className="border-t border-gray-200 pt-2 mt-2 space-y-1 flex flex-wrap items-center gap-2">
                 <div className="w-full px-3 py-2">
                   <LanguageSelector />
+                </div>
+                <div className="px-3 py-2 w-full">
+                  <GoogleSignInButton variant="navbar" />
                 </div>
                 <Link to="/login" className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100" onClick={() => setMobileMenuOpen(false)}>{t("nav.login")}</Link>
                 <Link to="/register" className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100" onClick={() => setMobileMenuOpen(false)}>{t("nav.register")}</Link>

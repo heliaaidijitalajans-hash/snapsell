@@ -1,11 +1,15 @@
+/** Eski Railway deploy'ları için referans; varsayılan API tabanı artık boş (aynı origin / Vercel). */
 const RAILWAY_API_BASE = "https://snapsell-production.up.railway.app";
 const envApiBase = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || "").toString().trim().replace(/\/$/, "");
 
-/** Base URL for API – env'de yoksa Railway kullanılır (SEO ve pipeline istekleri her zaman backend'e gitsin). */
-const API_BASE_URL = envApiBase || RAILWAY_API_BASE;
+/**
+ * API kökü. Boş = tarayıcıda aynı origin (`/api/...` → Vercel veya local).
+ * Sadece API başka bir host'taysa `VITE_API_BASE_URL` verin (örn. eski Railway).
+ */
+const API_BASE_URL = envApiBase;
 export { API_BASE_URL, RAILWAY_API_BASE };
 
-/** Returns full API base URL for fetch( getApiBase() + "/api/..." ). API istekleri Railway'e gider. */
+/** `fetch(\`\${getApiBase()}/api/...\`)` — boş dönerse istekler mevcut siteye gider (Vercel'de /api gerekli). */
 export function getApiBase(): string {
   return API_BASE_URL;
 }

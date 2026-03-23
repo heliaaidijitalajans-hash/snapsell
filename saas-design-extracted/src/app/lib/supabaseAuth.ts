@@ -4,6 +4,7 @@
  */
 import { supabase, isSupabaseConfigured } from "./supabase";
 import { getApiBase } from "../config";
+import { isNetworkFetchError, supabaseUnreachableMessage } from "./supabaseNetworkError";
 
 export type AuthCredentials = { email: string; password: string };
 
@@ -16,21 +17,71 @@ function notConfiguredError() {
   } as const;
 }
 
+function mapAuthResultNetwork<T extends { error: { message?: string } | null }>(result: T): T {
+  const msg = result.error?.message || "";
+  if (msg.includes("fetch") || msg.includes("NetworkError") || msg.includes("network")) {
+    return { ...result, error: supabaseUnreachableMessage() } as T;
+  }
+  return result;
+}
+
 export async function signUp({ email, password }: AuthCredentials) {
   if (!isSupabaseConfigured) return notConfiguredError();
   const trimmed = email.trim();
-  return supabase.auth.signUp({ email: trimmed, password });
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  try {
+    return mapAuthResultNetwork(
+      await supabase.auth.signUp({
+        email: trimmed,
+        password,
+        options: {
+          // Doğrulama e-postasındaki link bu adrese döner (Supabase → URL Configuration ile uyumlu olmalı).
+          emailRedirectTo: origin ? `${origin}/login` : undefined,
+        },
+      })
+    );
+  } catch (e) {
+    if (isNetworkFetchError(e)) {
+      return { data: { user: null, session: null }, error: supabaseUnreachableMessage() };
+    }
+    throw e;
+  }
 }
 
 export async function signIn({ email, password }: AuthCredentials) {
   if (!isSupabaseConfigured) return notConfiguredError();
   const trimmed = email.trim();
-  return supabase.auth.signInWithPassword({ email: trimmed, password });
+  try {
+    return mapAuthResultNetwork(await supabase.auth.signInWithPassword({ email: trimmed, password }));
+  } catch (e) {
+    if (isNetworkFetchError(e)) {
+      return { data: { user: null, session: null }, error: supabaseUnreachableMessage() };
+    }
+    throw e;
+  }
 }
 
 export async function signOut() {
   if (!isSupabaseConfigured) return { error: null };
   return supabase.auth.signOut();
+}
+
+/**
+ * Google OAuth — Supabase Dashboard: Authentication → Providers → Google açık olmalı;
+ * URL Configuration’da Site URL ve Redirect URLs’e `https://siteniz.com/**` ekleyin.
+ */
+export async function signInWithGoogle() {
+  if (!isSupabaseConfigured) {
+    return { data: { provider: null, url: null }, error: new Error("Supabase yapılandırılmadı (VITE_SUPABASE_*).") };
+  }
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  return supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: origin ? `${origin}/` : undefined,
+      skipBrowserRedirect: false,
+    },
+  });
 }
 
 /**

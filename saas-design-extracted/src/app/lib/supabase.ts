@@ -3,13 +3,30 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL || "").toString().trim();
 const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").toString().trim();
 
-/** True when real Supabase URL + anon key are set (Vite embeds VITE_* at build time). */
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+/** .env.example veya placeholder değerler — gerçek proje değil sayılır. */
+function looksLikeExampleConfig(url: string, key: string): boolean {
+  const u = url.toLowerCase();
+  const k = key.toLowerCase();
+  if (!url || !key) return true;
+  if (u.includes("your-project") || u.includes("placeholder") || u.includes("example.com")) return true;
+  if (k === "your_anon_key" || k.includes("placeholder") || k.includes("your_anon")) return true;
+  if (k.length < 20) return true;
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === "placeholder.supabase.co") return true;
+  } catch {
+    return true;
+  }
+  return false;
+}
+
+/** Gerçek Supabase URL + anon key (Vite build’de gömülür). Örnek metinler geçersiz sayılır. */
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey) && !looksLikeExampleConfig(supabaseUrl, supabaseAnonKey);
 
 if (!isSupabaseConfigured) {
   console.warn(
-    "Supabase env vars missing: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY. " +
-      "Add them in Vercel (or .env) and redeploy — Vite bakes them in at build time."
+    "Supabase client: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY eksik veya .env.example placeholder. " +
+      "Vercel → Environment Variables → Production + Preview → yeniden Deploy (Vite build sırasında gömülür)."
   );
 }
 
