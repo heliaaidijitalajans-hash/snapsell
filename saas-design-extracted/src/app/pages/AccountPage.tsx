@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router";
+import type { User } from "@supabase/supabase-js";
 import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import {
-  User,
+  User as UserIcon,
   CreditCard,
   BarChart3,
   Package,
@@ -34,43 +35,141 @@ type AccountData = {
   createdAt: string | null;
 };
 
+/** API isteği için Bearer — doğrudan Supabase oturumundan (AuthContext ile yarış olmaz). */
+async function getBearerHeaders(): Promise<Record<string, string>> {
+  const { data, error } = await supabase.auth.getSession();
+  authLog("getBearerHeaders getSession", {
+    err: error?.message ?? null,
+    hasToken: !!data.session?.access_token,
+  });
+  const token = data.session?.access_token;
+  if (token) return { Authorization: `Bearer ${token}` };
+  return {};
+}
+
 export function AccountPage() {
-  const { user, logout, getAuthHeaders, initialized } = useAuth();
+  const { logout, getAuthHeaders } = useAuth();
   const { t, locale } = useLanguage();
+
+  /** Supabase oturumu: sayfa içinde doğrudan yönetilir (OAuth dönüşü dahil). */
+  const [sessionLoading, setSessionLoading] = useState(true);
+  const [sessionUser, setSessionUser] = useState<User | null>(null);
+
   const [data, setData] = useState<AccountData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [accountLoading, setAccountLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelMessage, setCancelMessage] = useState<string | null>(null);
   const [cancelSuccess, setCancelSuccess] = useState(false);
 
+  /** 1) OAuth code → session, 2) getSession, 3) onAuthStateChange + cleanup */
   useEffect(() => {
-    if (!initialized || !user) return;
+    if (!isSupabaseConfigured) {
+      setSessionLoading(false);
+      setSessionUser(null);
+      return;
+    }
+
     let cancelled = false;
-    const fetchAccount = async () => {
-      if (isSupabaseConfigured) {
-        const { data: u, error: guErr } = await supabase.auth.getUser();
-        authLog("AccountPage getUser()", { id: u.user?.id, err: guErr?.message ?? null });
+    let subscription: { unsubscribe: () => void } | null = null;
+
+    void (async () => {
+      try {
+        if (typeof window !== "undefined" && window.location.search.includes("code=")) {
+          const { error: exErr } = await supabase.auth.exchangeCodeForSession(window.location.href);
+          authLog("AccountPage exchangeCodeForSession", exErr?.message ?? "ok");
+          if (!exErr) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+        }
+
+        const { data: sessData, error: gsErr } = await supabase.auth.getSession();
+        authLog("AccountPage mount getSession", {
+          error: gsErr?.message ?? null,
+          userId: sessData.session?.user?.id ?? null,
+        });
+        if (cancelled) return;
+        setSessionUser(sessData.session?.user ?? null);
+
+        const { data: subData } = supabase.auth.onAuthStateChange((event, session) => {
+          authLog("AUTH EVENT:", event, { userId: session?.user?.id ?? null });
+          setSessionUser(session?.user ?? null);
+          if (session?.access_token) {
+            void fetch(`${getApiBase()}/api/auth/supabase`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            }).catch(() => {});
+          }
+        });
+        subscription = subData.subscription;
+      } finally {
+        if (!cancelled) setSessionLoading(false);
       }
-      const headers = await getAuthHeaders();
-      const r = await fetch(`${getApiBase()}/api/account`, { headers });
-      const parsed = await apiJson<AccountData | { success?: boolean; data?: AccountData; error?: string }>(r);
-      if (cancelled) return;
-      if (!r.ok) {
-        throw new Error((parsed && typeof parsed === "object" && "error" in parsed && parsed.error) ? String(parsed.error) : t("account.errorLoad"));
-      }
-      const payload = parsed && typeof parsed === "object" && "data" in parsed && parsed.data != null ? parsed.data : parsed;
-      setData(payload as AccountData);
+    })();
+
+    return () => {
+      cancelled = true;
+      subscription?.unsubscribe();
     };
-    fetchAccount()
-      .catch((e) => {
+  }, []);
+
+  const fetchAccountData = useCallback(async () => {
+    setAccountLoading(true);
+    setError(null);
+    let headers: Record<string, string>;
+    if (isSupabaseConfigured) {
+      headers = await getBearerHeaders();
+      if (!headers.Authorization) {
+        setError(t("account.errorLoad"));
+        setAccountLoading(false);
+        return;
+      }
+    } else {
+      headers = await getAuthHeaders();
+    }
+
+    const r = await fetch(`${getApiBase()}/api/account`, { headers });
+    const parsed = await apiJson<AccountData | { success?: boolean; data?: AccountData; error?: string }>(r);
+    if (!r.ok) {
+      throw new Error(
+        parsed && typeof parsed === "object" && "error" in parsed && parsed.error
+          ? String(parsed.error)
+          : t("account.errorLoad")
+      );
+    }
+    const payload =
+      parsed && typeof parsed === "object" && "data" in parsed && parsed.data != null ? parsed.data : parsed;
+    setData(payload as AccountData);
+  }, [getAuthHeaders, t]);
+
+  useEffect(() => {
+    if (sessionLoading) return;
+    if (!isSupabaseConfigured) {
+      setAccountLoading(false);
+      return;
+    }
+    if (!sessionUser) {
+      setData(null);
+      setAccountLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data: uData, error: guErr } = await supabase.auth.getUser();
+        authLog("AccountPage getUser()", { id: uData.user?.id, err: guErr?.message ?? null });
+        await fetchAccountData();
+      } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : t("account.errorGeneric"));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [user, initialized, getAuthHeaders, t]);
+      } finally {
+        if (!cancelled) setAccountLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionLoading, sessionUser, fetchAccountData, t]);
 
   const handleCancelSubscription = async () => {
     if (!window.confirm(t("account.cancelConfirm"))) return;
@@ -79,7 +178,11 @@ export function AccountPage() {
     setCancelLoading(true);
     try {
       let headers: Record<string, string> = { "Content-Type": "application/json" };
-      Object.assign(headers, await getAuthHeaders());
+      if (isSupabaseConfigured) {
+        Object.assign(headers, await getBearerHeaders());
+      } else {
+        Object.assign(headers, await getAuthHeaders());
+      }
       const res = await fetch(`${getApiBase()}/api/account/cancel-subscription`, {
         method: "POST",
         headers,
@@ -94,7 +197,10 @@ export function AccountPage() {
       const refetch = await fetch(`${getApiBase()}/api/account`, { headers });
       const refetchData = await apiJson<AccountData | { data?: AccountData }>(refetch);
       if (refetch.ok && refetchData) {
-        const payload = refetchData && typeof refetchData === "object" && "data" in refetchData && refetchData.data != null ? refetchData.data : refetchData;
+        const payload =
+          refetchData && typeof refetchData === "object" && "data" in refetchData && refetchData.data != null
+            ? refetchData.data
+            : refetchData;
         setData(payload as AccountData);
       }
     } catch (e) {
@@ -104,7 +210,16 @@ export function AccountPage() {
     }
   };
 
-  if (!initialized || !user) {
+  if (sessionLoading) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-2">
+        <Loader2 className="w-10 h-10 text-[#FF5A5F] animate-spin" aria-hidden />
+        <p className="text-sm text-gray-500">{t("account.checkingSession")}</p>
+      </div>
+    );
+  }
+
+  if (!sessionUser) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-12">
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center">
@@ -118,7 +233,7 @@ export function AccountPage() {
     );
   }
 
-  if (loading) {
+  if (accountLoading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <Loader2 className="w-10 h-10 text-[#FF5A5F] animate-spin" aria-hidden />
@@ -137,11 +252,14 @@ export function AccountPage() {
     );
   }
 
-  const displayEmail = data.email || user?.email || "—";
-  const displayName = data.displayName || (user?.user_metadata?.full_name as string | undefined) || (user?.user_metadata?.name as string | undefined) || "—";
+  const displayEmail = data.email || sessionUser.email || "—";
+  const displayName =
+    data.displayName ||
+    (sessionUser.user_metadata?.full_name as string | undefined) ||
+    (sessionUser.user_metadata?.name as string | undefined) ||
+    "—";
   const isFreePlan =
-    String(data.plan || "").toLowerCase().trim() === "free" ||
-    (!data.hasEditor && !data.hasLeonardo);
+    String(data.plan || "").toLowerCase().trim() === "free" || (!data.hasEditor && !data.hasLeonardo);
 
   const dateLocale = locale === "en" ? "en-US" : "tr-TR";
 
@@ -156,7 +274,7 @@ export function AccountPage() {
         <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
             <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <User className="w-5 h-5 text-[#FF5A5F]" />
+              <UserIcon className="w-5 h-5 text-[#FF5A5F]" />
               {t("account.profile")}
             </h2>
           </div>
@@ -173,11 +291,18 @@ export function AccountPage() {
                   <span className="truncate">{displayEmail}</span>
                 </div>
                 {displayName !== "—" && (
-                  <p className="text-sm text-gray-600">{t("account.name")}: {displayName}</p>
+                  <p className="text-sm text-gray-600">
+                    {t("account.name")}: {displayName}
+                  </p>
                 )}
                 {data.createdAt && (
                   <p className="text-xs text-gray-500">
-                    {t("account.membership")}: {new Date(data.createdAt).toLocaleDateString(dateLocale, { day: "numeric", month: "long", year: "numeric" })}
+                    {t("account.membership")}:{" "}
+                    {new Date(data.createdAt).toLocaleDateString(dateLocale, {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })}
                   </p>
                 )}
               </div>
@@ -290,9 +415,7 @@ export function AccountPage() {
                     {t("account.cancel")}
                   </button>
                   {cancelMessage && (
-                    <p className={`text-sm ${cancelSuccess ? "text-green-600" : "text-red-600"}`}>
-                      {cancelMessage}
-                    </p>
+                    <p className={`text-sm ${cancelSuccess ? "text-green-600" : "text-red-600"}`}>{cancelMessage}</p>
                   )}
                 </div>
               ) : (

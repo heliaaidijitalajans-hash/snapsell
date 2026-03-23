@@ -1,14 +1,19 @@
 /**
- * OAuth dönüş URL’si — Supabase Dashboard → Redirect URLs’e aynısı eklenmeli.
- * Örn: https://snapsell.website/hesap-ayarlari
+ * Google OAuth dönüş — Supabase Dashboard → Redirect URLs ile birebir aynı olmalı.
+ * Production: https://snapsell.website/hesap-ayarlari
  */
+export const OAUTH_REDIRECT_PRODUCTION = "https://snapsell.website/hesap-ayarlari";
+
 export function getOAuthRedirectUrl(): string {
   const fromEnv = (import.meta.env.VITE_AUTH_REDIRECT_URL || "").toString().trim().replace(/\/$/, "");
   if (fromEnv) return fromEnv;
   if (typeof window !== "undefined") {
-    return `${window.location.origin}/hesap-ayarlari`;
+    const h = window.location.hostname;
+    if (h === "localhost" || h === "127.0.0.1") {
+      return `${window.location.origin}/hesap-ayarlari`;
+    }
   }
-  return "https://snapsell.website/hesap-ayarlari";
+  return OAUTH_REDIRECT_PRODUCTION;
 }
 
 /** Dev veya VITE_DEBUG_AUTH=true iken auth logları */
