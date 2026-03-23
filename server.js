@@ -3585,13 +3585,8 @@ app.use(function (err, req, res, next) {
   res.status(500).json({ error: err.message || "Server error" });
 });
 
-const PORT = process.env.PORT || 8080;
-if (!process.env.VERCEL) {
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log("Server is running on port", PORT);
-    console.log("Sunucu başarıyla ayağa kalktı ve hazır!");
-  });
-}
+// Dinleme (listen) yalnızca start.js içinde — çift port (EADDRINUSE) önlenir.
+// Vercel: api/index.js serverless-http ile app'i kullanır; burada listen yok.
 
 process.on("unhandledRejection", (reason, promise) => {
   console.log("Unhandled Rejection at:", promise, "reason:", reason);

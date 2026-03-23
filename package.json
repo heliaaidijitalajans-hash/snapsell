@@ -8,8 +8,8 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js",
-    "dev": "node server.js",
+    "start": "node start.js",
+    "dev": "node start.js",
     "build": "npm run build:design",
     "build:css": "npx tailwindcss -i ./src/input.css -o ./public/css/tailwind.css --minify",
     "build:design": "npm run build --prefix saas-design-extracted",

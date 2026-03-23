@@ -42,10 +42,11 @@ try {
     listenMinimal(e);
     return;
   }
-  app.listen(PORT, "0.0.0.0", function () {
+  const httpServer = app.listen(PORT, "0.0.0.0", function () {
     console.log("Server is running on port", PORT);
+    console.log("SnapSell API ready — health: GET /ping");
   });
-  server.on("error", function (err) {
+  httpServer.on("error", function (err) {
     console.error("Listen error:", err);
     process.exit(1);
   });
