@@ -1662,6 +1662,13 @@ async function getShopierBearerToken() {
 
 app.post("/api/create-payment", async (req, res) => {
   try {
+    const paymentsEnabled = String(process.env.PAYMENTS_ENABLED || "false").toLowerCase() === "true";
+    if (!paymentsEnabled) {
+      return res.status(503).json({
+        error: "PAYMENT_SYSTEM_DISABLED",
+        message: "Odeme sistemi su an aktif degildir. En kisa surede global odemelere acilacaktir.",
+      });
+    }
     const hasPat = Boolean(String(process.env.SHOPIER_PAT || "").trim());
     const clientId = String(process.env.SHOPIER_CLIENT_ID || "").trim();
     const clientSecret = String(process.env.SHOPIER_CLIENT_SECRET || "").trim();

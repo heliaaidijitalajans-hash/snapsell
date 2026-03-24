@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { Check, Sparkles } from "lucide-react";
 import { getApiBase, apiJson } from "../config";
 import { useLanguage } from "../contexts/LanguageContext";
-import { useAuth } from "../contexts/AuthContext";
 
 type PlanItem = {
   id: string;
@@ -106,75 +105,30 @@ function PlanCard({
 
 export default function PricingPage() {
   const { t } = useLanguage();
-  const { user } = useAuth();
+  const navigate = useNavigate();
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
-  const submitToShopier = useCallback((postUrl: string, params: Record<string, string>) => {
-    const form = document.createElement("form");
-    form.method = "POST";
-    form.action = postUrl;
-    form.style.display = "none";
-    Object.entries(params).forEach(([key, value]) => {
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = key;
-      input.value = value;
-      form.appendChild(input);
-    });
-    document.body.appendChild(form);
-    form.submit();
-  }, []);
 
   const handleCtaClick = useCallback(
-    async (
-      plan: PlanItem,
-      payment: { price: number; currency: "USD" }
-    ) => {
-      setPaymentError(null);
+    async (plan: PlanItem, payment: { price: number; currency: "USD" }) => {
       const planId = plan.id || plan.name;
       setPaymentLoading(planId);
       try {
-        const payload: Record<string, unknown> = {
-          plan: {
-            id: plan.id,
-            name: plan.name,
-            price: payment.price,
-            currency: payment.currency,
+        navigate("/odeme", {
+          state: {
+            plan: {
+              ...plan,
+              price: payment.price,
+              currency: payment.currency,
+            },
           },
-          buyer: {
-            name: (user?.user_metadata?.full_name as string | undefined) || (user?.user_metadata?.name as string | undefined) || "",
-            email: user?.email ?? "",
-            phone: "",
-          },
-        };
-        const res = await fetch(`${getApiBase()}/api/create-payment`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          replace: false,
         });
-        const data = await apiJson<{ paymentUrl?: string; postUrl?: string; params?: Record<string, string>; message?: string; error?: string }>(res);
-        if (!res.ok) {
-          const msg = (data && "message" in data && data.message) || (data && "error" in data && data.error) || "Ödeme sayfası açılamadı. Lütfen daha sonra tekrar deneyin veya destek ile iletişime geçin.";
-          setPaymentError(msg);
-          return;
-        }
-        if (data?.paymentUrl) {
-          window.location.href = data.paymentUrl;
-          return;
-        }
-        if (data?.postUrl && data?.params) {
-          submitToShopier(data.postUrl, data.params);
-          return;
-        }
-        setPaymentError("Ödeme sayfası açılamadı. Lütfen daha sonra tekrar deneyin veya destek ile iletişime geçin.");
-      } catch {
-        setPaymentError("Ödeme sayfası açılamadı. Lütfen daha sonra tekrar deneyin veya destek ile iletişime geçin.");
       } finally {
         setPaymentLoading(null);
       }
     },
-    [user?.user_metadata, user?.email, submitToShopier]
+    [navigate]
   );
 
   const getPaymentPayload = useCallback(
@@ -234,11 +188,6 @@ export default function PricingPage() {
         </p>
       </div>
 
-      {paymentError && (
-        <div className="mb-6 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-red-800 text-sm">
-          {paymentError}
-        </div>
-      )}
       <section>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
           {plans.map((plan) => {
