@@ -345,7 +345,7 @@ export function AccountPage() {
               <span className="text-xl font-bold text-gray-900">{data.planName || data.plan}</span>
               {data.planPrice !== undefined && data.planPrice !== "" && (
                 <span className="text-gray-600">
-                  — ₺{data.planPrice}
+                  — ${data.planPrice}
                   {data.planPeriod ? ` / ${data.planPeriod}` : ""}
                 </span>
               )}

@@ -908,7 +908,7 @@ export function AdminPage() {
 
           {/* 3.2 Backend plan fiyatları */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Backend plan fiyatları (₺)</h3>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Backend plan fiyatları (USD)</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {planOptions.map((key) => (
                 <div key={key} className="flex items-center gap-2">
@@ -925,7 +925,7 @@ export function AdminPage() {
                     }
                     className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
                   />
-                  <span className="text-gray-500 text-sm">₺</span>
+                  <span className="text-gray-500 text-sm">$</span>
                 </div>
               ))}
             </div>
@@ -1033,7 +1033,7 @@ export function AdminPage() {
                         {planOptions.map((p) => (
                           <option key={p} value={p}>
                             {p}
-                            {planPrices[p] != null ? ` (${planPrices[p]} ₺)` : ""}
+                            {planPrices[p] != null ? ` ($${planPrices[p]})` : ""}
                           </option>
                         ))}
                       </select>

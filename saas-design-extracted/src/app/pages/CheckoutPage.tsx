@@ -87,7 +87,7 @@ export default function CheckoutPage() {
     return null;
   }
 
-  const currency = plan.currency === "USD" ? "$" : "₺";
+  const currency = "$";
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

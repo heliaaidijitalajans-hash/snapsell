@@ -31,15 +31,15 @@ function PlanCard({
   t: (key: string) => string;
   onCtaClick: () => void;
   loading?: boolean;
-  displayCurrency?: "TRY" | "USD";
+  displayCurrency?: "USD";
   displayPrice?: number | string;
 }) {
-  const currency = (displayCurrency || plan.currency) === "USD" ? "$" : "₺";
+  const currency = "$";
   const price = displayPrice !== undefined ? displayPrice : plan.price;
   const priceDisplay =
     price === "—" || price === "" || (typeof price === "number" && !Number.isFinite(price))
       ? t("pricing.custom")
-      : `${currency}${typeof price === "number" ? (currency === "$" ? price.toFixed(2) : price) : price}`;
+      : `${currency}${typeof price === "number" ? (Number.isInteger(price) ? price : price.toFixed(2)) : price}`;
   const showPeriod =
     price !== "—" && price !== "" && plan.period && t("pricing.perPeriod");
 
@@ -110,22 +110,6 @@ export default function PricingPage() {
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
-  const [isTurkey, setIsTurkey] = useState<boolean>(true);
-  const [usdToTry, setUsdToTry] = useState<number>(34);
-
-  useEffect(() => {
-    const c = new AbortController();
-    fetch(`${getApiBase()}/api/geo`, { signal: c.signal })
-      .then((r) => r.json())
-      .then((d) => setIsTurkey(d.isTurkey === true))
-      .catch(() => setIsTurkey(true));
-    fetch(`${getApiBase()}/api/exchange-rate`, { signal: c.signal })
-      .then((r) => r.json())
-      .then((d) => setUsdToTry(typeof d.usdToTry === "number" && d.usdToTry > 0 ? d.usdToTry : 34))
-      .catch(() => setUsdToTry(34));
-    return () => c.abort();
-  }, []);
-
   const submitToShopier = useCallback((postUrl: string, params: Record<string, string>) => {
     const form = document.createElement("form");
     form.method = "POST";
@@ -145,7 +129,7 @@ export default function PricingPage() {
   const handleCtaClick = useCallback(
     async (
       plan: PlanItem,
-      payment: { price: number; currency: "TRY" | "USD"; usdToTryRate?: number }
+      payment: { price: number; currency: "USD" }
     ) => {
       setPaymentError(null);
       const planId = plan.id || plan.name;
@@ -164,9 +148,6 @@ export default function PricingPage() {
             phone: "",
           },
         };
-        if (payment.currency === "USD" && payment.usdToTryRate) {
-          payload.usdToTryRate = payment.usdToTryRate;
-        }
         const res = await fetch(`${getApiBase()}/api/create-payment`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -199,27 +180,17 @@ export default function PricingPage() {
   const getPaymentPayload = useCallback(
     (plan: PlanItem) => {
       const raw = plan.price === "—" || plan.price === "" ? 0 : Number(plan.price);
-      const tlPrice = Number.isFinite(raw) ? raw : 0;
-      if (isTurkey) {
-        return { price: tlPrice, currency: "TRY" as const };
-      }
-      const usdPrice = usdToTry > 0 ? tlPrice / usdToTry : tlPrice;
-      return { price: Math.round(usdPrice * 100) / 100, currency: "USD" as const, usdToTryRate: usdToTry };
+      const usdPrice = Number.isFinite(raw) ? raw : 0;
+      return { price: usdPrice, currency: "USD" as const };
     },
-    [isTurkey, usdToTry]
+    []
   );
 
   const getDisplayForPlan = useCallback(
     (plan: PlanItem) => {
-      const raw = plan.price === "—" || plan.price === "" ? null : Number(plan.price);
-      const tlPrice = raw != null && Number.isFinite(raw) ? raw : null;
-      if (isTurkey || tlPrice == null) {
-        return { displayCurrency: "TRY" as const, displayPrice: plan.price };
-      }
-      const usdPrice = usdToTry > 0 ? tlPrice / usdToTry : tlPrice;
-      return { displayCurrency: "USD" as const, displayPrice: Math.round(usdPrice * 100) / 100 };
+      return { displayCurrency: "USD" as const, displayPrice: plan.price };
     },
-    [isTurkey, usdToTry]
+    []
   );
 
   useEffect(() => {
@@ -231,7 +202,7 @@ export default function PricingPage() {
           return (data as { plans: PlanItem[] }).plans.map((p) => ({
             ...p,
             features: p.features || [],
-            currency: p.currency || "TRY",
+            currency: "USD",
           }));
         }
         if (Array.isArray(data)) return data;
