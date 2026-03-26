@@ -48,7 +48,7 @@ const QUALITY_OPTIONS = [
 
 export function EditorReplicatePage() {
   const { user, getAuthHeaders } = useAuth();
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const [hasEditor, setHasEditor] = useState<boolean | null>(null);
   const [freeEditorUsesRemaining, setFreeEditorUsesRemaining] = useState<number | null>(null);
   const [freeLimitReached, setFreeLimitReached] = useState(false);
@@ -139,6 +139,7 @@ export function EditorReplicatePage() {
           image: base64,
           prompt: prompt.trim() || (photoQuality === "luxury" ? "luxury product photography, premium lighting, elegant background" : photoQuality === "professional" ? "commercial product shot, clean neutral background, professional" : "professional product photography, studio lighting, soft daylight"),
           photoQuality,
+          language: locale,
         }),
         signal: controller.signal,
       });
@@ -216,7 +217,7 @@ export function EditorReplicatePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedFile, prompt, photoQuality, hasEditor, getAuthHeaders, t, freeEditorUsesRemaining, user?.id]);
+  }, [selectedFile, prompt, photoQuality, hasEditor, getAuthHeaders, t, locale, freeEditorUsesRemaining, user?.id]);
 
   const clearSelection = useCallback(() => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);

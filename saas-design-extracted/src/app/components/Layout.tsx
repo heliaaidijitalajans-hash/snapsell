@@ -22,6 +22,11 @@ export function Layout() {
     fetch(`${getApiBase()}/api/track-visit`, { method: "GET" }).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [location.pathname, location.search]);
+
   const navigation = [
     { nameKey: "nav.home", href: "/", external: false },
     { nameKey: "nav.imageEdit", href: "/gorsel-duzenleme", external: false },
@@ -200,7 +205,6 @@ export function Layout() {
             <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
               <img src={`${import.meta.env.BASE_URL}images/payment-cards/visa.svg`} alt="Visa" className="h-10 w-auto object-contain" width="80" height="28" />
               <img src={`${import.meta.env.BASE_URL}images/payment-cards/mastercard.svg`} alt="Mastercard" className="h-10 w-auto object-contain" width="48" height="32" />
-              <img src={`${import.meta.env.BASE_URL}images/payment-cards/troy.svg`} alt="Troy" className="h-9 w-auto object-contain" width="90" height="28" />
               <img src={`${import.meta.env.BASE_URL}images/payment-cards/maestro.svg`} alt="Maestro" className="h-9 w-auto object-contain" width="100" height="28" />
               <img src={`${import.meta.env.BASE_URL}images/payment-cards/amex.svg`} alt="American Express" className="h-9 w-auto object-contain" width="90" height="28" />
               <img src={`${import.meta.env.BASE_URL}images/payment-cards/discover.svg`} alt="Discover" className="h-9 w-auto object-contain" width="120" height="28" />

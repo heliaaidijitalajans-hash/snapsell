@@ -18,6 +18,55 @@ type PlanItem = {
   currency?: string;
 };
 
+function localizePlan(plan: PlanItem, locale: "tr" | "en"): PlanItem {
+  if (locale !== "en") return plan;
+  const id = (plan.id || "").toLowerCase();
+  const localizedPeriod = plan.period === "ay" ? "month" : plan.period === "yıl" ? "year" : plan.period;
+  const byId: Record<string, Partial<PlanItem>> = {
+    free: {
+      name: "Free plan",
+      description: "3 conversions, basic features",
+      cta: "Start free",
+      features: ["3 conversions", "Basic features"],
+    },
+    monthly_plan: {
+      name: "Monthly plan",
+      description: "30 conversions",
+      cta: "Get started",
+      features: ["30 conversions", "All features", "SEO description", "Price analysis"],
+    },
+    monthly_plan_pro: {
+      name: "Monthly plan Pro",
+      description: "80 conversions",
+      cta: "Upgrade to Pro",
+      features: ["80 conversions", "All features", "SEO description", "Price analysis"],
+    },
+    yearly_plan: {
+      name: "Yearly plan",
+      description: "1200 conversions, 100 monthly credits",
+      cta: "Choose yearly",
+      features: ["1200 conversions", "100 monthly credits", "All features", "SEO description", "Price analysis", "Includes upcoming feature updates"],
+    },
+    enterprise: {
+      name: "Enterprise",
+      description: "Contact us",
+      cta: "Contact us",
+      features: ["Team workspace", "All features", "SEO description", "Price analysis", "Includes upcoming feature updates", "Annual billing"],
+    },
+    addon: {
+      name: "Add-on pack",
+      description: "25 conversions",
+      cta: "Buy add-on",
+      features: ["25 conversions", "All features included"],
+    },
+  };
+  return {
+    ...plan,
+    ...byId[id],
+    period: localizedPeriod,
+  };
+}
+
 function PlanCard({
   plan,
   t,
@@ -104,7 +153,7 @@ function PlanCard({
 }
 
 export default function PricingPage() {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const navigate = useNavigate();
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null);
@@ -153,11 +202,13 @@ export default function PricingPage() {
       .then(async (res) => {
         const data = await apiJson<{ success?: boolean; plans?: PlanItem[] } | PlanItem[]>(res);
         if (data && typeof data === "object" && "plans" in data && Array.isArray((data as { plans: PlanItem[] }).plans)) {
-          return (data as { plans: PlanItem[] }).plans.map((p) => ({
-            ...p,
-            features: p.features || [],
-            currency: "USD",
-          }));
+          return (data as { plans: PlanItem[] }).plans.map((p) =>
+            localizePlan({
+              ...p,
+              features: p.features || [],
+              currency: "USD",
+            }, locale)
+          );
         }
         if (Array.isArray(data)) return data;
         return [];
@@ -168,16 +219,16 @@ export default function PricingPage() {
           .then(async (res) => {
             const data = await apiJson<{ success?: boolean; plans?: PlanItem[] } | PlanItem[]>(res);
             if (data && typeof data === "object" && "plans" in data && Array.isArray((data as { plans: PlanItem[] }).plans)) {
-              return (data as { plans: PlanItem[] }).plans;
+              return (data as { plans: PlanItem[] }).plans.map((p) => localizePlan({ ...p, currency: "USD" }, locale));
             }
-            if (Array.isArray(data)) return data;
+            if (Array.isArray(data)) return data.map((p) => localizePlan({ ...p, currency: "USD" }, locale));
             return [];
           })
           .then(setPlans)
           .catch(() => setPlans([]));
       });
     return () => controller.abort();
-  }, []);
+  }, [locale]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">

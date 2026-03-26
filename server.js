@@ -2318,7 +2318,9 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
     return res.status(403).json({ error: "Bu özellik Pro plan (Görsel Düzenleme) gerektirir. PhotoRoom ile arka plan silme ve yeni arka plan oluşturma.", upgradeUrl: "/dashboard/fiyatlandirma" });
   }
   if (!PHOTOROOM_API_KEY) return res.status(503).json({ error: "PHOTOROOM_API_KEY .env dosyasına ekleyin." });
-  const { image: base64, prompt } = req.body || {};
+  const { image: base64, prompt, language } = req.body || {};
+  const acceptLanguage = String(req.headers["accept-language"] || "").toLowerCase();
+  const isEnglish = String(language || "").toLowerCase() === "en" || acceptLanguage.startsWith("en");
   if (!base64 || typeof base64 !== "string") return res.status(400).json({ error: "image (base64) gerekli" });
   let buf;
   try {
@@ -2453,7 +2455,9 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
             messages: [{
               role: "user",
               content: [
-                { type: "text", text: "Sen profesyonel bir e-ticaret ve SEO uzmanısın. Sana gönderilen görseldeki ürünü detaylıca analiz et.\n\nBaşlık: Ürünün markasını, modelini, rengini ve en belirgin özelliğini içeren, tıklanma oranı yüksek bir başlık oluştur.\n\nAçıklama: Ürünün materyalini, tarzını, kullanım alanlarını ve neden satın alınması gerektiğini anlatan, müşteri odaklı, ikna edici ve SEO uyumlu (anahtar kelime zengini) uzun bir açıklama yaz.\n\nTon: Samimi ama profesyonel bir dil kullan. Eğer ürünün üzerinde bir kusur veya spesifik bir detay varsa ona da değin.\n\nTam olarak şu formatta cevap ver:\nBaşlık: [buraya başlık]\nAçıklama: [buraya açıklama]" },
+                { type: "text", text: isEnglish
+                    ? "You are a professional e-commerce and SEO specialist. Analyze the product in the provided image in detail.\n\nTitle: Create a high-CTR title including brand, model, color, and the most distinctive product trait.\n\nDescription: Write a long, persuasive, customer-focused, SEO-friendly description rich in keywords. Mention material, style, use cases, and why the customer should buy.\n\nTone: Friendly but professional. If the product has a visible flaw or specific detail, mention it clearly.\n\nReturn exactly in this format:\nTitle: [write title here]\nDescription: [write description here]"
+                    : "Sen profesyonel bir e-ticaret ve SEO uzmanisin. Sana gonderilen gorseldeki urunu detaylica analiz et.\n\nBaslik: Urunun markasini, modelini, rengini ve en belirgin ozelligini iceren, tiklanma orani yuksek bir baslik olustur.\n\nAciklama: Urunun materyalini, tarzini, kullanim alanlarini ve neden satin alinmasi gerektigini anlatan, musteri odakli, ikna edici ve SEO uyumlu (anahtar kelime zengini) uzun bir aciklama yaz.\n\nTon: Samimi ama profesyonel bir dil kullan. Eger urunun uzerinde bir kusur veya spesifik bir detay varsa ona da degin.\n\nTam olarak su formatta cevap ver:\nBaslik: [buraya baslik]\nAciklama: [buraya aciklama]" },
                 { type: "image_url", image_url: { url: imgDataUrl, detail: "low" } }
               ]
             }]
