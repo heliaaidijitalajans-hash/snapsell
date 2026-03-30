@@ -189,7 +189,7 @@ export function AccountPage() {
       };
       const payload = {
         email: String(sessionUser.email || "").trim().toLowerCase(),
-        plan: "pro" as const,
+        plan: "monthly_plan_pro",
       };
       const res = await fetch(`${getApiBase()}/api/create-checkout`, {
         method: "POST",

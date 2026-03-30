@@ -306,18 +306,30 @@ async function getUserById(userId) {
 const LEMON_CHECKOUT_PLAN_IDS = ["monthly_plan", "monthly_plan_pro", "yearly_plan", "addon", "enterprise"];
 
 /**
- * Checkout isteği: body.plan → Lemon variant. Öncelik VARIANTS.pro = LEMON_SQUEEZY_VARIANT_ID.
- * Eski istemciler monthly_plan vb. gönderirse aynı variant kullanılır.
+ * body.plan → Lemon variant ID. Railway: LEMON_SQUEEZY_VARIANT_MONTHLY_PLAN, LEMON_SQUEEZY_VARIANT_PRO_PLAN
+ * (yazım birebir bu iki isim; başka env kullanılmaz.)
  */
 function resolveCheckoutVariantId(plan) {
   const n = lemon.normalizeLemonRelationshipId;
-  const VARIANTS = {
-    pro: n(process.env.LEMON_SQUEEZY_VARIANT_ID)
-  };
   const p = String(plan || "").trim().toLowerCase();
-  if (VARIANTS[p]) return VARIANTS[p];
-  if (LEMON_CHECKOUT_PLAN_IDS.indexOf(p) !== -1 && VARIANTS.pro) return VARIANTS.pro;
-  return "";
+  /** @type {string|undefined} */
+  let raw;
+  switch (p) {
+    case "monthly_plan":
+      raw = process.env.LEMON_SQUEEZY_VARIANT_MONTHLY_PLAN;
+      break;
+    case "pro":
+    case "monthly_plan_pro":
+      raw = process.env.LEMON_SQUEEZY_VARIANT_PRO_PLAN;
+      break;
+    case "yearly_plan":
+    case "addon":
+      raw = process.env.LEMON_SQUEEZY_VARIANT_PRO_PLAN;
+      break;
+    default:
+      return "";
+  }
+  return n(raw);
 }
 
 /** Webhook: custom_data.plan_id → users.plan (yoksa eski davranış: "pro"). */
@@ -2232,7 +2244,7 @@ app.post("/api/subscription-webhook", (req, res) => {
 
 /**
  * Lemon Squeezy — checkout oluştur.
- * Body: { email, plan } — plan: "pro" (veya geriye dönük: monthly_plan, …). Bearer zorunlu; email oturum ile eşleşmeli.
+ * Body: { email, plan } — plan: monthly_plan | monthly_plan_pro | pro | yearly_plan | addon. Bearer zorunlu.
  */
 app.post("/api/create-checkout", async function (req, res) {
   console.log("BODY:", req.body);
@@ -2253,8 +2265,17 @@ app.post("/api/create-checkout", async function (req, res) {
     if (!userId) return res.status(400).json({ error: "Kullanıcı kimliği alınamadı" });
     const variantId = resolveCheckoutVariantId(plan);
     if (!variantId) {
+      const p = String(plan || "").trim().toLowerCase();
+      const known = ["monthly_plan", "monthly_plan_pro", "pro", "yearly_plan", "addon"];
+      if (known.indexOf(p) === -1) {
+        return res.status(400).json({
+          error:
+            "Geçersiz plan. İzin verilen: monthly_plan, monthly_plan_pro, pro, yearly_plan, addon."
+        });
+      }
       return res.status(400).json({
-        error: "Geçersiz plan veya LEMON_SQUEEZY_VARIANT_ID tanımlı değil"
+        error:
+          "Lemon variant ID eksik veya geçersiz. monthly_plan için LEMON_SQUEEZY_VARIANT_MONTHLY_PLAN; pro / monthly_plan_pro / yearly_plan / addon için LEMON_SQUEEZY_VARIANT_PRO_PLAN kontrol edin."
       });
     }
     const apiKey = String(process.env.LEMON_SQUEEZY_API_KEY || "").trim();
