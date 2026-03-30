@@ -303,8 +303,6 @@ async function getUserById(userId) {
   return { id, credits: u.credits ?? FREE_CREDITS, plan: u.plan || "free", email: u.email, displayName: u.displayName };
 }
 
-const LEMON_CHECKOUT_PLAN_IDS = ["monthly_plan", "monthly_plan_pro", "yearly_plan", "addon", "enterprise"];
-
 /**
  * body.plan → Lemon variant ID. Railway: LEMON_SQUEEZY_VARIANT_MONTHLY_PLAN, LEMON_SQUEEZY_VARIANT_PRO_PLAN
  * (yazım birebir bu iki isim; başka env kullanılmaz.)
@@ -332,14 +330,6 @@ function resolveCheckoutVariantId(plan) {
   return n(raw);
 }
 
-/** Webhook: custom_data.plan_id → users.plan (yoksa eski davranış: "pro"). */
-function snapPlanFromLemonCustom(planIdRaw) {
-  const p = String(planIdRaw || "").trim();
-  if (LEMON_CHECKOUT_PLAN_IDS.indexOf(p) !== -1) return p;
-  if (p === "pro") return "pro";
-  return "pro";
-}
-
 /** Veritabanında kullanıcı güncelle (Supabase veya bellek). */
 async function updateUserInDb(userId, data) {
   const payload = {};
@@ -354,8 +344,11 @@ async function updateUserInDb(userId, data) {
   if (data.subscription_status != null) payload.subscription_status = data.subscription_status;
   if (Object.keys(payload).length === 0) return;
   if (supabase) {
-    const { error } = await supabase.from("users").update(payload).eq("id", userId);
+    const { data, error } = await supabase.from("users").update(payload).eq("id", userId).select("id");
     if (error) throw new Error(error.message);
+    if (!data || data.length === 0) {
+      console.warn("[Lemon] Supabase update: eşleşen kullanıcı yok (id=", userId, ")");
+    }
     return;
   }
   if (memoryUsers.has(userId)) {
@@ -413,81 +406,19 @@ async function requireProUser(req, res, next) {
   }
 }
 
-async function resolveLemonWebhookUserId(body) {
-  const sum = lemon.summarizeWebhook(body);
-  if (sum.customUserId) return sum.customUserId;
-  if (sum.userEmail) {
-    const u = await getUserByEmail(sum.userEmail);
-    return u ? u.id : null;
-  }
-  return null;
-}
+const { runLemonWebhook } = require("./lib/lemonWebhookProcess");
 
 /** Lemon Squeezy webhook gövdesi (JSON) — Supabase users güncellenir. */
 async function processLemonWebhookPayload(body) {
-  const sum = lemon.summarizeWebhook(body);
-  const uid = await resolveLemonWebhookUserId(body);
-  const planSnap = snapPlanFromLemonCustom(sum.customPlanId);
-  switch (sum.eventName) {
-    case "subscription_created":
-      if (uid) {
-        const patch = {
-          plan: planSnap,
-          subscription_id: sum.resourceId,
-          subscription_status: "active"
-        };
-        const grant = getCreditsForPlan(planSnap);
-        if (grant > 0) {
-          const u = await getUserById(uid);
-          if (u) patch.credits = Math.max(u.credits ?? FREE_CREDITS, grant);
-        }
-        await updateUserInDb(uid, patch);
-      } else {
-        console.warn("[Lemon] subscription_created: kullanıcı bulunamadı", sum.userEmail);
-      }
-      break;
-    case "subscription_updated":
-      if (!uid) {
-        console.warn("[Lemon] subscription_updated: kullanıcı bulunamadı", sum.userEmail);
-        break;
-      }
-      if (sum.status === "active" || sum.status === "on_trial" || sum.status === "paused") {
-        const patch = { plan: planSnap, subscription_status: "active" };
-        if (sum.resourceId) patch.subscription_id = sum.resourceId;
-        const grant = getCreditsForPlan(planSnap);
-        if (grant > 0) {
-          const u = await getUserById(uid);
-          if (u) patch.credits = Math.max(u.credits ?? FREE_CREDITS, grant);
-        }
-        await updateUserInDb(uid, patch);
-      } else if (sum.status === "cancelled" || sum.status === "expired" || sum.status === "unpaid") {
-        await updateUserInDb(uid, { plan: "free", subscription_status: "cancelled" });
-      }
-      break;
-    case "subscription_cancelled":
-    case "subscription_expired":
-      if (uid) await updateUserInDb(uid, { plan: "free", subscription_status: "cancelled" });
-      else console.warn("[Lemon] subscription end: kullanıcı bulunamadı", sum.userEmail);
-      break;
-    case "order_created":
-      if (!sum.customUserId || sum.resourceType !== "orders") break;
-      if (String(sum.customPlanId || "").trim() !== "addon") break;
-      {
-        const add = getCreditsForPlan("addon");
-        const u = await getUserById(sum.customUserId);
-        if (!u) {
-          console.warn("[Lemon] order_created addon: kullanıcı yok", sum.customUserId);
-          break;
-        }
-        const newCredits = (u.credits ?? FREE_CREDITS) + add;
-        const patch = { credits: newCredits };
-        if (!isProPlan(u.plan)) patch.plan = "addon";
-        await updateUserInDb(sum.customUserId, patch);
-      }
-      break;
-    default:
-      break;
-  }
+  return runLemonWebhook(body, {
+    lemon,
+    getUserById,
+    getUserByEmail,
+    updateUserInDb,
+    getCreditsForPlan,
+    isProPlan,
+    FREE_CREDITS
+  });
 }
 
 async function getOrCreateUser(sessionIdOrUid, opts) {
@@ -2325,8 +2256,11 @@ app.post("/api/webhook/lemonsqueezy", async function (req, res) {
   const sig = req.get("X-Signature") || req.get("x-signature");
   const raw = req.rawBody;
   if (!raw || !Buffer.isBuffer(raw) || !lemon.verifyWebhookSignature(raw, sig, secret)) {
+    console.warn("[Lemon] Webhook imza geçersiz veya ham gövde yok");
     return res.status(400).json({ error: "Invalid signature" });
   }
+  const ev = req.body && req.body.meta && req.body.meta.event_name;
+  console.log("[Lemon] 🔗 Webhook alındı (imza OK), event=", ev || "(meta yok)");
   try {
     await processLemonWebhookPayload(req.body || {});
     res.status(200).json({ received: true });
