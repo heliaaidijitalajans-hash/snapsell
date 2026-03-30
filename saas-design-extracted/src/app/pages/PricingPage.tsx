@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router";
 import { Check, Sparkles } from "lucide-react";
 import { getApiBase, apiJson } from "../config";
 import { useLanguage } from "../contexts/LanguageContext";
+import { useAuth } from "../contexts/AuthContext";
 
 type PlanItem = {
   id: string;
@@ -152,17 +153,53 @@ function PlanCard({
   );
 }
 
+const LEMON_PLAN_IDS = ["monthly_plan", "monthly_plan_pro", "yearly_plan", "addon", "enterprise"] as const;
+
 export default function PricingPage() {
   const { t, locale } = useLanguage();
   const navigate = useNavigate();
+  const { user, getAuthHeaders } = useAuth();
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null);
 
   const handleCtaClick = useCallback(
     async (plan: PlanItem, payment: { price: number; currency: "USD" }) => {
-      const planId = plan.id || plan.name;
-      setPaymentLoading(planId);
+      const planKey = plan.id || plan.name;
+      setPaymentLoading(planKey);
       try {
+        if (plan.id === "free") {
+          navigate("/login");
+          return;
+        }
+        if (plan.id === "enterprise") {
+          navigate("/destek");
+          return;
+        }
+        const lemonPlan =
+          plan.id && LEMON_PLAN_IDS.includes(plan.id as (typeof LEMON_PLAN_IDS)[number])
+            ? plan.id
+            : null;
+        if (lemonPlan && user?.id && user.email) {
+          const headers = await getAuthHeaders();
+          const res = await fetch(`${getApiBase()}/api/create-checkout`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...headers },
+            body: JSON.stringify({
+              userId: user.id,
+              email: user.email,
+              planId: lemonPlan,
+            }),
+          });
+          const json = await apiJson<{ checkoutUrl?: string; error?: string }>(res);
+          if (res.ok && json?.checkoutUrl) {
+            window.location.href = json.checkoutUrl;
+            return;
+          }
+        }
+        if (lemonPlan && (!user?.id || !user.email)) {
+          navigate("/login", { state: { from: "/fiyatlandirma" } });
+          return;
+        }
         navigate("/odeme", {
           state: {
             plan: {
@@ -177,7 +214,7 @@ export default function PricingPage() {
         setPaymentLoading(null);
       }
     },
-    [navigate]
+    [navigate, user, getAuthHeaders]
   );
 
   const getPaymentPayload = useCallback(

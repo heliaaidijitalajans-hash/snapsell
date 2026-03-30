@@ -16,6 +16,7 @@ const path = require("path");
 const fs = require("fs");
 const { randomUUID } = require("crypto");
 const { createServiceClient } = require("./lib/supabase");
+const lemon = require("./lib/lemonsqueezy");
 const FormDataPkg = (function () { try { return require("form-data"); } catch (_) { return null; } })();
 let supabase = null;
 try {
@@ -147,7 +148,8 @@ let sitePlans = loadSitePlansFromDisk();
 
 /** Plan satın alındığında atanacak kredi. Bellekteki sitePlans kullanılır. */
 function getCreditsForPlan(planId) {
-  const p = sitePlans.find(function (x) { return (x.id || x.name) === planId; });
+  const id = planId === "pro" ? "monthly_plan_pro" : planId;
+  const p = sitePlans.find(function (x) { return (x.id || x.name) === id; });
   if (p && typeof p.credits === "number") return p.credits;
   return 0;
 }
@@ -184,6 +186,7 @@ function getEnterprisePlan(planId) {
 function isProPlan(plan) {
   if (PRO_PLAN_DEMO) return true;
   if (!plan) return false;
+  if (String(plan).toLowerCase() === "pro") return true;
   if (PRO_PLANS.includes(String(plan))) return true;
   if (String(plan).startsWith("enterprise_")) {
     const ep = getEnterprisePlan(String(plan));
@@ -202,7 +205,9 @@ function isEditorPlan(plan) {
 }
 function resolvePlan(plan) {
   if (PRO_PLAN_DEMO) return "monthly_plan_pro";
-  return plan || "free";
+  const p = plan || "free";
+  if (String(p).toLowerCase() === "pro") return "pro";
+  return p;
 }
 
 async function getSupabaseAuthUserFromToken(token) {
@@ -229,7 +234,9 @@ function saveMemoryUsers() {
       totalConversions: u.totalConversions ?? 0,
       email: u.email || null,
       displayName: u.displayName || null,
-      createdAt: u.createdAt != null ? u.createdAt : null
+      createdAt: u.createdAt != null ? u.createdAt : null,
+      subscription_id: u.subscription_id || null,
+      subscription_status: u.subscription_status || null
     };
   });
   saveJsonFile(MEMORY_USERS_FILE, obj);
@@ -246,7 +253,9 @@ function loadMemoryUsers() {
       totalConversions: u.totalConversions != null ? u.totalConversions : 0,
       email: u.email || null,
       displayName: u.displayName || null,
-      createdAt: u.createdAt != null ? u.createdAt : null
+      createdAt: u.createdAt != null ? u.createdAt : null,
+      subscription_id: u.subscription_id || null,
+      subscription_status: u.subscription_status || null
     });
   });
   if (memoryUsers.size > 0) console.log("Bellek kullanicilar yuklendi:", memoryUsers.size);
@@ -280,6 +289,50 @@ async function getUserByEmail(email) {
   return null;
 }
 
+/** ID ile kullanıcı (Lemon webhook ek paket / kredi). */
+async function getUserById(userId) {
+  if (!userId || String(userId).trim() === "") return null;
+  const id = String(userId).trim();
+  if (supabase) {
+    const { data: row, error } = await supabase.from("users").select("*").eq("id", id).maybeSingle();
+    if (error || !row) return null;
+    return { id: row.id, credits: row.credits ?? FREE_CREDITS, plan: row.plan || "free", email: row.email, displayName: row.display_name };
+  }
+  const u = memoryUsers.get(id);
+  if (!u) return null;
+  return { id, credits: u.credits ?? FREE_CREDITS, plan: u.plan || "free", email: u.email, displayName: u.displayName };
+}
+
+const LEMON_CHECKOUT_PLAN_IDS = ["monthly_plan", "monthly_plan_pro", "yearly_plan", "addon", "enterprise"];
+
+function resolveLemonVariantId(planId) {
+  const p = String(planId || "").trim();
+  const legacy = String(process.env.LEMON_SQUEEZY_VARIANT_ID || "").trim();
+  const envKeys = {
+    monthly_plan: "LEMON_SQUEEZY_VARIANT_MONTHLY_PLAN",
+    monthly_plan_pro: "LEMON_SQUEEZY_VARIANT_MONTHLY_PLAN_PRO",
+    yearly_plan: "LEMON_SQUEEZY_VARIANT_YEARLY_PLAN",
+    addon: "LEMON_SQUEEZY_VARIANT_ADDON",
+    enterprise: "LEMON_SQUEEZY_VARIANT_ENTERPRISE"
+  };
+  const key = envKeys[p];
+  let v = key ? String(process.env[key] || "").trim() : "";
+  if (!v && p === "monthly_plan" && legacy) v = legacy;
+  const anySpecific = Object.keys(envKeys).some(function (k) {
+    return String(process.env[envKeys[k]] || "").trim() !== "";
+  });
+  if (!v && legacy && !anySpecific) v = legacy;
+  return v;
+}
+
+/** Webhook: custom_data.plan_id → users.plan (yoksa eski davranış: "pro"). */
+function snapPlanFromLemonCustom(planIdRaw) {
+  const p = String(planIdRaw || "").trim();
+  if (LEMON_CHECKOUT_PLAN_IDS.indexOf(p) !== -1) return p;
+  if (p === "pro") return "pro";
+  return "pro";
+}
+
 /** Veritabanında kullanıcı güncelle (Supabase veya bellek). */
 async function updateUserInDb(userId, data) {
   const payload = {};
@@ -290,6 +343,8 @@ async function updateUserInDb(userId, data) {
   if (data.displayName != null) payload.display_name = data.displayName;
   if (data.subscription_start != null) payload.subscription_start = data.subscription_start;
   if (data.subscription_end != null) payload.subscription_end = data.subscription_end;
+  if (data.subscription_id != null) payload.subscription_id = data.subscription_id;
+  if (data.subscription_status != null) payload.subscription_status = data.subscription_status;
   if (Object.keys(payload).length === 0) return;
   if (supabase) {
     const { error } = await supabase.from("users").update(payload).eq("id", userId);
@@ -305,7 +360,126 @@ async function updateUserInDb(userId, data) {
     if (data.displayName != null) u.displayName = data.displayName;
     if (data.subscription_start != null) u.subscription_start = data.subscription_start;
     if (data.subscription_end != null) u.subscription_end = data.subscription_end;
+    if (data.subscription_id != null) u.subscription_id = data.subscription_id;
+    if (data.subscription_status != null) u.subscription_status = data.subscription_status;
     saveMemoryUsers();
+  }
+}
+
+/** Supabase users satırından oturum nesnesi (Lemon alanları dahil). */
+function userFromSupabaseRow(row, uid) {
+  const plan = resolvePlan(row.plan);
+  const createdAt = row.created_at ? new Date(row.created_at) : null;
+  return {
+    id: uid,
+    ref: { update: async function (d) { return updateUserInDb(uid, d); } },
+    credits: row.credits ?? FREE_CREDITS,
+    plan,
+    email: row.email || null,
+    displayName: row.display_name || null,
+    createdAt,
+    totalConversions: row.total_conversions ?? 0,
+    subscriptionId: row.subscription_id || null,
+    subscriptionStatus: row.subscription_status || null
+  };
+}
+
+/**
+ * Aktif Lemon / iç plan: isProPlan ile uyumlu. req.snapSellUser atanır.
+ */
+async function requireProUser(req, res, next) {
+  try {
+    const user = await getRequestUser(req);
+    if (!user) return res.status(401).json({ error: "UNAUTHORIZED", message: "Oturum gerekli." });
+    const plan = user.plan || "free";
+    if (!isProPlan(plan)) {
+      return res.status(403).json({
+        error: "PRO_REQUIRED",
+        message: "Bu özellik Pro plan gerektirir.",
+        upgradeUrl: "/fiyatlandirma"
+      });
+    }
+    req.snapSellUser = user;
+    next();
+  } catch (e) {
+    next(e);
+  }
+}
+
+async function resolveLemonWebhookUserId(body) {
+  const sum = lemon.summarizeWebhook(body);
+  if (sum.customUserId) return sum.customUserId;
+  if (sum.userEmail) {
+    const u = await getUserByEmail(sum.userEmail);
+    return u ? u.id : null;
+  }
+  return null;
+}
+
+/** Lemon Squeezy webhook gövdesi (JSON) — Supabase users güncellenir. */
+async function processLemonWebhookPayload(body) {
+  const sum = lemon.summarizeWebhook(body);
+  const uid = await resolveLemonWebhookUserId(body);
+  const planSnap = snapPlanFromLemonCustom(sum.customPlanId);
+  switch (sum.eventName) {
+    case "subscription_created":
+      if (uid) {
+        const patch = {
+          plan: planSnap,
+          subscription_id: sum.resourceId,
+          subscription_status: "active"
+        };
+        const grant = getCreditsForPlan(planSnap);
+        if (grant > 0) {
+          const u = await getUserById(uid);
+          if (u) patch.credits = Math.max(u.credits ?? FREE_CREDITS, grant);
+        }
+        await updateUserInDb(uid, patch);
+      } else {
+        console.warn("[Lemon] subscription_created: kullanıcı bulunamadı", sum.userEmail);
+      }
+      break;
+    case "subscription_updated":
+      if (!uid) {
+        console.warn("[Lemon] subscription_updated: kullanıcı bulunamadı", sum.userEmail);
+        break;
+      }
+      if (sum.status === "active" || sum.status === "on_trial" || sum.status === "paused") {
+        const patch = { plan: planSnap, subscription_status: "active" };
+        if (sum.resourceId) patch.subscription_id = sum.resourceId;
+        const grant = getCreditsForPlan(planSnap);
+        if (grant > 0) {
+          const u = await getUserById(uid);
+          if (u) patch.credits = Math.max(u.credits ?? FREE_CREDITS, grant);
+        }
+        await updateUserInDb(uid, patch);
+      } else if (sum.status === "cancelled" || sum.status === "expired" || sum.status === "unpaid") {
+        await updateUserInDb(uid, { plan: "free", subscription_status: "cancelled" });
+      }
+      break;
+    case "subscription_cancelled":
+    case "subscription_expired":
+      if (uid) await updateUserInDb(uid, { plan: "free", subscription_status: "cancelled" });
+      else console.warn("[Lemon] subscription end: kullanıcı bulunamadı", sum.userEmail);
+      break;
+    case "order_created":
+      if (!sum.customUserId || sum.resourceType !== "orders") break;
+      if (String(sum.customPlanId || "").trim() !== "addon") break;
+      {
+        const add = getCreditsForPlan("addon");
+        const u = await getUserById(sum.customUserId);
+        if (!u) {
+          console.warn("[Lemon] order_created addon: kullanıcı yok", sum.customUserId);
+          break;
+        }
+        const newCredits = (u.credits ?? FREE_CREDITS) + add;
+        const patch = { credits: newCredits };
+        if (!isProPlan(u.plan)) patch.plan = "addon";
+        await updateUserInDb(sum.customUserId, patch);
+      }
+      break;
+    default:
+      break;
   }
 }
 
@@ -315,36 +489,14 @@ async function getOrCreateUser(sessionIdOrUid, opts) {
     const { data: row, error: fetchErr } = await supabase.from("users").select("*").eq("id", sessionIdOrUid).maybeSingle();
     if (fetchErr) throw new Error(fetchErr.message);
     if (row) {
-      const plan = resolvePlan(row.plan);
-      const createdAt = row.created_at ? new Date(row.created_at) : null;
-      return {
-        id: sessionIdOrUid,
-        ref: { update: async (d) => updateUserInDb(sessionIdOrUid, d) },
-        credits: row.credits ?? FREE_CREDITS,
-        plan,
-        email: row.email || null,
-        displayName: row.display_name || null,
-        createdAt,
-        totalConversions: row.total_conversions ?? 0
-      };
+      return userFromSupabaseRow(row, sessionIdOrUid);
     }
     // Aynı e-posta ile daha önce kayıt varsa onu kullan (ücretsiz hak yenilenmesin)
     if (opts.email != null && String(opts.email).trim() !== "") {
       const emailNorm = String(opts.email).trim().toLowerCase();
       const { data: existingByEmail, error: emailErr } = await supabase.from("users").select("*").ilike("email", emailNorm).maybeSingle();
       if (!emailErr && existingByEmail) {
-        const plan = resolvePlan(existingByEmail.plan);
-        const createdAt = existingByEmail.created_at ? new Date(existingByEmail.created_at) : null;
-        return {
-          id: existingByEmail.id,
-          ref: { update: async (d) => updateUserInDb(existingByEmail.id, d) },
-          credits: existingByEmail.credits ?? FREE_CREDITS,
-          plan,
-          email: existingByEmail.email || null,
-          displayName: existingByEmail.display_name || null,
-          createdAt,
-          totalConversions: existingByEmail.total_conversions ?? 0
-        };
+        return userFromSupabaseRow(existingByEmail, existingByEmail.id);
       }
     }
     // Session (X-Session-Id) ile gelip kullanıcı yoksa yeni oluşturma; ücretsiz 3 hak sadece POST /api/register ile verilsin
@@ -364,37 +516,15 @@ async function getOrCreateUser(sessionIdOrUid, opts) {
       if (insertErr.code === "23505") {
         const { data: again, error: fetchAgain } = await supabase.from("users").select("*").eq("id", sessionIdOrUid).maybeSingle();
         if (!fetchAgain && again) {
-          const planResolved = resolvePlan(again.plan);
-          const createdAt = again.created_at ? new Date(again.created_at) : null;
           console.log("✅ User created");
-          return {
-            id: sessionIdOrUid,
-            ref: { update: async (d) => updateUserInDb(sessionIdOrUid, d) },
-            credits: again.credits ?? FREE_CREDITS,
-            plan: planResolved,
-            email: again.email || null,
-            displayName: again.display_name || null,
-            createdAt,
-            totalConversions: again.total_conversions ?? 0
-          };
+          return userFromSupabaseRow(again, sessionIdOrUid);
         }
         if (opts.email) {
           const emailNorm = String(opts.email).trim().toLowerCase();
           const { data: byEmail, error: emailFetchErr } = await supabase.from("users").select("*").eq("email", emailNorm).maybeSingle();
           if (!emailFetchErr && byEmail) {
-            const planResolved = resolvePlan(byEmail.plan);
-            const createdAt = byEmail.created_at ? new Date(byEmail.created_at) : null;
             console.log("✅ User created");
-            return {
-              id: byEmail.id,
-              ref: { update: async (d) => updateUserInDb(byEmail.id, d) },
-              credits: byEmail.credits ?? FREE_CREDITS,
-              plan: planResolved,
-              email: byEmail.email || null,
-              displayName: byEmail.display_name || null,
-              createdAt,
-              totalConversions: byEmail.total_conversions ?? 0
-            };
+            return userFromSupabaseRow(byEmail, byEmail.id);
           }
         }
       }
@@ -427,6 +557,8 @@ async function getOrCreateUser(sessionIdOrUid, opts) {
           email: u.email || null,
           displayName: u.displayName || null,
           createdAt: u.createdAt != null ? (typeof u.createdAt === "number" ? u.createdAt : new Date(u.createdAt).getTime()) : null,
+          subscriptionId: u.subscription_id || null,
+          subscriptionStatus: u.subscription_status || null,
           _memory: true
         };
       }
@@ -440,7 +572,9 @@ async function getOrCreateUser(sessionIdOrUid, opts) {
       createdAt: Date.now(),
       totalConversions: 0,
       email: opts.email != null ? String(opts.email) : null,
-      displayName: opts.displayName != null ? String(opts.displayName) : null
+      displayName: opts.displayName != null ? String(opts.displayName) : null,
+      subscription_id: null,
+      subscription_status: null
     });
     saveMemoryUsers();
     try { incrementDailyStat("signups"); } catch (_) {}
@@ -459,6 +593,8 @@ async function getOrCreateUser(sessionIdOrUid, opts) {
     email: u.email || null,
     displayName: u.displayName || null,
     createdAt: u.createdAt != null ? (typeof u.createdAt === "number" ? u.createdAt : new Date(u.createdAt).getTime()) : null,
+    subscriptionId: u.subscription_id || null,
+    subscriptionStatus: u.subscription_status || null,
     _memory: true
   };
 }
@@ -562,7 +698,12 @@ app.use(function (req, res, next) {
 app.use(cors(corsOptions));
 
 // 2) Body parser
-app.use(express.json({ limit: "50mb" }));
+app.use(express.json({
+  limit: "50mb",
+  verify: function (req, res, buf) {
+    req.rawBody = buf;
+  }
+}));
 
 // 3) API routes (app.get, app.post, app.use("/api/...") etc. follow below)
 
@@ -616,8 +757,8 @@ function canUsePhotoRoom(user) {
   if (credits < CREDITS_PER_CONVERSION) return false;
   // Ücretsiz planda: 3 deneme limiti / krediler başka yerde kontrol ediliyor, burada sadece erişime izin ver
   if (plan === "free") return true;
-  // Ücretli planlarda da kredi temelli kullanım: editor/pro planı varsa ve kredisi yeterliyse izin ver
-  return isEditorPlan(plan);
+  // Ücretli planlarda: görsel düzenleme (addon) veya Lemon Squeezy "pro" aboneliği
+  return isEditorPlan(plan) || String(plan).toLowerCase() === "pro";
 }
 function canUseLeonardo(user) {
   return isProPlan(user.plan || "free") || isAdminUser(user);
@@ -2047,7 +2188,11 @@ app.get("/api/account", async (req, res) => {
   const credits = user.credits ?? FREE_CREDITS;
   const plan = user.plan || "free";
   const conversions = Math.floor(credits / CREDITS_PER_CONVERSION);
-  const planInfo = sitePlans.find(function (p) { return (p.id || p.name) === plan; }) || { name: plan, features: [], price: "", period: "" };
+  var planInfo = sitePlans.find(function (p) { return (p.id || p.name) === plan; }) || null;
+  if (!planInfo && String(plan).toLowerCase() === "pro") {
+    planInfo = { name: "Pro", features: [], price: "", period: "" };
+  }
+  if (!planInfo) planInfo = { name: plan, features: [], price: "", period: "" };
   const createdAt = user.createdAt ? (typeof user.createdAt === "object" && user.createdAt.getTime ? user.createdAt.getTime() : user.createdAt) : null;
   res.json({
     email: user.email || null,
@@ -2062,6 +2207,8 @@ app.get("/api/account", async (req, res) => {
     planFeatures: planInfo.features || [],
     planPrice: planInfo.price,
     planPeriod: planInfo.period,
+    subscriptionId: user.subscriptionId || null,
+    subscriptionStatus: user.subscriptionStatus || null,
     createdAt: createdAt ? new Date(createdAt).toISOString() : null
   });
 });
@@ -2075,7 +2222,7 @@ app.post("/api/account/cancel-subscription", async (req, res) => {
     return res.status(200).json({ success: true, message: "Zaten ücretsiz plandasınız.", plan: "free" });
   }
   try {
-    await updateUserInDb(user.id, { plan: "free" });
+    await updateUserInDb(user.id, { plan: "free", subscription_status: "cancelled" });
     res.status(200).json({ success: true, message: "Abonelik iptal edildi.", plan: "free" });
   } catch (err) {
     console.error("cancel-subscription:", err.message);
@@ -2086,6 +2233,79 @@ app.post("/api/account/cancel-subscription", async (req, res) => {
 /** Payment webhook – temporarily disabled; placeholder until payment system is re-enabled. */
 app.post("/api/subscription-webhook", (req, res) => {
   res.status(200).json({ message: "Payment system coming soon" });
+});
+
+/**
+ * Lemon Squeezy — checkout oluştur (API anahtarı sadece sunucuda).
+ * Body: { userId, email, planId } — planId: monthly_plan | monthly_plan_pro | yearly_plan | addon | enterprise
+ */
+app.post("/api/create-checkout", async function (req, res) {
+  try {
+    const authUser = await getRequestUser(req);
+    if (!authUser) return res.status(401).json({ error: "Oturum gerekli" });
+    const body = req.body || {};
+    const userId = String(body.userId || "").trim();
+    const email = String(body.email || "").trim().toLowerCase();
+    const planId = String(body.planId || "").trim();
+    if (!userId || !email) return res.status(400).json({ error: "userId ve email gerekli" });
+    if (!planId || LEMON_CHECKOUT_PLAN_IDS.indexOf(planId) === -1) {
+      return res.status(400).json({ error: "Geçerli planId gerekli (monthly_plan, monthly_plan_pro, yearly_plan, addon, enterprise)" });
+    }
+    if (authUser.id !== userId) return res.status(403).json({ error: "userId oturum ile eşleşmiyor" });
+    const authEmail = (authUser.email || "").trim().toLowerCase();
+    if (authEmail !== email) return res.status(403).json({ error: "email oturum ile eşleşmiyor" });
+    const apiKey = String(process.env.LEMON_SQUEEZY_API_KEY || "").trim();
+    const storeId = String(process.env.LEMON_SQUEEZY_STORE_ID || "").trim();
+    const variantId = resolveLemonVariantId(planId);
+    if (!variantId) {
+      return res.status(400).json({
+        error: "Bu plan için Lemon variant ID tanımlı değil (.env: LEMON_SQUEEZY_VARIANT_* veya tek LEMON_SQUEEZY_VARIANT_ID)"
+      });
+    }
+    const base = String(process.env.PUBLIC_APP_URL || "").trim().replace(/\/$/, "");
+    const redirectUrl = base ? base + "/hesap-ayarlari" : undefined;
+    const { checkoutUrl } = await lemon.createCheckout({
+      apiKey,
+      storeId,
+      variantId,
+      userId,
+      email,
+      redirectUrl,
+      planId
+    });
+    res.json({ checkoutUrl });
+  } catch (err) {
+    console.error("[Lemon] create-checkout:", err.message);
+    res.status(500).json({ error: err.message || "Checkout oluşturulamadı" });
+  }
+});
+
+/**
+ * Lemon Squeezy — webhook (X-Signature HMAC-SHA256, ham gövde).
+ */
+app.post("/api/webhook/lemonsqueezy", async function (req, res) {
+  const secret = String(process.env.LEMON_SQUEEZY_WEBHOOK_SECRET || "").trim();
+  if (!secret) {
+    console.warn("[Lemon] LEMON_SQUEEZY_WEBHOOK_SECRET tanımsız");
+    return res.status(503).json({ error: "Webhook yapılandırılmadı" });
+  }
+  const sig = req.get("X-Signature") || req.get("x-signature");
+  const raw = req.rawBody;
+  if (!raw || !Buffer.isBuffer(raw) || !lemon.verifyWebhookSignature(raw, sig, secret)) {
+    return res.status(400).json({ error: "Invalid signature" });
+  }
+  try {
+    await processLemonWebhookPayload(req.body || {});
+    res.status(200).json({ received: true });
+  } catch (err) {
+    console.error("[Lemon] webhook işleme:", err.message);
+    res.status(500).json({ error: err.message || "Webhook hatası" });
+  }
+});
+
+/** Örnek: sadece Pro planına izin veren endpoint (requireProUser). */
+app.get("/api/pro/health", requireProUser, function (req, res) {
+  res.json({ ok: true, plan: req.snapSellUser.plan });
 });
 
 app.post("/api/refill-demo", async (req, res) => {

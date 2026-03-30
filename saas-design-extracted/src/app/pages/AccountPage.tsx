@@ -32,6 +32,8 @@ type AccountData = {
   planFeatures: string[];
   planPrice: string;
   planPeriod: string;
+  subscriptionId?: string | null;
+  subscriptionStatus?: string | null;
   createdAt: string | null;
 };
 
@@ -61,6 +63,8 @@ export function AccountPage() {
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelMessage, setCancelMessage] = useState<string | null>(null);
   const [cancelSuccess, setCancelSuccess] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   /** 1) OAuth code → session, 2) getSession, 3) onAuthStateChange + cleanup */
   useEffect(() => {
@@ -171,6 +175,44 @@ export function AccountPage() {
     };
   }, [sessionLoading, sessionUser, fetchAccountData, t]);
 
+  const handleLemonUpgrade = async () => {
+    if (!sessionUser?.id || !sessionUser.email) {
+      setCheckoutError(t("account.lemonCheckoutError"));
+      return;
+    }
+    setCheckoutError(null);
+    setCheckoutLoading(true);
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...(await getBearerHeaders()),
+      };
+      const res = await fetch(`${getApiBase()}/api/create-checkout`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          userId: sessionUser.id,
+          email: sessionUser.email,
+          planId: "monthly_plan",
+        }),
+      });
+      const json = await apiJson<{ checkoutUrl?: string; error?: string }>(res);
+      if (!res.ok) {
+        setCheckoutError((json && json.error) || t("account.lemonCheckoutError"));
+        return;
+      }
+      if (json?.checkoutUrl) {
+        window.location.href = json.checkoutUrl;
+        return;
+      }
+      setCheckoutError(t("account.lemonCheckoutError"));
+    } catch (e) {
+      setCheckoutError(e instanceof Error ? e.message : t("account.lemonCheckoutError"));
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
   const handleCancelSubscription = async () => {
     if (!window.confirm(t("account.cancelConfirm"))) return;
     setCancelMessage(null);
@@ -260,6 +302,7 @@ export function AccountPage() {
     "—";
   const isFreePlan =
     String(data.plan || "").toLowerCase().trim() === "free" || (!data.hasEditor && !data.hasLeonardo);
+  const isLemonPro = String(data.plan || "").toLowerCase() === "pro";
 
   const dateLocale = locale === "en" ? "en-US" : "tr-TR";
 
@@ -385,6 +428,30 @@ export function AccountPage() {
             </h2>
           </div>
           <div className="p-6 sm:p-8 space-y-6">
+            {!isLemonPro && (
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-xl bg-[#FF5A5F]/5 border border-[#FF5A5F]/25">
+                <div>
+                  <h3 className="font-medium text-gray-900">{t("account.upgradeToPro")}</h3>
+                  <p className="text-sm text-gray-600 mt-0.5">{t("account.upgradeToProHint")}</p>
+                  {checkoutError && <p className="text-sm text-red-600 mt-2">{checkoutError}</p>}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleLemonUpgrade}
+                  disabled={checkoutLoading}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-white bg-[#FF5A5F] hover:bg-[#FF5A5F]/90 shrink-0 disabled:opacity-60"
+                >
+                  {checkoutLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+                  {t("account.upgradeToPro")}
+                </button>
+              </div>
+            )}
+            {(data.subscriptionId || data.subscriptionStatus) && (
+              <p className="text-xs text-gray-500">
+                {data.subscriptionStatus && <span className="mr-2">Status: {data.subscriptionStatus}</span>}
+                {data.subscriptionId && <span className="font-mono">ID: {data.subscriptionId}</span>}
+              </p>
+            )}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-xl bg-gray-50 border border-gray-100">
               <div>
                 <h3 className="font-medium text-gray-900">{t("account.renewUpgrade")}</h3>
