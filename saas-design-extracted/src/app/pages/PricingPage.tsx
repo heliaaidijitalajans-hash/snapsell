@@ -153,7 +153,7 @@ function PlanCard({
   );
 }
 
-const LEMON_PLAN_IDS = ["monthly_plan", "monthly_plan_pro", "yearly_plan", "addon", "enterprise"] as const;
+const PAID_PLAN_IDS = ["monthly_plan", "monthly_plan_pro", "yearly_plan", "addon", "enterprise"] as const;
 
 export default function PricingPage() {
   const { t, locale } = useLanguage();
@@ -177,11 +177,9 @@ export default function PricingPage() {
           navigate("/destek");
           return;
         }
-        const lemonPlan =
-          plan.id && LEMON_PLAN_IDS.includes(plan.id as (typeof LEMON_PLAN_IDS)[number])
-            ? plan.id
-            : null;
-        if (!lemonPlan) {
+        const isPaidCard =
+          plan.id && PAID_PLAN_IDS.includes(plan.id as (typeof PAID_PLAN_IDS)[number]);
+        if (!isPaidCard) {
           setCheckoutError(t("pricing.checkoutUnavailable"));
           return;
         }
@@ -190,16 +188,17 @@ export default function PricingPage() {
           return;
         }
         const headers = await getAuthHeaders();
+        const payload = {
+          email: String(user.email).trim().toLowerCase(),
+          plan: "pro" as const,
+        };
         const res = await fetch(`${getApiBase()}/api/create-checkout`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...headers },
-          body: JSON.stringify({
-            userId: user.id,
-            email: user.email,
-            planId: lemonPlan,
-          }),
+          body: JSON.stringify(payload),
         });
         const json = await apiJson<{ checkoutUrl?: string; error?: string }>(res);
+        console.log("[create-checkout] status:", res.status, "body:", json);
         if (res.ok && json?.checkoutUrl) {
           window.location.href = json.checkoutUrl;
           return;

@@ -187,16 +187,17 @@ export function AccountPage() {
         "Content-Type": "application/json",
         ...(await getBearerHeaders()),
       };
+      const payload = {
+        email: String(sessionUser.email || "").trim().toLowerCase(),
+        plan: "pro" as const,
+      };
       const res = await fetch(`${getApiBase()}/api/create-checkout`, {
         method: "POST",
         headers,
-        body: JSON.stringify({
-          userId: sessionUser.id,
-          email: sessionUser.email,
-          planId: "monthly_plan",
-        }),
+        body: JSON.stringify(payload),
       });
       const json = await apiJson<{ checkoutUrl?: string; error?: string }>(res);
+      console.log("[create-checkout] status:", res.status, "body:", json);
       if (!res.ok) {
         setCheckoutError((json && json.error) || t("account.lemonCheckoutError"));
         return;
