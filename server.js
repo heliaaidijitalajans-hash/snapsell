@@ -277,8 +277,9 @@ async function getUserByEmail(email) {
   if (!email || String(email).trim() === "") return null;
   const emailNorm = String(email).trim().toLowerCase();
   if (supabase) {
-    const { data: row, error } = await supabase.from("users").select("*").ilike("email", emailNorm).maybeSingle();
-    if (error || !row) return null;
+    const { data: rows, error } = await supabase.from("users").select("*").ilike("email", emailNorm).limit(1);
+    if (error || !rows || !rows.length) return null;
+    const row = rows[0];
     return { id: row.id, credits: row.credits ?? FREE_CREDITS, plan: row.plan || "free", email: row.email, displayName: row.display_name };
   }
   for (const [id, u] of memoryUsers.entries()) {
@@ -340,7 +341,9 @@ async function updateUserInDb(userId, data) {
   if (data.displayName != null) payload.display_name = data.displayName;
   if (data.subscription_start != null) payload.subscription_start = data.subscription_start;
   if (data.subscription_end != null) payload.subscription_end = data.subscription_end;
-  if (data.subscription_id != null) payload.subscription_id = data.subscription_id;
+  if (Object.prototype.hasOwnProperty.call(data, "subscription_id")) {
+    payload.subscription_id = data.subscription_id;
+  }
   if (data.subscription_status != null) payload.subscription_status = data.subscription_status;
   if (Object.keys(payload).length === 0) return;
   if (supabase) {
@@ -360,7 +363,9 @@ async function updateUserInDb(userId, data) {
     if (data.displayName != null) u.displayName = data.displayName;
     if (data.subscription_start != null) u.subscription_start = data.subscription_start;
     if (data.subscription_end != null) u.subscription_end = data.subscription_end;
-    if (data.subscription_id != null) u.subscription_id = data.subscription_id;
+    if (Object.prototype.hasOwnProperty.call(data, "subscription_id")) {
+      u.subscription_id = data.subscription_id;
+    }
     if (data.subscription_status != null) u.subscription_status = data.subscription_status;
     saveMemoryUsers();
   }
@@ -2162,7 +2167,11 @@ app.post("/api/account/cancel-subscription", async (req, res) => {
     return res.status(200).json({ success: true, message: "Zaten ücretsiz plandasınız.", plan: "free" });
   }
   try {
-    await updateUserInDb(user.id, { plan: "free", subscription_status: "cancelled" });
+    await updateUserInDb(user.id, {
+      plan: "free",
+      subscription_status: "cancelled",
+      subscription_id: null
+    });
     res.status(200).json({ success: true, message: "Abonelik iptal edildi.", plan: "free" });
   } catch (err) {
     console.error("cancel-subscription:", err.message);
@@ -2175,96 +2184,15 @@ app.post("/api/subscription-webhook", (req, res) => {
   res.status(200).json({ message: "Payment system coming soon" });
 });
 
-/**
- * Lemon Squeezy — checkout oluştur.
- * Body: { plan } — plan: monthly_plan | monthly_plan_pro | pro | yearly_plan | addon.
- * E-posta ve user_id yalnızca Authorization Bearer (Supabase JWT) içinden alınır; gövdedeki email/userId yok sayılır
- * (getOrCreateUser e-posta birleştirmesi yanlış kullanıcı id’sine yol açmasın diye).
- */
-app.post("/api/create-checkout", async function (req, res) {
-  console.log("BODY:", req.body);
-  try {
-    const body = req.body || {};
-    const plan = String(body.plan || "").trim();
-    if (!plan) {
-      return res.status(400).json({ error: "plan gerekli" });
-    }
-    const authHeader = req.headers.authorization || "";
-    if (!authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Oturum gerekli" });
-    }
-    const accessToken = authHeader.slice(7).trim();
-    if (!accessToken) return res.status(401).json({ error: "Oturum gerekli" });
-    const sessionUser = await getSupabaseAuthUserFromToken(accessToken);
-    if (!sessionUser) return res.status(401).json({ error: "Geçersiz veya süresi dolmuş oturum" });
-    const sessionEmailRaw = String(sessionUser.email || "").trim();
-    const sessionEmailNorm = sessionEmailRaw.toLowerCase();
-    if (!sessionEmailNorm) {
-      return res.status(400).json({ error: "Hesabınızda e-posta yok; ödeme için e-posta gerekli" });
-    }
-    const sessionUserId = String(sessionUser.id || "").trim();
-    if (!sessionUserId) return res.status(400).json({ error: "Kullanıcı kimliği alınamadı" });
-    const prefillName =
-      (sessionUser.user_metadata &&
-        (sessionUser.user_metadata.full_name || sessionUser.user_metadata.name)) ||
-      "";
-    const variantId = resolveCheckoutVariantId(plan);
-    if (!variantId) {
-      const p = String(plan || "").trim().toLowerCase();
-      const known = ["monthly_plan", "monthly_plan_pro", "pro", "yearly_plan", "addon"];
-      if (known.indexOf(p) === -1) {
-        return res.status(400).json({
-          error:
-            "Geçersiz plan. İzin verilen: monthly_plan, monthly_plan_pro, pro, yearly_plan, addon."
-        });
-      }
-      return res.status(400).json({
-        error:
-          "Lemon variant ID eksik veya geçersiz. monthly_plan için LEMON_SQUEEZY_VARIANT_MONTHLY_PLAN; pro / monthly_plan_pro / yearly_plan / addon için LEMON_SQUEEZY_VARIANT_PRO_PLAN kontrol edin."
-      });
-    }
-    const apiKey = String(process.env.LEMON_SQUEEZY_API_KEY || "").trim();
-    const storeId = lemon.normalizeLemonRelationshipId(process.env.LEMON_SQUEEZY_STORE_ID);
-    if (!apiKey || !storeId) {
-      return res.status(500).json({ error: "Lemon API yapılandırması eksik (LEMON_SQUEEZY_API_KEY / STORE_ID)" });
-    }
-    const base = String(process.env.PUBLIC_APP_URL || "").trim().replace(/\/$/, "");
-    const redirectUrl = base ? base + "/hesap-ayarlari" : undefined;
-    const { checkoutUrl } = await lemon.createCheckout({
-      apiKey,
-      storeId,
-      variantId,
-      sessionUserId,
-      sessionEmail: sessionEmailRaw,
-      prefillName: String(prefillName || "").trim() || undefined,
-      redirectUrl,
-      planId: plan
-    });
-    console.log(
-      "[Lemon] create-checkout OK (session.user.email → checkout_data.email), userId:",
-      sessionUserId,
-      "email:",
-      sessionEmailNorm,
-      "urlLen:",
-      checkoutUrl ? checkoutUrl.length : 0
-    );
-    res.json({ checkoutUrl });
-  } catch (err) {
-    const lemonStatus = err && typeof err.lemonStatus === "number" ? err.lemonStatus : null;
-    console.error("[Lemon] create-checkout:", err.message, lemonStatus != null ? "(HTTP " + lemonStatus + ")" : "");
-    const clientMsg = err.message || "Checkout oluşturulamadı";
-    if (lemonStatus === 401 || lemonStatus === 403) {
-      return res.status(502).json({ error: "Lemon API reddetti (anahtar veya yetki). Sunucu LEMON_SQUEEZY_API_KEY / STORE_ID kontrol edin.", detail: clientMsg });
-    }
-    if (lemonStatus === 404 || lemonStatus === 422) {
-      return res.status(400).json({ error: "Lemon geçersiz istek (variant veya mağaza ID’si yanlış olabilir).", detail: clientMsg });
-    }
-    if (lemonStatus != null && lemonStatus >= 400 && lemonStatus < 500) {
-      return res.status(400).json({ error: clientMsg });
-    }
-    res.status(500).json({ error: clientMsg });
-  }
-});
+/** Lemon checkout — mantık: api/create-checkout.js (checkout_data.email = session.user.email) */
+app.post(
+  "/api/create-checkout",
+  require("./api/create-checkout.js")({
+    getSupabaseAuthUserFromToken,
+    lemon,
+    resolveCheckoutVariantId
+  })
+);
 
 /**
  * Lemon Squeezy — webhook (X-Signature HMAC-SHA256, ham gövde).

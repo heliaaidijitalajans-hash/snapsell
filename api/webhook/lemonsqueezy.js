@@ -133,8 +133,9 @@ module.exports = async function lemonWebhookHandler(req, res) {
   async function getUserByEmail(email) {
     if (!email || String(email).trim() === "") return null;
     const emailNorm = String(email).trim().toLowerCase();
-    const { data: row, error } = await supabase.from("users").select("*").ilike("email", emailNorm).maybeSingle();
-    if (error || !row) return null;
+    const { data: rows, error } = await supabase.from("users").select("*").ilike("email", emailNorm).limit(1);
+    if (error || !rows || !rows.length) return null;
+    const row = rows[0];
     return {
       id: row.id,
       credits: row.credits ?? FREE_CREDITS,
@@ -153,7 +154,9 @@ module.exports = async function lemonWebhookHandler(req, res) {
     if (data.displayName != null) payload.display_name = data.displayName;
     if (data.subscription_start != null) payload.subscription_start = data.subscription_start;
     if (data.subscription_end != null) payload.subscription_end = data.subscription_end;
-    if (data.subscription_id != null) payload.subscription_id = data.subscription_id;
+    if (Object.prototype.hasOwnProperty.call(data, "subscription_id")) {
+      payload.subscription_id = data.subscription_id;
+    }
     if (data.subscription_status != null) payload.subscription_status = data.subscription_status;
     if (Object.keys(payload).length === 0) return;
     const { data: rows, error } = await supabase.from("users").update(payload).eq("id", userId).select("id");
