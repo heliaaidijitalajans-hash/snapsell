@@ -1,4 +1,4 @@
-# SnapSell backend - Railway icin net baslangic
+# SnapSell backend — Railway / Docker (WORKDIR /app = proje kökü)
 FROM node:20-alpine
 
 WORKDIR /app
@@ -6,9 +6,13 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --production
 
+# server.js: require("./lib/...") ve require("./api/create-checkout.js") — klasörler /app altında olmalı
 COPY server.js start.js ./
-# server.js → require("./lib/supabase") — olmadan Railway/Docker'da modül bulunamaz
-COPY lib ./lib/
+COPY lib/ ./lib/
+COPY api/ ./api/
+
+# Erken hata: api klasörü imajda yoksa veya create-checkout eksikse build kırılsın
+RUN test -f /app/api/create-checkout.js
 
 ENV NODE_ENV=production
 ENV PORT=8080
