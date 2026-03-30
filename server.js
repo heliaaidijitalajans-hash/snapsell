@@ -2195,14 +2195,19 @@ app.post("/api/create-checkout", async function (req, res) {
     }
     const accessToken = authHeader.slice(7).trim();
     if (!accessToken) return res.status(401).json({ error: "Oturum gerekli" });
-    const sbUser = await getSupabaseAuthUserFromToken(accessToken);
-    if (!sbUser) return res.status(401).json({ error: "Geçersiz veya süresi dolmuş oturum" });
-    const email = String(sbUser.email || "").trim().toLowerCase();
-    if (!email) {
+    const sessionUser = await getSupabaseAuthUserFromToken(accessToken);
+    if (!sessionUser) return res.status(401).json({ error: "Geçersiz veya süresi dolmuş oturum" });
+    const sessionEmailRaw = String(sessionUser.email || "").trim();
+    const sessionEmailNorm = sessionEmailRaw.toLowerCase();
+    if (!sessionEmailNorm) {
       return res.status(400).json({ error: "Hesabınızda e-posta yok; ödeme için e-posta gerekli" });
     }
-    const userId = String(sbUser.id || "").trim();
-    if (!userId) return res.status(400).json({ error: "Kullanıcı kimliği alınamadı" });
+    const sessionUserId = String(sessionUser.id || "").trim();
+    if (!sessionUserId) return res.status(400).json({ error: "Kullanıcı kimliği alınamadı" });
+    const prefillName =
+      (sessionUser.user_metadata &&
+        (sessionUser.user_metadata.full_name || sessionUser.user_metadata.name)) ||
+      "";
     const variantId = resolveCheckoutVariantId(plan);
     if (!variantId) {
       const p = String(plan || "").trim().toLowerCase();
@@ -2229,12 +2234,20 @@ app.post("/api/create-checkout", async function (req, res) {
       apiKey,
       storeId,
       variantId,
-      userId,
-      email,
+      sessionUserId,
+      sessionEmail: sessionEmailRaw,
+      prefillName: String(prefillName || "").trim() || undefined,
       redirectUrl,
       planId: plan
     });
-    console.log("[Lemon] create-checkout OK, url length:", checkoutUrl ? checkoutUrl.length : 0);
+    console.log(
+      "[Lemon] create-checkout OK (session.user.email → checkout_data.email), userId:",
+      sessionUserId,
+      "email:",
+      sessionEmailNorm,
+      "urlLen:",
+      checkoutUrl ? checkoutUrl.length : 0
+    );
     res.json({ checkoutUrl });
   } catch (err) {
     const lemonStatus = err && typeof err.lemonStatus === "number" ? err.lemonStatus : null;
@@ -2280,8 +2293,22 @@ async function lemonSqueezyWebhookHandler(req, res) {
   }
 }
 
+function lemonWebhookInfo(req, res) {
+  res.status(200).json({
+    ok: true,
+    message: "Lemon Squeezy webhook: POST ile JSON gövde ve X-Signature gerekir.",
+    postPaths: ["/api/webhook", "/api/webhook/lemonsqueezy"]
+  });
+}
+app.get("/api/webhook", lemonWebhookInfo);
+app.get("/api/webhook/", lemonWebhookInfo);
+app.get("/api/webhook/lemonsqueezy", lemonWebhookInfo);
+app.get("/api/webhook/lemonsqueezy/", lemonWebhookInfo);
+
 app.post("/api/webhook/lemonsqueezy", lemonSqueezyWebhookHandler);
+app.post("/api/webhook/lemonsqueezy/", lemonSqueezyWebhookHandler);
 app.post("/api/webhook", lemonSqueezyWebhookHandler);
+app.post("/api/webhook/", lemonSqueezyWebhookHandler);
 
 /** Örnek: sadece Pro planına izin veren endpoint (requireProUser). */
 app.get("/api/pro/health", requireProUser, function (req, res) {
