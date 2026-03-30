@@ -2278,8 +2278,19 @@ app.post("/api/create-checkout", async function (req, res) {
     });
     res.json({ checkoutUrl });
   } catch (err) {
-    console.error("[Lemon] create-checkout:", err.message);
-    res.status(500).json({ error: err.message || "Checkout oluşturulamadı" });
+    const lemonStatus = err && typeof err.lemonStatus === "number" ? err.lemonStatus : null;
+    console.error("[Lemon] create-checkout:", err.message, lemonStatus != null ? "(HTTP " + lemonStatus + ")" : "");
+    const clientMsg = err.message || "Checkout oluşturulamadı";
+    if (lemonStatus === 401 || lemonStatus === 403) {
+      return res.status(502).json({ error: "Lemon API reddetti (anahtar veya yetki). Sunucu LEMON_SQUEEZY_API_KEY / STORE_ID kontrol edin.", detail: clientMsg });
+    }
+    if (lemonStatus === 404 || lemonStatus === 422) {
+      return res.status(400).json({ error: "Lemon geçersiz istek (variant veya mağaza ID’si yanlış olabilir).", detail: clientMsg });
+    }
+    if (lemonStatus != null && lemonStatus >= 400 && lemonStatus < 500) {
+      return res.status(400).json({ error: clientMsg });
+    }
+    res.status(500).json({ error: clientMsg });
   }
 });
 
