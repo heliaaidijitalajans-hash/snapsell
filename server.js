@@ -664,12 +664,14 @@ app.get("/api/snapserver", function (req, res) {
 });
 
 const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || "").trim();
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "Helai.ai.dijital.ajans@gmail.com").trim().toLowerCase();
+/** Sadece .env ile verin; varsayılan yok (yanlışlıkla tek e-postaya admin / özel hak bağlanmasın). */
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
 const REPLICATE_ALLOWED_EMAILS = (process.env.REPLICATE_ALLOWED_EMAILS || "helyora349@gmail.com")
   .split(",")
   .map(function (e) { return e.trim().toLowerCase(); })
   .filter(Boolean);
 function isAdminUser(user) {
+  if (!ADMIN_EMAIL) return false;
   return user && user.email && String(user.email).toLowerCase() === ADMIN_EMAIL;
 }
 function canUseReplicate(user) {
@@ -721,7 +723,7 @@ async function requireAdmin(req, res, next) {
     try {
       const sbUser = await getSupabaseAuthUserFromToken(bearerToken);
       const email = (sbUser && sbUser.email ? sbUser.email : "").toLowerCase();
-      if (email === ADMIN_EMAIL) return next();
+      if (ADMIN_EMAIL && email === ADMIN_EMAIL) return next();
     } catch (e) { /* token gecersiz */ }
   }
   if (!ADMIN_PASSWORD) return res.status(403).json({ error: "Admin sifresi .env icinde ADMIN_PASSWORD olarak ayarlanmali." });
