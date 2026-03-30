@@ -161,11 +161,13 @@ export default function PricingPage() {
   const { user, getAuthHeaders } = useAuth();
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   const handleCtaClick = useCallback(
-    async (plan: PlanItem, payment: { price: number; currency: "USD" }) => {
+    async (plan: PlanItem) => {
       const planKey = plan.id || plan.name;
       setPaymentLoading(planKey);
+      setCheckoutError(null);
       try {
         if (plan.id === "free") {
           navigate("/login");
@@ -179,51 +181,35 @@ export default function PricingPage() {
           plan.id && LEMON_PLAN_IDS.includes(plan.id as (typeof LEMON_PLAN_IDS)[number])
             ? plan.id
             : null;
-        if (lemonPlan && user?.id && user.email) {
-          const headers = await getAuthHeaders();
-          const res = await fetch(`${getApiBase()}/api/create-checkout`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", ...headers },
-            body: JSON.stringify({
-              userId: user.id,
-              email: user.email,
-              planId: lemonPlan,
-            }),
-          });
-          const json = await apiJson<{ checkoutUrl?: string; error?: string }>(res);
-          if (res.ok && json?.checkoutUrl) {
-            window.location.href = json.checkoutUrl;
-            return;
-          }
+        if (!lemonPlan) {
+          setCheckoutError(t("pricing.checkoutUnavailable"));
+          return;
         }
-        if (lemonPlan && (!user?.id || !user.email)) {
+        if (!user?.id || !user.email) {
           navigate("/login", { state: { from: "/fiyatlandirma" } });
           return;
         }
-        navigate("/odeme", {
-          state: {
-            plan: {
-              ...plan,
-              price: payment.price,
-              currency: payment.currency,
-            },
-          },
-          replace: false,
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${getApiBase()}/api/create-checkout`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...headers },
+          body: JSON.stringify({
+            userId: user.id,
+            email: user.email,
+            planId: lemonPlan,
+          }),
         });
+        const json = await apiJson<{ checkoutUrl?: string; error?: string }>(res);
+        if (res.ok && json?.checkoutUrl) {
+          window.location.href = json.checkoutUrl;
+          return;
+        }
+        setCheckoutError((json && json.error) || t("pricing.checkoutError"));
       } finally {
         setPaymentLoading(null);
       }
     },
-    [navigate, user, getAuthHeaders]
-  );
-
-  const getPaymentPayload = useCallback(
-    (plan: PlanItem) => {
-      const raw = plan.price === "—" || plan.price === "" ? 0 : Number(plan.price);
-      const usdPrice = Number.isFinite(raw) ? raw : 0;
-      return { price: usdPrice, currency: "USD" as const };
-    },
-    []
+    [navigate, user, getAuthHeaders, t]
   );
 
   const getDisplayForPlan = useCallback(
@@ -276,17 +262,25 @@ export default function PricingPage() {
         </p>
       </div>
 
+      {checkoutError && (
+        <div
+          className="mb-8 max-w-2xl mx-auto rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+          role="alert"
+        >
+          {checkoutError}
+        </div>
+      )}
+
       <section>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
           {plans.map((plan) => {
             const display = getDisplayForPlan(plan);
-            const payment = getPaymentPayload(plan);
             return (
               <PlanCard
                 key={plan.id || plan.name}
                 plan={plan}
                 t={t}
-                onCtaClick={() => handleCtaClick(plan, payment)}
+                onCtaClick={() => handleCtaClick(plan)}
                 loading={paymentLoading === (plan.id || plan.name)}
                 displayCurrency={display.displayCurrency}
                 displayPrice={display.displayPrice}
