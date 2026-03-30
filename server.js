@@ -2237,23 +2237,26 @@ app.post("/api/subscription-webhook", (req, res) => {
 
 /**
  * Lemon Squeezy — checkout oluştur (API anahtarı sadece sunucuda).
- * Body: { userId, email, planId } — planId: monthly_plan | monthly_plan_pro | yearly_plan | addon | enterprise
+ * Body: { planId } — isteğe bağlı userId/email (yok sayılır); kimlik yalnızca Bearer / oturumdan.
+ * planId: monthly_plan | monthly_plan_pro | yearly_plan | addon | enterprise
  */
 app.post("/api/create-checkout", async function (req, res) {
   try {
     const authUser = await getRequestUser(req);
     if (!authUser) return res.status(401).json({ error: "Oturum gerekli" });
     const body = req.body || {};
-    const userId = String(body.userId || "").trim();
-    const email = String(body.email || "").trim().toLowerCase();
     const planId = String(body.planId || "").trim();
-    if (!userId || !email) return res.status(400).json({ error: "userId ve email gerekli" });
+    const userId = String(authUser.id || "").trim();
+    const email = String(authUser.email || "").trim().toLowerCase();
+    if (!userId) return res.status(400).json({ error: "Kullanıcı kimliği alınamadı" });
+    if (!email) {
+      return res.status(400).json({
+        error: "Hesabınızda e-posta yok. Ödeme için profilinize e-posta ekleyin veya Google ile giriş kullanın."
+      });
+    }
     if (!planId || LEMON_CHECKOUT_PLAN_IDS.indexOf(planId) === -1) {
       return res.status(400).json({ error: "Geçerli planId gerekli (monthly_plan, monthly_plan_pro, yearly_plan, addon, enterprise)" });
     }
-    if (authUser.id !== userId) return res.status(403).json({ error: "userId oturum ile eşleşmiyor" });
-    const authEmail = (authUser.email || "").trim().toLowerCase();
-    if (authEmail !== email) return res.status(403).json({ error: "email oturum ile eşleşmiyor" });
     const apiKey = String(process.env.LEMON_SQUEEZY_API_KEY || "").trim();
     const storeId = String(process.env.LEMON_SQUEEZY_STORE_ID || "").trim();
     const variantId = resolveLemonVariantId(planId);
