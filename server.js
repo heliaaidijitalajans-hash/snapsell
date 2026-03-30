@@ -2177,24 +2177,31 @@ app.post("/api/subscription-webhook", (req, res) => {
 
 /**
  * Lemon Squeezy — checkout oluştur.
- * Body: { email, plan } — plan: monthly_plan | monthly_plan_pro | pro | yearly_plan | addon. Bearer zorunlu.
+ * Body: { plan } — plan: monthly_plan | monthly_plan_pro | pro | yearly_plan | addon.
+ * E-posta ve user_id yalnızca Authorization Bearer (Supabase JWT) içinden alınır; gövdedeki email/userId yok sayılır
+ * (getOrCreateUser e-posta birleştirmesi yanlış kullanıcı id’sine yol açmasın diye).
  */
 app.post("/api/create-checkout", async function (req, res) {
   console.log("BODY:", req.body);
   try {
     const body = req.body || {};
-    const email = String(body.email || "").trim().toLowerCase();
     const plan = String(body.plan || "").trim();
-    if (!email || !plan) {
-      return res.status(400).json({ error: "email ve plan gerekli" });
+    if (!plan) {
+      return res.status(400).json({ error: "plan gerekli" });
     }
-    const authUser = await getRequestUser(req);
-    if (!authUser) return res.status(401).json({ error: "Oturum gerekli" });
-    const authEmail = String(authUser.email || "").trim().toLowerCase();
-    if (!authEmail || authEmail !== email) {
-      return res.status(403).json({ error: "email oturum ile eşleşmiyor" });
+    const authHeader = req.headers.authorization || "";
+    if (!authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Oturum gerekli" });
     }
-    const userId = String(authUser.id || "").trim();
+    const accessToken = authHeader.slice(7).trim();
+    if (!accessToken) return res.status(401).json({ error: "Oturum gerekli" });
+    const sbUser = await getSupabaseAuthUserFromToken(accessToken);
+    if (!sbUser) return res.status(401).json({ error: "Geçersiz veya süresi dolmuş oturum" });
+    const email = String(sbUser.email || "").trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ error: "Hesabınızda e-posta yok; ödeme için e-posta gerekli" });
+    }
+    const userId = String(sbUser.id || "").trim();
     if (!userId) return res.status(400).json({ error: "Kullanıcı kimliği alınamadı" });
     const variantId = resolveCheckoutVariantId(plan);
     if (!variantId) {
@@ -2248,8 +2255,9 @@ app.post("/api/create-checkout", async function (req, res) {
 
 /**
  * Lemon Squeezy — webhook (X-Signature HMAC-SHA256, ham gövde).
+ * İki yol: /api/webhook/lemonsqueezy (önerilen) ve /api/webhook (Lemon panelinde kısa URL kullanan kurulumlar).
  */
-app.post("/api/webhook/lemonsqueezy", async function (req, res) {
+async function lemonSqueezyWebhookHandler(req, res) {
   const secret = String(process.env.LEMON_SQUEEZY_WEBHOOK_SECRET || "").trim();
   if (!secret) {
     console.warn("[Lemon] LEMON_SQUEEZY_WEBHOOK_SECRET tanımsız");
@@ -2270,7 +2278,10 @@ app.post("/api/webhook/lemonsqueezy", async function (req, res) {
     console.error("[Lemon] webhook işleme:", err.message);
     res.status(500).json({ error: err.message || "Webhook hatası" });
   }
-});
+}
+
+app.post("/api/webhook/lemonsqueezy", lemonSqueezyWebhookHandler);
+app.post("/api/webhook", lemonSqueezyWebhookHandler);
 
 /** Örnek: sadece Pro planına izin veren endpoint (requireProUser). */
 app.get("/api/pro/health", requireProUser, function (req, res) {

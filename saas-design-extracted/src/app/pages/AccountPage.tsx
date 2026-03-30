@@ -187,10 +187,7 @@ export function AccountPage() {
         "Content-Type": "application/json",
         ...(await getBearerHeaders()),
       };
-      const payload = {
-        email: String(sessionUser.email || "").trim().toLowerCase(),
-        plan: "monthly_plan_pro",
-      };
+      const payload = { plan: "monthly_plan_pro" as const };
       const res = await fetch(`${getApiBase()}/api/create-checkout`, {
         method: "POST",
         headers,

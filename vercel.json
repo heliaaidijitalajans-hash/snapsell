@@ -3,6 +3,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "saas-design-extracted/dist",
   "rewrites": [
+    { "source": "/api/webhook", "destination": "/api/webhook" },
     { "source": "/api/webhook/lemonsqueezy", "destination": "/api/webhook/lemonsqueezy" },
     { "source": "/api", "destination": "/api" },
     { "source": "/api/:path*", "destination": "/api" },

@@ -189,10 +189,7 @@ export default function PricingPage() {
         }
         const headers = await getAuthHeaders();
         const checkoutPlan = plan.id as (typeof PAID_PLAN_IDS)[number];
-        const payload = {
-          email: String(user.email).trim().toLowerCase(),
-          plan: checkoutPlan,
-        };
+        const payload = { plan: checkoutPlan };
         const res = await fetch(`${getApiBase()}/api/create-checkout`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...headers },
