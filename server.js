@@ -2309,13 +2309,19 @@ async function lemonSqueezyWebhookHandler(req, res) {
   }
   const ev = req.body && req.body.meta && req.body.meta.event_name;
   console.log("[Lemon] 🔗 Webhook alındı (imza OK), event=", ev || "(meta yok)");
-  try {
-    await processLemonWebhookPayload(req.body || {});
-    res.status(200).json({ received: true });
-  } catch (err) {
-    console.error("[Lemon] webhook işleme:", err.message);
-    res.status(500).json({ error: err.message || "Webhook hatası" });
-  }
+
+  // Lemon webhook çağrısını hızlıca ACK'le (timeout/yeniden deneme olmasın).
+  // E-posta/receipt gönderimi Lemon tarafındadır; bizim işlemlerimiz maili tetiklemez.
+  const payload = req.body || {};
+  res.status(200).send("OK");
+
+  setImmediate(async function () {
+    try {
+      await processLemonWebhookPayload(payload);
+    } catch (err) {
+      console.error("[Lemon] webhook async işleme:", err && err.message);
+    }
+  });
 }
 
 function lemonWebhookInfo(req, res) {
