@@ -37,9 +37,10 @@ process.on("unhandledRejection", function (reason, promise) {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
 });
 
-const CREDITS_PER_CONVERSION = 10;
-const FREE_CREDITS = 100;
-const DEMO_REFILL_CREDITS = 100;
+/** 1 kredi = 1 dönüşüm (ürün işleme). */
+const CREDITS_PER_CONVERSION = 1;
+const FREE_CREDITS = 3;
+const DEMO_REFILL_CREDITS = 10;
 const USERS_COLLECTION = "users";
 
 const PRO_PLANS = ["monthly_plan", "monthly_plan_pro", "yearly_plan", "enterprise"];
@@ -114,12 +115,12 @@ function saveSitePlans(updatedPlans) {
 /** Tek kaynak: fiyat listesi sadece burada. Dosyadan okuma yok, eski veri geri gelmez. */
 const DEFAULT_PLAN_PRICES = { free: 0, monthly_plan: 40, monthly_plan_pro: 65, yearly_plan: 440, enterprise: 0, addon: 15 };
 const DEFAULT_SITE_PLANS = [
-  { id: "free", name: "Ücretsiz", price: "0", period: "ay", description: "3 dönüşüm, temel özellikler", features: ["3 dönüşüm", "Temel özellikler"], cta: "Ücretsiz başla", href: "/register", highlighted: false, planType: "conversion", currency: "USD", credits: 30 },
-  { id: "monthly_plan", name: "Aylık plan", price: "40", period: "ay", description: "30 dönüşüm", features: ["30 dönüşüm", "Tüm özellikler", "SEO açıklama", "Fiyat analizi"], cta: "Başla", href: "/register?plan=monthly_plan", highlighted: true, planType: "conversion", currency: "USD", credits: 300 },
-  { id: "monthly_plan_pro", name: "Aylık plan Pro", price: "65", period: "ay", description: "80 dönüşüm", features: ["80 dönüşüm", "Tüm özellikler", "SEO açıklama", "Fiyat analizi"], cta: "Pro'ya geç", href: "/register?plan=monthly_plan_pro", highlighted: false, planType: "conversion", currency: "USD", credits: 800 },
-  { id: "yearly_plan", name: "Yıllık plan", price: "440", period: "yıl", description: "1200 dönüşüm, aylık 100 yüklenecek", features: ["1200 dönüşüm", "Aylık 100 dönüşüm yüklenecek", "Tüm özellikler", "SEO açıklama", "Fiyat analizi", "Yüklenecek özellik geliştirmeleri dahil"], cta: "Yıllık seç", href: "/register?plan=yearly_plan", highlighted: false, planType: "conversion", currency: "USD", credits: 12000 },
+  { id: "free", name: "Ücretsiz", price: "0", period: "ay", description: "3 dönüşüm, temel özellikler", features: ["3 dönüşüm", "Temel özellikler"], cta: "Ücretsiz başla", href: "/register", highlighted: false, planType: "conversion", currency: "USD", credits: 3 },
+  { id: "monthly_plan", name: "Aylık plan", price: "40", period: "ay", description: "30 dönüşüm", features: ["30 dönüşüm", "Tüm özellikler", "SEO açıklama", "Fiyat analizi"], cta: "Başla", href: "/register?plan=monthly_plan", highlighted: true, planType: "conversion", currency: "USD", credits: 30 },
+  { id: "monthly_plan_pro", name: "Aylık plan Pro", price: "65", period: "ay", description: "80 dönüşüm", features: ["80 dönüşüm", "Tüm özellikler", "SEO açıklama", "Fiyat analizi"], cta: "Pro'ya geç", href: "/register?plan=monthly_plan_pro", highlighted: false, planType: "conversion", currency: "USD", credits: 80 },
+  { id: "yearly_plan", name: "Yıllık plan", price: "440", period: "yıl", description: "1200 dönüşüm, aylık 100 yüklenecek", features: ["1200 dönüşüm", "Aylık 100 dönüşüm yüklenecek", "Tüm özellikler", "SEO açıklama", "Fiyat analizi", "Yüklenecek özellik geliştirmeleri dahil"], cta: "Yıllık seç", href: "/register?plan=yearly_plan", highlighted: false, planType: "conversion", currency: "USD", credits: 1200 },
   { id: "enterprise", name: "Kurumsal", price: "—", period: "yıl", description: "Bize ulaşın", features: ["Ekibiniz ile takım kurma ayrıcalığı", "Tüm özellikler", "SEO açıklama", "Fiyat analizi", "Yüklenecek özellik geliştirmeleri dahil", "Yıllık faturalandırma"], cta: "Bize ulaşın", href: "/destek", highlighted: false, planType: "conversion", currency: "USD", credits: 0 },
-  { id: "addon", name: "Ek paket", price: "15", period: "ay", description: "25 dönüşüm", features: ["25 dönüşüm", "Tüm özellikler dahil"], cta: "Ek paket al", href: "/register?plan=addon", highlighted: false, planType: "addon", currency: "USD", credits: 250 }
+  { id: "addon", name: "Ek paket", price: "15", period: "ay", description: "25 dönüşüm", features: ["25 dönüşüm", "Tüm özellikler dahil"], cta: "Ek paket al", href: "/register?plan=addon", highlighted: false, planType: "addon", currency: "USD", credits: 25 }
 ];
 
 function applyPlanType(plans) {
@@ -1925,7 +1926,7 @@ app.get("/callback", handleShopierCallback);
 app.post("/callback", express.urlencoded({ extended: true }), handleShopierCallback);
 
 /** Shopier webhook: ödeme onayı sonrası plan / kredi güncelleme. */
-const SHOPIER_CREDIT_PACK_CREDITS = 250;
+const SHOPIER_CREDIT_PACK_CREDITS = 25;
 
 app.post("/api/shopier-webhook", async (req, res) => {
   console.log("[Shopier webhook] webhook received");

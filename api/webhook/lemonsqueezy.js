@@ -10,16 +10,16 @@ const { createServiceClient } = require("../../lib/supabase");
 const lemon = require("../../lib/lemonsqueezy");
 const { runLemonWebhook } = require("../../lib/lemonWebhookProcess");
 
-const FREE_CREDITS = 100;
+const FREE_CREDITS = 3;
 
-/** server.js DEFAULT_SITE_PLANS ile aynı kredi sayıları (tek kaynak sapmasın diye) */
+/** 1 kredi = 1 dönüşüm; server.js DEFAULT_SITE_PLANS ile uyumlu */
 const CREDITS_BY_PLAN = {
-  monthly_plan: 300,
-  monthly_plan_pro: 800,
-  yearly_plan: 12000,
-  addon: 250,
+  monthly_plan: 30,
+  monthly_plan_pro: 80,
+  yearly_plan: 1200,
+  addon: 25,
   enterprise: 0,
-  free: 30
+  free: 3
 };
 
 function getCreditsForPlan(planId) {
