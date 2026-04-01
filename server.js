@@ -315,8 +315,7 @@ function firstEnvValue(names) {
 }
 
 /**
- * body.plan → Lemon variant ID.
- * Live’a geçince test variant ID’leri çalışmaz; her plan için Lemon’daki canlı variant ID’yi koyun.
+ * body.plan → Lemon variant ID (canlı mağaza / canlı variant env değişkenleri).
  */
 function resolveCheckoutVariantId(plan) {
   const n = lemon.normalizeLemonRelationshipId;
@@ -2307,15 +2306,20 @@ async function handleCreateCheckout(req, res) {
       const meta = await lemon.fetchVariantMeta(apiKey, variantId);
       if (!meta.ok) {
         console.error("[Lemon] variant doğrulama başarısız:", meta.status, meta.detail);
+        const d = String(meta.detail || "");
+        if (meta.status === 400 && /test modu/i.test(d)) {
+          return res.status(400).json({
+            error: "Lemon: Test modundaki variant kabul edilmez; canlı mağazada oluşturulmuş variant ID kullanın.",
+            detail: meta.detail
+          });
+        }
         const hint404 =
           meta.status === 404
-            ? " Dashboard → Products → ürün → Variants: variant ID’yi kopyalayın. Test API key ile test mağazası, canlı key ile canlı mağaza aynı ortamda olmalı."
+            ? " Dashboard → Products → ürün → Variants: canlı modda variant ID’yi kopyalayın."
             : "";
         return res.status(400).json({
           error:
-            "Lemon: Bu variant_id API anahtarınızla bulunamadı veya eşleşmiyor." +
-            hint404 +
-            " (The related resource does not exist → genelde yanlış variant_id veya test/live karışması.)",
+            "Lemon: Bu variant_id API anahtarınızla bulunamadı veya eşleşmiyor." + hint404,
           detail: meta.detail
         });
       }
@@ -2328,33 +2332,9 @@ async function handleCreateCheckout(req, res) {
         );
         return res.status(400).json({
           error:
-            "Lemon: LEMON_SQUEEZY_STORE_ID bu variant’ın ait olduğu mağaza ile aynı değil. Aynı ortamdaki (test veya live) Store ID ve variant ID’leri kullanın.",
+            "Lemon: LEMON_SQUEEZY_STORE_ID bu variant’ın ait olduğu mağaza ile aynı değil. Canlı Store ID ve variant ID’leri birlikte kullanın.",
           detail: "variant store=" + meta.storeId + " env store=" + storeId
         });
-      }
-
-      const keyEnv = lemon.inferLemonApiKeyEnvironment(apiKey);
-      if (keyEnv == null) {
-        console.warn(
-          "[Lemon] API anahtarı öneki tanınamadı (sk_test_* / sk_live_* veya lem_test_* / lem_live_*); test/live eşlemesi atlandı."
-        );
-      } else if (meta.testMode != null) {
-        const wantTest = keyEnv === "test";
-        const variantIsTest = meta.testMode === true;
-        if (wantTest !== variantIsTest) {
-          console.error(
-            "[Lemon] API key ortamı ile variant test_mode uyuşmuyor. key→",
-            keyEnv,
-            "variant.test_mode=",
-            meta.testMode
-          );
-          return res.status(400).json({
-            error: wantTest
-              ? "Lemon: Test API anahtarı yalnızca test modunda oluşturulmuş variant (test_mode: true) ile kullanılabilir. Env’deki variant_id’yi Dashboard test modunda Products → Variants’tan güncelleyin."
-              : "Lemon: Canlı API anahtarı yalnızca canlı variant (test_mode: false) ile kullanılabilir. Env’de test variant ID’si kaldıysa canlı ortamdaki ID ile değiştirin.",
-            detail: "keyEnv=" + keyEnv + " variant.test_mode=" + String(meta.testMode)
-          });
-        }
       }
     }
 
@@ -2394,7 +2374,7 @@ async function handleCreateCheckout(req, res) {
         /related resource does not exist/i.test(String(err.lemonBody || ""));
       return res.status(400).json({
         error: related
-          ? "Lemon: İlişkili kaynak yok (variant veya store). Dashboard → Products → Variants’tan doğru variant_id; test key↔test store, live key↔live store eşlemesi."
+          ? "Lemon: İlişkili kaynak yok (variant veya store). Canlı modda doğru variant_id ve Store ID kullanın."
           : "Lemon geçersiz istek (variant veya mağaza ID’si yanlış olabilir).",
         detail: clientMsg
       });
