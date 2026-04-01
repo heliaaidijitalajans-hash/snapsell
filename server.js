@@ -2297,15 +2297,41 @@ async function handleCreateCheckout(req, res) {
     const base = String(process.env.PUBLIC_APP_URL || "").trim().replace(/\/$/, "");
     const redirectUrl = base ? base + "/hesap-ayarlari" : undefined;
 
-    console.log(
-      "[Lemon] create-checkout istek plan=",
-      plan,
-      "storeId=",
-      storeId,
-      "variantId=",
-      variantId,
-      "(Live test variant karıştıysa 422 alırsınız)"
-    );
+    console.log("Variant ID:", variantId);
+    console.log("Store ID:", storeId);
+    console.log("[Lemon] create-checkout plan=", plan);
+
+    const skipVerify = String(process.env.LEMON_SQUEEZY_SKIP_VARIANT_VERIFY || "").trim() === "1";
+    if (!skipVerify) {
+      const meta = await lemon.fetchVariantMeta(apiKey, variantId);
+      if (!meta.ok) {
+        console.error("[Lemon] variant doğrulama başarısız:", meta.status, meta.detail);
+        const hint404 =
+          meta.status === 404
+            ? " Dashboard → Products → ürün → Variants: variant ID’yi kopyalayın. Test API key ile test mağazası, canlı key ile canlı mağaza aynı ortamda olmalı."
+            : "";
+        return res.status(400).json({
+          error:
+            "Lemon: Bu variant_id API anahtarınızla bulunamadı veya eşleşmiyor." +
+            hint404 +
+            " (The related resource does not exist → genelde yanlış variant_id veya test/live karışması.)",
+          detail: meta.detail
+        });
+      }
+      if (String(meta.storeId) !== String(storeId)) {
+        console.error(
+          "[Lemon] STORE_ID, variant’ın mağazası ile uyuşmuyor. env STORE_ID=",
+          storeId,
+          "variant store=",
+          meta.storeId
+        );
+        return res.status(400).json({
+          error:
+            "Lemon: LEMON_SQUEEZY_STORE_ID bu variant’ın ait olduğu mağaza ile aynı değil. Aynı ortamdaki (test veya live) Store ID ve variant ID’leri kullanın.",
+          detail: "variant store=" + meta.storeId + " env store=" + storeId
+        });
+      }
+    }
 
     const { checkoutUrl } = await lemon.createCheckout({
       apiKey,
@@ -2338,7 +2364,15 @@ async function handleCreateCheckout(req, res) {
       });
     }
     if (lemonStatus === 404 || lemonStatus === 422) {
-      return res.status(400).json({ error: "Lemon geçersiz istek (variant veya mağaza ID’si yanlış olabilir).", detail: clientMsg });
+      const related =
+        /related resource does not exist/i.test(clientMsg) ||
+        /related resource does not exist/i.test(String(err.lemonBody || ""));
+      return res.status(400).json({
+        error: related
+          ? "Lemon: İlişkili kaynak yok (variant veya store). Dashboard → Products → Variants’tan doğru variant_id; test key↔test store, live key↔live store eşlemesi."
+          : "Lemon geçersiz istek (variant veya mağaza ID’si yanlış olabilir).",
+        detail: clientMsg
+      });
     }
     if (lemonStatus != null && lemonStatus >= 400 && lemonStatus < 500) {
       return res.status(400).json({ error: clientMsg });
