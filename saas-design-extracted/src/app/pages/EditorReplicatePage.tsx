@@ -164,6 +164,8 @@ export function EditorReplicatePage() {
         if ((data as any).upgradeUrl) err.upgradeUrl = (data as any).upgradeUrl;
         throw err;
       }
+      const libErr = (data as { libraryError?: string | null }).libraryError;
+      if (libErr) console.warn("[SnapSell] Kütüphane kaydı (sunucu):", libErr);
       let imageUrl = (data.image ?? data.outputUrl ?? data.output?.[0] ?? (Array.isArray(data.output) ? data.output[0] : data.output)) as string | undefined;
       if (imageUrl && typeof imageUrl === "string") {
         if (!imageUrl.startsWith("http") && !imageUrl.startsWith("data:image")) {

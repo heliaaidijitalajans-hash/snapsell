@@ -21,9 +21,15 @@ const FormDataPkg = (function () { try { return require("form-data"); } catch (_
 let supabase = null;
 try {
   supabase = createServiceClient();
-  console.log("Supabase hazir.");
+  try {
+    const raw = String(process.env.SUPABASE_URL || "").trim();
+    const host = raw ? new URL(raw).hostname : "(yok)";
+    console.log("Supabase hazir. Proje URL host:", host, "(VITE_SUPABASE_URL ile aynı projeyi kullanın)");
+  } catch (_) {
+    console.log("Supabase hazir.");
+  }
 } catch (err) {
-  console.warn("Supabase yuklenemedi:", err.message);
+  console.warn("Supabase yuklenemedi:", err.message, "— SUPABASE_URL ve SUPABASE_SERVICE_ROLE_KEY ikisi de gerekli.");
 }
 
 if (typeof globalThis.File === "undefined") {
@@ -1103,18 +1109,30 @@ app.get("/admin/subscribers", requireAdmin, async function (req, res) {
   res.json({ monthly, yearly, all: list });
 });
 
-/** Admin paneli: images tablosundan source=editor kayıtları (Supabase). */
+/** Admin paneli: images tablosundan kayıtlar (öncelik source=editor; eski şema / boş source için tüm satırlar). */
 async function getAdminImageEditsFromDb() {
   if (!supabase) return [];
-  const { data: rows, error } = await supabase
+  const withSource = await supabase
     .from("images")
-    .select("user_id, image_url, created_at, prompt")
-    .eq("source", "editor")
+    .select("user_id, image_url, created_at, prompt, source")
     .order("created_at", { ascending: false })
     .limit(5000);
-  if (error) {
-    console.warn("getAdminImageEditsFromDb:", error.message);
-    return [];
+  let rows = [];
+  if (withSource.error) {
+    const noSrcCol = await supabase
+      .from("images")
+      .select("user_id, image_url, created_at, prompt")
+      .order("created_at", { ascending: false })
+      .limit(5000);
+    if (noSrcCol.error) {
+      console.warn("getAdminImageEditsFromDb:", noSrcCol.error.message);
+      return [];
+    }
+    rows = noSrcCol.data || [];
+  } else {
+    rows = (withSource.data || []).filter(function (r) {
+      return !r.source || r.source === "editor";
+    });
   }
   if (!rows || !rows.length) return [];
   const ids = [];
@@ -2717,7 +2735,10 @@ app.get("/api/replicate/temp/:id/nobg", function (req, res) {
  * @returns {Promise<{ ok: true, id?: string }|{ ok: false, error: string }>}
  */
 async function saveEditorImageToLibraryFromBuffer(user, buffer, contentType, prompt) {
-  if (!supabase || !user || !user.id || !buffer || buffer.length === 0) {
+  if (!supabase) {
+    return { ok: false, error: "Supabase sunucuda yok (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY kontrol edin)" };
+  }
+  if (!user || !user.id || !buffer || buffer.length === 0) {
     return { ok: false, error: "Yapılandırma veya görsel eksik" };
   }
   try {
@@ -2728,20 +2749,31 @@ async function saveEditorImageToLibraryFromBuffer(user, buffer, contentType, pro
       contentType: ct,
       upsert: false
     });
-    if (upErr) return { ok: false, error: upErr.message };
+    if (upErr) {
+      return {
+        ok: false,
+        error: "Storage: " + upErr.message + " (bucket generated-images var mı, SQL 004 uygulandı mı?)"
+      };
+    }
     const { data: pub } = supabase.storage.from("generated-images").getPublicUrl(path);
-    const { data: ins, error: insErr } = await supabase
-      .from("images")
-      .insert({
-        user_id: user.id,
-        image_url: pub.publicUrl,
-        created_at: new Date().toISOString(),
-        source: "editor",
-        prompt: String(prompt || "").slice(0, 500)
-      })
-      .select("id")
-      .single();
-    if (insErr) return { ok: false, error: insErr.message };
+    const basePayload = {
+      user_id: user.id,
+      image_url: pub.publicUrl,
+      created_at: new Date().toISOString(),
+      prompt: String(prompt || "").slice(0, 500)
+    };
+    let payload = Object.assign({ source: "editor" }, basePayload);
+    let { data: ins, error: insErr } = await supabase.from("images").insert(payload).select("id").single();
+    if (insErr && /source|column|schema/i.test(String(insErr.message || ""))) {
+      payload = basePayload;
+      const retry = await supabase.from("images").insert(payload).select("id").single();
+      ins = retry.data;
+      insErr = retry.error;
+    }
+    if (insErr) {
+      console.warn("saveEditorImageToLibraryFromBuffer insert:", insErr.code, insErr.message, insErr.details || "");
+      return { ok: false, error: insErr.message + (insErr.hint ? " — " + insErr.hint : "") };
+    }
     return { ok: true, id: ins && ins.id };
   } catch (e) {
     return { ok: false, error: e.message || String(e) };
@@ -2977,7 +3009,14 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
     }
 
     console.log("PhotoRoom pipeline: res.json gönderiliyor (seo uzunluk:", (seoText || "").length, ")");
-    return res.json({ ok: true, outputUrl, output: [outputUrl], seo: seoText || "" });
+    return res.json({
+      ok: true,
+      outputUrl,
+      output: [outputUrl],
+      seo: seoText || "",
+      librarySaved: libResult.ok,
+      libraryError: libResult.ok ? null : libResult.error
+    });
   } catch (e) {
     console.error("PhotoRoom pipeline error:", e);
     const isTimeout = e && (e.name === "AbortError" || /abort|timeout|Form buffer timeout/i.test(String(e.message)));
