@@ -2297,7 +2297,8 @@ async function handleCreateCheckout(req, res) {
     const base = String(process.env.PUBLIC_APP_URL || "").trim().replace(/\/$/, "");
     const redirectUrl = base ? base + "/hesap-ayarlari" : undefined;
 
-    console.log("Variant ID:", variantId);
+    console.log("API KEY:", lemon.formatLemonApiKeyForLog(apiKey));
+    console.log("VARIANT:", variantId);
     console.log("Store ID:", storeId);
     console.log("[Lemon] create-checkout plan=", plan);
 
@@ -2330,6 +2331,30 @@ async function handleCreateCheckout(req, res) {
             "Lemon: LEMON_SQUEEZY_STORE_ID bu variant’ın ait olduğu mağaza ile aynı değil. Aynı ortamdaki (test veya live) Store ID ve variant ID’leri kullanın.",
           detail: "variant store=" + meta.storeId + " env store=" + storeId
         });
+      }
+
+      const keyEnv = lemon.inferLemonApiKeyEnvironment(apiKey);
+      if (keyEnv == null) {
+        console.warn(
+          "[Lemon] API anahtarı öneki tanınamadı (sk_test_* / sk_live_* veya lem_test_* / lem_live_*); test/live eşlemesi atlandı."
+        );
+      } else if (meta.testMode != null) {
+        const wantTest = keyEnv === "test";
+        const variantIsTest = meta.testMode === true;
+        if (wantTest !== variantIsTest) {
+          console.error(
+            "[Lemon] API key ortamı ile variant test_mode uyuşmuyor. key→",
+            keyEnv,
+            "variant.test_mode=",
+            meta.testMode
+          );
+          return res.status(400).json({
+            error: wantTest
+              ? "Lemon: Test API anahtarı yalnızca test modunda oluşturulmuş variant (test_mode: true) ile kullanılabilir. Env’deki variant_id’yi Dashboard test modunda Products → Variants’tan güncelleyin."
+              : "Lemon: Canlı API anahtarı yalnızca canlı variant (test_mode: false) ile kullanılabilir. Env’de test variant ID’si kaldıysa canlı ortamdaki ID ile değiştirin.",
+            detail: "keyEnv=" + keyEnv + " variant.test_mode=" + String(meta.testMode)
+          });
+        }
       }
     }
 
