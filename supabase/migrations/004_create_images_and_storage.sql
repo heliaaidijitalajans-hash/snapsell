@@ -1,4 +1,5 @@
 -- Kutuphane: gorsel metadata + Storage bucket (Dashboard'da Storage'i da acin)
+-- Eski bir `images` tablosu varsa ve user_id yoksa: once 007_images_add_missing_columns.sql calistirin.
 
 -- 1) Tablo
 create table if not exists public.images (

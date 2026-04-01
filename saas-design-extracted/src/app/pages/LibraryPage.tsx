@@ -12,29 +12,73 @@ export type LibraryImage = {
   prompt?: string;
 };
 
+function logSupabaseLibraryError(err: unknown) {
+  const e = err as { message?: string; code?: string; details?: string; hint?: string };
+  console.warn(
+    "Library Supabase error:",
+    e.message || err,
+    e.code ? `code=${e.code}` : "",
+    e.details ? `details=${e.details}` : "",
+    e.hint ? `hint=${e.hint}` : ""
+  );
+}
+
 export function LibraryPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
   const [images, setImages] = useState<LibraryImage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.id) {
       setImages([]);
+      setLoadError(null);
       setLoading(false);
       return;
     }
 
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase
+      setLoadError(null);
+      let data: {
+        id: string;
+        image_url?: string | null;
+        created_at?: string | null;
+        source?: string | null;
+        prompt?: string | null;
+      }[] | null = null;
+      let error = null;
+
+      const full = await supabase
         .from("images")
         .select("id, image_url, created_at, source, prompt")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
+      data = full.data;
+      error = full.error;
+
+      if (error && !cancelled) {
+        logSupabaseLibraryError(error);
+        const minimal = await supabase
+          .from("images")
+          .select("id, image_url, created_at")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+        if (!minimal.error) {
+          data = minimal.data;
+          error = null;
+        } else {
+          logSupabaseLibraryError(minimal.error);
+          error = minimal.error;
+        }
+      }
+
       if (cancelled) return;
       if (error) {
-        console.warn("Library Supabase error:", error);
+        const msg = (error as { message?: string }).message || String(error);
+        setLoadError(msg);
+        setImages([]);
         setLoading(false);
         return;
       }
@@ -67,6 +111,12 @@ export function LibraryPage() {
       ) : loading ? (
         <div className="flex justify-center py-16">
           <div className="animate-spin w-8 h-8 border-2 border-[#FF5A5F] border-t-transparent rounded-full" />
+        </div>
+      ) : loadError ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-6 text-sm text-amber-900">
+          <p className="font-medium mb-2">{t("library.loadErrorTitle")}</p>
+          <p className="text-amber-800/90 mb-2">{t("library.loadErrorHint")}</p>
+          <p className="font-mono text-xs text-amber-900/80 break-all">{loadError}</p>
         </div>
       ) : images.length === 0 ? (
         <p className="text-gray-500 text-center py-16">{t("library.empty")}</p>

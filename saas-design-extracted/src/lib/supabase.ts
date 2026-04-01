@@ -1,10 +1,29 @@
 /**
- * Tarayıcı Supabase istemcisi — VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY (Vite build’de gömülür).
+ * Tarayıcı Supabase istemcisi.
+ * Öncelik: import.meta.env.VITE_* → vite.config define ile gelen process.env.SUPABASE_* (build anında dolar).
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL || "").toString().trim();
-const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").toString().trim();
+function readSupabaseUrl(): string {
+  const v = import.meta.env.VITE_SUPABASE_URL;
+  if (v) return String(v).trim();
+  if (typeof process !== "undefined" && process.env?.SUPABASE_URL) {
+    return String(process.env.SUPABASE_URL).trim();
+  }
+  return "";
+}
+
+function readSupabaseAnonKey(): string {
+  const v = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  if (v) return String(v).trim();
+  if (typeof process !== "undefined" && process.env?.SUPABASE_ANON_KEY) {
+    return String(process.env.SUPABASE_ANON_KEY).trim();
+  }
+  return "";
+}
+
+const supabaseUrl = readSupabaseUrl();
+const supabaseAnonKey = readSupabaseAnonKey();
 
 function looksLikeExampleConfig(url: string, key: string): boolean {
   const u = url.toLowerCase();
@@ -26,12 +45,15 @@ export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey) && !
 
 if (!isSupabaseConfigured) {
   console.warn(
-    "[SnapSell] VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY eksik veya placeholder. Vercel env + redeploy gerekir."
+    "[SnapSell] Supabase: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY (veya build env SUPABASE_*) eksik veya placeholder. Vercel env + redeploy."
   );
 }
 
 const PLACEHOLDER_URL = "https://placeholder.supabase.co";
 const PLACEHOLDER_KEY = "sb-placeholder-not-configured";
+
+/** Aynı origin’de başka Supabase uygulaması varsa oturum çakışmasını azaltmak için sabit storage anahtarı. */
+const AUTH_STORAGE_KEY = "snapsell-supabase-auth";
 
 export const supabase: SupabaseClient = createClient(
   isSupabaseConfigured ? supabaseUrl : PLACEHOLDER_URL,
@@ -41,6 +63,7 @@ export const supabase: SupabaseClient = createClient(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
+      storageKey: AUTH_STORAGE_KEY,
     },
   }
 );

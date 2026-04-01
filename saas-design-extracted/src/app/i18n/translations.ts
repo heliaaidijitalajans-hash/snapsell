@@ -354,6 +354,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     "library.signInToView": "Kütüphaneyi görmek için giriş yapın.",
     "library.note": "Not:",
     "library.noteText": "İşlenen görseller hesabınıza kaydedilir ve burada listelenir.",
+    "library.loadErrorTitle": "Kütüphane listesi yüklenemedi",
+    "library.loadErrorHint": "Ağ sekmesinde 404 görüyorsanız genelde Supabase’te `public.images` tablosu yoktur veya yanlış projeye bağlanıyorsunuzdur. SQL migration 004’ü çalıştırın; VITE_SUPABASE_URL ile backend’deki SUPABASE_URL aynı proje olmalı.",
     // Editor (Görsel düzenleme)
     "editor.title": "Ürün stüdyo görseli",
     "editor.pleaseSelectImage": "Lütfen bir görsel seçin (PNG, JPG, WEBP).",
@@ -754,6 +756,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     "library.signInToView": "Sign in to view your library.",
     "library.note": "Note:",
     "library.noteText": "Processed images are saved to your account and listed here.",
+    "library.loadErrorTitle": "Could not load library",
+    "library.loadErrorHint": "A 404 on the Network tab usually means the `public.images` table is missing or the app points at the wrong Supabase project. Run migration 004; VITE_SUPABASE_URL must match the backend SUPABASE_URL project.",
     // Editor
     "editor.title": "Product studio image",
     "editor.pleaseSelectImage": "Please select an image (PNG, JPG, WEBP).",

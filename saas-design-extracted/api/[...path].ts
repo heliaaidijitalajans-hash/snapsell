@@ -1,4 +1,4 @@
-const RAILWAY_BASE = "https://snapsell-production.up.railway.app";
+import { getApiProxyTarget } from "./proxyEnv";
 
 export default async function handler(
   req: { method?: string; query: { path?: string | string[] }; body?: unknown; headers?: Record<string, string | string[] | undefined } },
@@ -15,9 +15,15 @@ export default async function handler(
     return;
   }
 
+  const base = getApiProxyTarget();
+  if (!base) {
+    res.status(503).send(JSON.stringify({ error: "API_PROXY_TARGET veya VITE_API_BASE_URL tanımlı değil." }));
+    return;
+  }
+
   const pathSegments = req.query?.path;
   const path = Array.isArray(pathSegments) ? pathSegments.join("/") : (pathSegments || "");
-  const url = `${RAILWAY_BASE}/api/${path}`;
+  const url = `${base}/api/${path}`;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",

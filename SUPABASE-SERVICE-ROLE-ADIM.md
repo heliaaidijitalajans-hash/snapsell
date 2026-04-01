@@ -4,7 +4,7 @@ Kullanıcı kaydı ve giriş (users tablosu) için **SUPABASE_SERVICE_ROLE_KEY**
 
 ## 1. Key’i alın
 
-1. [Supabase Dashboard](https://supabase.com/dashboard) → Projenize girin (örn. `eabgyxssepusxceqwmta`).
+1. [Supabase Dashboard](https://supabase.com/dashboard) → Projenize girin (Project ref sizde farklıdır).
 2. Sol menü **Settings** (dişli) → **API**.
 3. **Project API keys** bölümünde **service_role** satırını bulun.
 4. **Reveal** / **Göster** ile key’i görün, **Copy** ile kopyalayın.  
@@ -21,7 +21,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 Eşittir işaretinden sonra kopyaladığınız key’i yapıştırın (boşluk bırakmayın):
 
 ```env
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+SUPABASE_SERVICE_ROLE_KEY=<Dashboard’dan kopyaladığınız service_role değeri>
 ```
 
 Kaydedin.

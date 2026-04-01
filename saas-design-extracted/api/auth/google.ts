@@ -1,4 +1,4 @@
-const RAILWAY_BASE = "https://snapsell-production.up.railway.app";
+import { getApiProxyTarget } from "../proxyEnv";
 
 type VercelReq = { method?: string; body?: unknown; headers?: Record<string, string | string[] | undefined> };
 type VercelRes = {
@@ -29,11 +29,17 @@ export default async function handler(req: VercelReq, res: VercelRes) {
     return;
   }
 
+  const base = getApiProxyTarget();
+  if (!base) {
+    res.status(503).send(JSON.stringify({ error: "API_PROXY_TARGET veya VITE_API_BASE_URL tanımlı değil." }));
+    return;
+  }
+
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   const auth = req.headers?.authorization;
   if (auth && typeof auth === "string") headers["Authorization"] = auth;
 
-  const response = await fetch(`${RAILWAY_BASE}/api/auth/google`, {
+  const response = await fetch(`${base}/api/auth/google`, {
     method: "POST",
     headers,
     body: JSON.stringify(req.body ?? {}),
