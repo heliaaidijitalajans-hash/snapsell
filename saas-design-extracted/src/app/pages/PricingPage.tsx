@@ -195,14 +195,16 @@ export default function PricingPage() {
           headers: { "Content-Type": "application/json", ...headers },
           body: JSON.stringify(payload),
         });
-        const json = await apiJson<{ checkoutUrl?: string; error?: string }>(res);
+        const json = await apiJson<{ checkoutUrl?: string; error?: string; detail?: string }>(res);
         console.log("[create-checkout] status:", res.status, "body:", json);
         if (res.ok && json?.checkoutUrl) {
           console.log("Checkout created");
           window.location.href = json.checkoutUrl;
           return;
         }
-        setCheckoutError((json && json.error) || t("pricing.checkoutError"));
+        const errMsg = json?.error || t("pricing.checkoutError");
+        const lemonDetail = json?.detail ? String(json.detail).trim().slice(0, 400) : "";
+        setCheckoutError(lemonDetail ? `${errMsg} (${lemonDetail})` : errMsg);
       } finally {
         setPaymentLoading(null);
       }

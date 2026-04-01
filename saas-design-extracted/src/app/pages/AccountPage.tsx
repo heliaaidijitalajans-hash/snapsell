@@ -193,10 +193,12 @@ export function AccountPage() {
         headers,
         body: JSON.stringify(payload),
       });
-      const json = await apiJson<{ checkoutUrl?: string; error?: string }>(res);
+      const json = await apiJson<{ checkoutUrl?: string; error?: string; detail?: string }>(res);
       console.log("[create-checkout] status:", res.status, "body:", json);
       if (!res.ok) {
-        setCheckoutError((json && json.error) || t("account.lemonCheckoutError"));
+        const errMsg = (json && json.error) || t("account.lemonCheckoutError");
+        const lemonDetail = json?.detail ? String(json.detail).trim().slice(0, 400) : "";
+        setCheckoutError(lemonDetail ? `${errMsg} (${lemonDetail})` : errMsg);
         return;
       }
       if (json?.checkoutUrl) {
