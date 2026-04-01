@@ -189,7 +189,16 @@ export function EditorReplicatePage() {
               : photoQuality === "professional"
                 ? "commercial product shot"
                 : "professional product photography");
-          const apiRoot = (EDITOR_API_BASE || "").replace(/\/$/, "") || (typeof window !== "undefined" ? window.location.origin : "");
+          /** Aynı origin’de statik site + ayrı API (Railway) varken buffer API sunucusundadır; kayıt da aynı origin’e gitmeli. */
+          let apiRoot = (EDITOR_API_BASE || "").replace(/\/$/, "");
+          if (!apiRoot && /^https?:\/\//i.test(imageUrl)) {
+            try {
+              apiRoot = new URL(imageUrl).origin;
+            } catch {
+              /* ignore */
+            }
+          }
+          if (!apiRoot && typeof window !== "undefined") apiRoot = window.location.origin;
           const tempMatch = imageUrl.match(/\/api\/replicate\/temp\/([^/?]+)/);
           const tempId = tempMatch ? tempMatch[1] : null;
           const saveLibrary = async () => {
