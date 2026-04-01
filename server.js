@@ -1103,11 +1103,52 @@ app.get("/admin/subscribers", requireAdmin, async function (req, res) {
   res.json({ monthly, yearly, all: list });
 });
 
-/** Admin: Görsel düzenleme kayıtları. Şimdilik boş dizi; ileride data/image-edits.json ile doldurulabilir. */
-app.get("/admin/image-edits", requireAdmin, function (req, res) {
-  const loaded = loadJsonFile("image-edits.json", null);
-  const edits = Array.isArray(loaded) ? loaded : [];
-  res.json({ edits });
+/** Admin paneli: images tablosundan source=editor kayıtları (Supabase). */
+async function getAdminImageEditsFromDb() {
+  if (!supabase) return [];
+  const { data: rows, error } = await supabase
+    .from("images")
+    .select("user_id, image_url, created_at, prompt")
+    .eq("source", "editor")
+    .order("created_at", { ascending: false })
+    .limit(5000);
+  if (error) {
+    console.warn("getAdminImageEditsFromDb:", error.message);
+    return [];
+  }
+  if (!rows || !rows.length) return [];
+  const ids = [];
+  const seen = {};
+  rows.forEach(function (r) {
+    if (r.user_id && !seen[r.user_id]) {
+      seen[r.user_id] = true;
+      ids.push(r.user_id);
+    }
+  });
+  const userMap = {};
+  if (ids.length) {
+    const { data: users } = await supabase.from("users").select("id, email, display_name").in("id", ids);
+    if (users) users.forEach(function (u) { userMap[u.id] = u; });
+  }
+  return rows.map(function (row) {
+    const u = userMap[row.user_id];
+    return {
+      userId: row.user_id,
+      email: u ? u.email : null,
+      displayName: u ? u.display_name : null,
+      outputUrl: row.image_url,
+      createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now()
+    };
+  });
+}
+
+app.get("/admin/image-edits", requireAdmin, async function (req, res) {
+  try {
+    const edits = await getAdminImageEditsFromDb();
+    res.json({ edits });
+  } catch (e) {
+    res.status(500).json({ error: e.message || String(e), edits: [] });
+  }
 });
 
 app.get("/admin/teams", requireAdmin, function (req, res) {
@@ -1327,9 +1368,13 @@ app.get("/api/admin/subscribers", requireAdmin, async function (req, res) {
   const yearly = list.filter(function (u) { return (u.plan || "").toString().startsWith("yearly_"); });
   res.json({ monthly, yearly, all: list });
 });
-app.get("/api/admin/image-edits", requireAdmin, function (req, res) {
-  const loaded = loadJsonFile("image-edits.json", null);
-  res.json({ edits: Array.isArray(loaded) ? loaded : [] });
+app.get("/api/admin/image-edits", requireAdmin, async function (req, res) {
+  try {
+    const edits = await getAdminImageEditsFromDb();
+    res.json({ edits });
+  } catch (e) {
+    res.status(500).json({ error: e.message || String(e), edits: [] });
+  }
 });
 app.get("/api/admin/teams", requireAdmin, function (req, res) {
   loadTeams();
@@ -2667,6 +2712,42 @@ app.get("/api/replicate/temp/:id/nobg", function (req, res) {
   res.send(entry.noBgBuffer);
 });
 
+/**
+ * Görsel düzenleme çıktısını Storage + images tablosuna yazar (servis rolü; istemciden bağımsız).
+ * @returns {Promise<{ ok: true, id?: string }|{ ok: false, error: string }>}
+ */
+async function saveEditorImageToLibraryFromBuffer(user, buffer, contentType, prompt) {
+  if (!supabase || !user || !user.id || !buffer || buffer.length === 0) {
+    return { ok: false, error: "Yapılandırma veya görsel eksik" };
+  }
+  try {
+    const ct = contentType || "image/png";
+    const ext = String(ct).indexOf("jpeg") >= 0 ? "jpg" : "png";
+    const path = user.id + "/" + Date.now() + "." + ext;
+    const { error: upErr } = await supabase.storage.from("generated-images").upload(path, buffer, {
+      contentType: ct,
+      upsert: false
+    });
+    if (upErr) return { ok: false, error: upErr.message };
+    const { data: pub } = supabase.storage.from("generated-images").getPublicUrl(path);
+    const { data: ins, error: insErr } = await supabase
+      .from("images")
+      .insert({
+        user_id: user.id,
+        image_url: pub.publicUrl,
+        created_at: new Date().toISOString(),
+        source: "editor",
+        prompt: String(prompt || "").slice(0, 500)
+      })
+      .select("id")
+      .single();
+    if (insErr) return { ok: false, error: insErr.message };
+    return { ok: true, id: ins && ins.id };
+  } catch (e) {
+    return { ok: false, error: e.message || String(e) };
+  }
+}
+
 /** Kütüphane: geçici replicate/PhotoRoom buffer’ını sunucudan Storage + images tablosuna yazar (CORS’suz). */
 app.post("/api/library/save-replicate-temp", async function (req, res) {
   try {
@@ -2683,27 +2764,10 @@ app.post("/api/library/save-replicate-temp", async function (req, res) {
         error: "Görsel bulunamadı veya süresi doldu. Sayfayı yenileyip tekrar deneyin."
       });
     }
-    const path = user.id + "/" + Date.now() + ".png";
     const contentType = entry.contentType || "image/png";
-    const { error: upErr } = await supabase.storage.from("generated-images").upload(path, entry.buffer, {
-      contentType: contentType,
-      upsert: false
-    });
-    if (upErr) return res.status(500).json({ error: upErr.message });
-    const { data: pub } = supabase.storage.from("generated-images").getPublicUrl(path);
-    const { data: ins, error: insErr } = await supabase
-      .from("images")
-      .insert({
-        user_id: user.id,
-        image_url: pub.publicUrl,
-        created_at: new Date().toISOString(),
-        source: "editor",
-        prompt: prompt
-      })
-      .select("id")
-      .single();
-    if (insErr) return res.status(500).json({ error: insErr.message });
-    return res.json({ ok: true, id: ins && ins.id });
+    const result = await saveEditorImageToLibraryFromBuffer(user, entry.buffer, contentType, prompt);
+    if (!result.ok) return res.status(500).json({ error: result.error || "Kayıt başarısız" });
+    return res.json({ ok: true, id: result.id });
   } catch (e) {
     return res.status(500).json({ error: e.message || String(e) });
   }
@@ -2905,6 +2969,11 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
       } else {
         await updateUserInDb(user.id, { credits: newCredits, totalConversions: newTotal });
       }
+    }
+
+    const libResult = await saveEditorImageToLibraryFromBuffer(user, resultBuffer, contentType, bgPrompt);
+    if (!libResult.ok) {
+      console.warn("PhotoRoom pipeline: kütüphaneye kayıt başarısız:", libResult.error);
     }
 
     console.log("PhotoRoom pipeline: res.json gönderiliyor (seo uzunluk:", (seoText || "").length, ")");
