@@ -356,6 +356,24 @@ function resolveCheckoutVariantId(plan) {
   return n(raw);
 }
 
+/** İstemci `basic`, `pro` gibi isimler gönderebilir; Lemon variant eşlemesi için iç plan id'ye çevir. */
+function normalizeCheckoutPlanForLemon(raw) {
+  const p = String(raw || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+  const aliases = {
+    basic: "monthly_plan",
+    starter: "monthly_plan",
+    standard: "monthly_plan",
+    premium: "monthly_plan_pro",
+    plus: "monthly_plan_pro",
+    annual: "yearly_plan",
+    yearly: "yearly_plan"
+  };
+  return aliases[p] || p;
+}
+
 /** Veritabanında kullanıcı güncelle (Supabase veya bellek). */
 async function updateUserInDb(userId, data) {
   const payload = {};
@@ -2213,10 +2231,11 @@ app.post("/api/subscription-webhook", (req, res) => {
  * Lemon Squeezy — checkout. checkout_data.email = session.user.email, custom.user_id + userId = session.user.id
  * (ayrı dosya yok; Bearer JWT zorunlu, gövdedeki email kullanılmaz)
  */
-app.post("/api/create-checkout", async function (req, res) {
+async function handleCreateCheckout(req, res) {
   try {
     const body = req.body || {};
-    const plan = String(body.plan || "").trim();
+    const planRaw = String(body.plan || "").trim();
+    const plan = normalizeCheckoutPlanForLemon(planRaw);
     if (!plan) {
       return res.status(400).json({ error: "plan gerekli" });
     }
@@ -2260,7 +2279,7 @@ app.post("/api/create-checkout", async function (req, res) {
       if (known.indexOf(p) === -1) {
         return res.status(400).json({
           error:
-            "Geçersiz plan. İzin verilen: monthly_plan, monthly_plan_pro, pro, yearly_plan, addon."
+            "Geçersiz plan. İzin verilen: monthly_plan, monthly_plan_pro, pro, yearly_plan, addon (veya basic, premium, yearly gibi eş anlamlılar)."
         });
       }
       return res.status(400).json({
@@ -2305,6 +2324,7 @@ app.post("/api/create-checkout", async function (req, res) {
       "email=",
       sessionEmail.toLowerCase()
     );
+    console.log("Checkout created");
     res.json({ checkoutUrl });
   } catch (err) {
     const lemonStatus = err && typeof err.lemonStatus === "number" ? err.lemonStatus : null;
@@ -2325,7 +2345,11 @@ app.post("/api/create-checkout", async function (req, res) {
     }
     res.status(500).json({ error: clientMsg });
   }
-});
+}
+
+app.post("/api/create-checkout", handleCreateCheckout);
+/** Eski veya hatalı istemciler `/create-checkout` kullanırsa (404 önleme); tercihen POST /api/create-checkout */
+app.post("/create-checkout", handleCreateCheckout);
 
 /**
  * Lemon Squeezy — webhook (X-Signature HMAC-SHA256, ham gövde).

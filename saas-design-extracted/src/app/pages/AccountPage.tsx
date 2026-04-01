@@ -15,7 +15,7 @@ import {
   Sparkles,
   Loader2,
 } from "lucide-react";
-import { getApiBase, apiJson } from "../config";
+import { getApiBase, getCreateCheckoutUrl, apiJson } from "../config";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { authLog } from "../../lib/authConfig";
 
@@ -188,7 +188,7 @@ export function AccountPage() {
         ...(await getBearerHeaders()),
       };
       const payload = { plan: "monthly_plan_pro" as const };
-      const res = await fetch(`${getApiBase()}/api/create-checkout`, {
+      const res = await fetch(getCreateCheckoutUrl(), {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
@@ -200,6 +200,7 @@ export function AccountPage() {
         return;
       }
       if (json?.checkoutUrl) {
+        console.log("Checkout created");
         window.location.href = json.checkoutUrl;
         return;
       }

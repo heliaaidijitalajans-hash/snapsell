@@ -14,6 +14,12 @@ export function getApiBase(): string {
   return API_BASE_URL;
 }
 
+/** Lemon checkout — her zaman `/api/create-checkout` ( `/create-checkout` kullanmayın ). */
+export function getCreateCheckoutUrl(): string {
+  const b = getApiBase();
+  return b ? `${b}/api/create-checkout` : "/api/create-checkout";
+}
+
 /** Parse JSON from response. Returns {} for empty/non-JSON; throws only for HTML (wrong host). */
 export async function apiJson<T = unknown>(res: Response): Promise<T> {
   const ct = res.headers.get("content-type") || "";

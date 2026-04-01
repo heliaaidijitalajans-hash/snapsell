@@ -5,6 +5,7 @@
   "rewrites": [
     { "source": "/api/webhook", "destination": "/api/webhook" },
     { "source": "/api/webhook/lemonsqueezy", "destination": "/api/webhook/lemonsqueezy" },
+    { "source": "/create-checkout", "destination": "/api" },
     { "source": "/api", "destination": "/api" },
     { "source": "/api/:path*", "destination": "/api" },
     { "source": "/(.*)", "destination": "/index.html" }

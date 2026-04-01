@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Check, Sparkles } from "lucide-react";
-import { getApiBase, apiJson } from "../config";
+import { getApiBase, getCreateCheckoutUrl, apiJson } from "../config";
 import { useLanguage } from "../contexts/LanguageContext";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -190,7 +190,7 @@ export default function PricingPage() {
         const headers = await getAuthHeaders();
         const checkoutPlan = plan.id as (typeof PAID_PLAN_IDS)[number];
         const payload = { plan: checkoutPlan };
-        const res = await fetch(`${getApiBase()}/api/create-checkout`, {
+        const res = await fetch(getCreateCheckoutUrl(), {
           method: "POST",
           headers: { "Content-Type": "application/json", ...headers },
           body: JSON.stringify(payload),
@@ -198,6 +198,7 @@ export default function PricingPage() {
         const json = await apiJson<{ checkoutUrl?: string; error?: string }>(res);
         console.log("[create-checkout] status:", res.status, "body:", json);
         if (res.ok && json?.checkoutUrl) {
+          console.log("Checkout created");
           window.location.href = json.checkoutUrl;
           return;
         }
