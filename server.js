@@ -2296,46 +2296,49 @@ async function handleCreateCheckout(req, res) {
     const base = String(process.env.PUBLIC_APP_URL || "").trim().replace(/\/$/, "");
     const redirectUrl = base ? base + "/hesap-ayarlari" : undefined;
 
-    console.log("API KEY:", lemon.formatLemonApiKeyForLog(apiKey));
-    console.log("VARIANT:", variantId);
-    console.log("Store ID:", storeId);
-    console.log("[Lemon] create-checkout plan=", plan);
+    const looksLikeLiveKey = /^sk_live_|^lem_live_/i.test(apiKey);
+    if (looksLikeLiveKey) {
+      console.log("LIVE MODE ACTIVE");
+    } else {
+      console.warn(
+        "[Lemon] Checkout: API key does not start with sk_live_ or lem_live_; use a live key from Lemon for production checkout."
+      );
+    }
+    console.log("Variant:", variantId);
+    console.log("Store ID:", storeId, "plan=", plan, "API KEY:", lemon.formatLemonApiKeyForLog(apiKey));
 
-    const skipVerify = String(process.env.LEMON_SQUEEZY_SKIP_VARIANT_VERIFY || "").trim() === "1";
-    if (!skipVerify) {
-      const meta = await lemon.fetchVariantMeta(apiKey, variantId);
-      if (!meta.ok) {
-        console.error("[Lemon] variant doğrulama başarısız:", meta.status, meta.detail);
-        const d = String(meta.detail || "");
-        if (meta.status === 400 && /test modu/i.test(d)) {
-          return res.status(400).json({
-            error: "Lemon: Test modundaki variant kabul edilmez; canlı mağazada oluşturulmuş variant ID kullanın.",
-            detail: meta.detail
-          });
-        }
-        const hint404 =
-          meta.status === 404
-            ? " Dashboard → Products → ürün → Variants: canlı modda variant ID’yi kopyalayın."
-            : "";
+    const meta = await lemon.fetchVariantMeta(apiKey, variantId);
+    if (!meta.ok) {
+      console.error("[Lemon] variant doğrulama başarısız:", meta.status, meta.detail);
+      const d = String(meta.detail || "");
+      if (meta.status === 400 && /test modu/i.test(d)) {
         return res.status(400).json({
-          error:
-            "Lemon: Bu variant_id API anahtarınızla bulunamadı veya eşleşmiyor." + hint404,
+          error: "Lemon: Test modundaki variant kabul edilmez; canlı mağazada oluşturulmuş variant ID kullanın.",
           detail: meta.detail
         });
       }
-      if (String(meta.storeId) !== String(storeId)) {
-        console.error(
-          "[Lemon] STORE_ID, variant’ın mağazası ile uyuşmuyor. env STORE_ID=",
-          storeId,
-          "variant store=",
-          meta.storeId
-        );
-        return res.status(400).json({
-          error:
-            "Lemon: LEMON_SQUEEZY_STORE_ID bu variant’ın ait olduğu mağaza ile aynı değil. Canlı Store ID ve variant ID’leri birlikte kullanın.",
-          detail: "variant store=" + meta.storeId + " env store=" + storeId
-        });
-      }
+      const hint404 =
+        meta.status === 404
+          ? " Dashboard → Products → ürün → Variants: canlı modda variant ID’yi kopyalayın."
+          : "";
+      return res.status(400).json({
+        error:
+          "Lemon: Bu variant_id API anahtarınızla bulunamadı veya eşleşmiyor." + hint404,
+        detail: meta.detail
+      });
+    }
+    if (String(meta.storeId) !== String(storeId)) {
+      console.error(
+        "[Lemon] STORE_ID, variant’ın mağazası ile uyuşmuyor. env STORE_ID=",
+        storeId,
+        "variant store=",
+        meta.storeId
+      );
+      return res.status(400).json({
+        error:
+          "Lemon: LEMON_SQUEEZY_STORE_ID bu variant’ın ait olduğu mağaza ile aynı değil. Canlı Store ID ve variant ID’leri birlikte kullanın.",
+        detail: "variant store=" + meta.storeId + " env store=" + storeId
+      });
     }
 
     const { checkoutUrl } = await lemon.createCheckout({
@@ -2360,7 +2363,9 @@ async function handleCreateCheckout(req, res) {
   } catch (err) {
     const lemonStatus = err && typeof err.lemonStatus === "number" ? err.lemonStatus : null;
     console.error("[Lemon] create-checkout:", err.message, lemonStatus != null ? "(HTTP " + lemonStatus + ")" : "");
-    if (err.lemonBody) console.error("[Lemon] API gövde özeti:", String(err.lemonBody).slice(0, 500));
+    if (err.lemonBody) {
+      console.error("[Lemon] checkout Lemon API full response body:", String(err.lemonBody));
+    }
     const clientMsg = err.message || "Checkout oluşturulamadı";
     if (lemonStatus === 401 || lemonStatus === 403) {
       return res.status(502).json({
