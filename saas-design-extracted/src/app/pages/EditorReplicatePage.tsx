@@ -3,7 +3,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import { Upload, Sparkles, ImageIcon, Check, Store } from "lucide-react";
 import { Link } from "react-router";
-import { saveGeneratedImageToLibrary } from "../lib/libraryImages";
+import { saveGeneratedImageToLibrary, saveRemoteImageToLibrary } from "../lib/libraryImages";
 
 /** Boş = aynı origin (Vercel). Farklı backend için `VITE_API_BASE_URL`. */
 const EDITOR_API_BASE = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || "").toString().trim().replace(/\/$/, "");
@@ -181,9 +181,37 @@ export function EditorReplicatePage() {
         imageUrl = ensureReplicateImageFromRailway(imageUrl);
         const finalUrl = imageUrl.startsWith("data:") ? imageUrl : imageUrl + (imageUrl.includes("?") ? "&" : "?") + "_t=" + Date.now();
         setOutputUrl(finalUrl);
-        if (user?.id && imageUrl.startsWith("data:")) {
-          const userPrompt = prompt.trim() || (photoQuality === "luxury" ? "luxury product photography" : photoQuality === "professional" ? "commercial product shot" : "professional product photography");
-          saveGeneratedImageToLibrary(user.id, imageUrl, userPrompt).catch((err) => console.warn("Library save failed:", err));
+        if (user?.id) {
+          const userPrompt =
+            prompt.trim() ||
+            (photoQuality === "luxury"
+              ? "luxury product photography"
+              : photoQuality === "professional"
+                ? "commercial product shot"
+                : "professional product photography");
+          const apiRoot = (EDITOR_API_BASE || "").replace(/\/$/, "") || (typeof window !== "undefined" ? window.location.origin : "");
+          const tempMatch = imageUrl.match(/\/api\/replicate\/temp\/([^/?]+)/);
+          const tempId = tempMatch ? tempMatch[1] : null;
+          const saveLibrary = async () => {
+            if (tempId && apiRoot) {
+              const r = await fetch(`${apiRoot}/api/library/save-replicate-temp`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", ...headers },
+                body: JSON.stringify({ tempId, prompt: userPrompt }),
+              });
+              const j = (await r.json().catch(() => ({}))) as { error?: string };
+              if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+              return;
+            }
+            if (imageUrl.startsWith("data:")) {
+              await saveGeneratedImageToLibrary(user.id, imageUrl, userPrompt);
+              return;
+            }
+            if (/^https?:\/\//i.test(imageUrl)) {
+              await saveRemoteImageToLibrary(user.id, imageUrl, userPrompt);
+            }
+          };
+          saveLibrary().catch((err) => console.warn("Library save failed:", err));
         }
       }
       const d = data as Record<string, unknown>;

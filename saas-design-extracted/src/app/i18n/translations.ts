@@ -353,7 +353,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     "library.empty": "Henüz görsel yok. Görsel düzenlemeden bir fotoğraf işleyin; sonuçlar burada listelenir.",
     "library.signInToView": "Kütüphaneyi görmek için giriş yapın.",
     "library.note": "Not:",
-    "library.noteText": "PhotoRoom ile işlenen görseller hesabınıza kaydedilir ve burada listelenir.",
+    "library.noteText": "İşlenen görseller hesabınıza kaydedilir ve burada listelenir.",
     // Editor (Görsel düzenleme)
     "editor.title": "Ürün stüdyo görseli",
     "editor.pleaseSelectImage": "Lütfen bir görsel seçin (PNG, JPG, WEBP).",
@@ -753,7 +753,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     "library.empty": "No images yet. Process a photo in the image editor; results will appear here.",
     "library.signInToView": "Sign in to view your library.",
     "library.note": "Note:",
-    "library.noteText": "Images processed with PhotoRoom are saved to your account and listed here.",
+    "library.noteText": "Processed images are saved to your account and listed here.",
     // Editor
     "editor.title": "Product studio image",
     "editor.pleaseSelectImage": "Please select an image (PNG, JPG, WEBP).",

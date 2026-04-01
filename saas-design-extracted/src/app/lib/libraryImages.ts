@@ -42,9 +42,59 @@ export async function saveGeneratedImageToLibrary(
     user_id: userId,
     image_url: downloadURL,
     created_at: new Date().toISOString(),
-    source: "photoroom",
+    source: "editor",
     prompt: prompt || "",
   }).select("id").single();
+  if (error) throw error;
+  return data?.id || null;
+}
+
+/**
+ * PhotoRoom / pipeline çıktısı HTTP URL olduğunda (çoğu dönüşüm); tarayıcıdan indirip Storage'a yükler.
+ */
+export async function saveRemoteImageToLibrary(
+  userId: string,
+  imageHttpUrl: string,
+  prompt: string
+): Promise<string | null> {
+  if (!isSupabaseConfigured) {
+    console.warn("saveRemoteImageToLibrary: Supabase VITE_* env eksik.");
+    return null;
+  }
+  const url = String(imageHttpUrl || "").trim();
+  if (!url.startsWith("http://") && !url.startsWith("https://")) return null;
+
+  const res = await fetch(url, { mode: "cors", credentials: "omit" });
+  if (!res.ok) {
+    throw new Error(`Görsel indirilemedi (${res.status})`);
+  }
+  const blob = await res.blob();
+  if (!blob.size) throw new Error("Boş görsel yanıtı");
+
+  const timestamp = Date.now();
+  const ext = blob.type.includes("jpeg") || blob.type.includes("jpg") ? "jpg" : "png";
+  const path = `${userId}/${timestamp}.${ext}`;
+  const contentType = blob.type || (ext === "jpg" ? "image/jpeg" : "image/png");
+
+  const { error: uploadErr } = await supabase.storage
+    .from("generated-images")
+    .upload(path, blob, { contentType, upsert: false });
+  if (uploadErr) throw uploadErr;
+
+  const { data: publicUrlData } = supabase.storage.from("generated-images").getPublicUrl(path);
+  const downloadURL = publicUrlData.publicUrl;
+
+  const { data, error } = await supabase
+    .from("images")
+    .insert({
+      user_id: userId,
+      image_url: downloadURL,
+      created_at: new Date().toISOString(),
+      source: "editor",
+      prompt: prompt || "",
+    })
+    .select("id")
+    .single();
   if (error) throw error;
   return data?.id || null;
 }

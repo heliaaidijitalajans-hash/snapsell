@@ -2667,6 +2667,48 @@ app.get("/api/replicate/temp/:id/nobg", function (req, res) {
   res.send(entry.noBgBuffer);
 });
 
+/** Kütüphane: geçici replicate/PhotoRoom buffer’ını sunucudan Storage + images tablosuna yazar (CORS’suz). */
+app.post("/api/library/save-replicate-temp", async function (req, res) {
+  try {
+    const user = await getRequestUser(req);
+    if (!user) return res.status(401).json({ error: "Oturum gerekli" });
+    const body = req.body || {};
+    const tempId = String(body.tempId || "").trim();
+    const prompt = String(body.prompt || "").slice(0, 500);
+    if (!tempId) return res.status(400).json({ error: "tempId gerekli" });
+    if (!supabase) return res.status(503).json({ error: "Veritabanı yapılandırması eksik" });
+    const entry = replicateTempImages.get(tempId);
+    if (!entry || !entry.buffer) {
+      return res.status(404).json({
+        error: "Görsel bulunamadı veya süresi doldu. Sayfayı yenileyip tekrar deneyin."
+      });
+    }
+    const path = user.id + "/" + Date.now() + ".png";
+    const contentType = entry.contentType || "image/png";
+    const { error: upErr } = await supabase.storage.from("generated-images").upload(path, entry.buffer, {
+      contentType: contentType,
+      upsert: false
+    });
+    if (upErr) return res.status(500).json({ error: upErr.message });
+    const { data: pub } = supabase.storage.from("generated-images").getPublicUrl(path);
+    const { data: ins, error: insErr } = await supabase
+      .from("images")
+      .insert({
+        user_id: user.id,
+        image_url: pub.publicUrl,
+        created_at: new Date().toISOString(),
+        source: "editor",
+        prompt: prompt
+      })
+      .select("id")
+      .single();
+    if (insErr) return res.status(500).json({ error: insErr.message });
+    return res.json({ ok: true, id: ins && ins.id });
+  } catch (e) {
+    return res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
 /** PhotoRoom: ürün algılama → arka plan silme → yeni AI arka plan → ürün orantılı ölçeklenir (fit), kesme izi yok, profesyonel stüdyo çıktısı. */
 app.post("/api/photoroom/pipeline", async (req, res) => {
   const user = await getRequestUser(req);
