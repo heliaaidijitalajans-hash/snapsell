@@ -744,8 +744,8 @@ function canUsePhotoRoom(user) {
   if (credits < CREDITS_PER_CONVERSION) return false;
   // Ücretsiz planda: 3 deneme limiti / krediler başka yerde kontrol ediliyor, burada sadece erişime izin ver
   if (plan === "free") return true;
-  // Ücretli planlarda: görsel düzenleme (addon) veya Lemon Squeezy "pro" aboneliği
-  return isEditorPlan(plan) || String(plan).toLowerCase() === "pro";
+  // Ücretli: tüm pro dönüşüm planları (monthly_plan, yearly_plan, …) + addon; Lemon plan_id genelde "pro" değil
+  return isProPlan(plan) || isEditorPlan(plan);
 }
 function canUseLeonardo(user) {
   return isProPlan(user.plan || "free") || isAdminUser(user);
