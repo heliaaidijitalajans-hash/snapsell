@@ -2296,12 +2296,11 @@ async function handleCreateCheckout(req, res) {
     const base = String(process.env.PUBLIC_APP_URL || "").trim().replace(/\/$/, "");
     const redirectUrl = base ? base + "/hesap-ayarlari" : undefined;
 
-    const looksLikeLiveKey = /^sk_live_|^lem_live_/i.test(apiKey);
-    if (looksLikeLiveKey) {
+    if (!lemon.isLemonTestModeApiKey(apiKey)) {
       console.log("LIVE MODE ACTIVE");
     } else {
       console.warn(
-        "[Lemon] Checkout: API key does not start with sk_live_ or lem_live_; use a live key from Lemon for production checkout."
+        "[Lemon] Checkout: LEMON_SQUEEZY_API_KEY test modu önekine sahip (sk_test_/lem_test_). Üretimde canlı anahtar kullanın."
       );
     }
     console.log("Variant:", variantId);
