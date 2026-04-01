@@ -454,6 +454,12 @@ async function requireProUser(req, res, next) {
 }
 
 const { runLemonWebhook } = require("./lib/lemonWebhookProcess");
+const { ensureLemonUserRow } = require("./lib/ensureLemonUserRow");
+
+async function ensureSupabaseUserRowForLemon(authUserId, email) {
+  if (!supabase) return;
+  await ensureLemonUserRow(supabase, { getUserById, getUserByEmail, FREE_CREDITS }, authUserId, email);
+}
 
 /** Lemon Squeezy webhook gövdesi (JSON) — Supabase users güncellenir. */
 async function processLemonWebhookPayload(body) {
@@ -464,7 +470,8 @@ async function processLemonWebhookPayload(body) {
     updateUserInDb,
     getCreditsForPlan,
     isProPlan,
-    FREE_CREDITS
+    FREE_CREDITS,
+    ensureUserRow: ensureSupabaseUserRowForLemon
   });
 }
 

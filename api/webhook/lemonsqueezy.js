@@ -9,6 +9,7 @@ const crypto = require("crypto");
 const { createServiceClient } = require("../../lib/supabase");
 const lemon = require("../../lib/lemonsqueezy");
 const { runLemonWebhook } = require("../../lib/lemonWebhookProcess");
+const { ensureLemonUserRow } = require("../../lib/ensureLemonUserRow");
 
 const FREE_CREDITS = 3;
 
@@ -166,6 +167,10 @@ module.exports = async function lemonWebhookHandler(req, res) {
     }
   }
 
+  async function ensureUserRow(authUserId, email) {
+    await ensureLemonUserRow(supabase, { getUserById, getUserByEmail, FREE_CREDITS }, authUserId, email);
+  }
+
   try {
     await runLemonWebhook(payload, {
       lemon,
@@ -174,7 +179,8 @@ module.exports = async function lemonWebhookHandler(req, res) {
       getUserByEmail,
       updateUserInDb,
       getCreditsForPlan,
-      isProPlan
+      isProPlan,
+      ensureUserRow
     });
     res.status(200).json({ success: true, received: true });
   } catch (err) {
