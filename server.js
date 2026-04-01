@@ -305,9 +305,18 @@ async function getUserById(userId) {
   return { id, credits: u.credits ?? FREE_CREDITS, plan: u.plan || "free", email: u.email, displayName: u.displayName };
 }
 
+/** İlk dolu process.env anahtarını döndür (Railway’de yanlış isimle tanımlanan değişkenler için alias). */
+function firstEnvValue(names) {
+  for (let i = 0; i < names.length; i++) {
+    const v = process.env[names[i]];
+    if (v != null && String(v).trim() !== "") return v;
+  }
+  return undefined;
+}
+
 /**
- * body.plan → Lemon variant ID. Railway: LEMON_SQUEEZY_VARIANT_MONTHLY_PLAN, LEMON_SQUEEZY_VARIANT_PRO_PLAN
- * (yazım birebir bu iki isim; başka env kullanılmaz.)
+ * body.plan → Lemon variant ID.
+ * Live’a geçince test variant ID’leri çalışmaz; her plan için Lemon’daki canlı variant ID’yi koyun.
  */
 function resolveCheckoutVariantId(plan) {
   const n = lemon.normalizeLemonRelationshipId;
@@ -316,15 +325,30 @@ function resolveCheckoutVariantId(plan) {
   let raw;
   switch (p) {
     case "monthly_plan":
-      raw = process.env.LEMON_SQUEEZY_VARIANT_MONTHLY_PLAN;
+      raw = firstEnvValue(["LEMON_SQUEEZY_VARIANT_MONTHLY_PLAN"]);
       break;
     case "pro":
     case "monthly_plan_pro":
-      raw = process.env.LEMON_SQUEEZY_VARIANT_PRO_PLAN;
+      raw = firstEnvValue([
+        "LEMON_SQUEEZY_VARIANT_PRO_PLAN",
+        "LEMON_SQUEEZY_VARIANT_MONTHLY_PLAN_PRO",
+        "LEMON_SQUEEZY_VARIANT_MONTHLY_PLAN_PRO_PLAN"
+      ]);
       break;
     case "yearly_plan":
+      raw = firstEnvValue([
+        "LEMON_SQUEEZY_VARIANT_YEARLY_PLAN",
+        "LEMON_SQUEEZY_VARIANT_YEARLY",
+        "LEMON_SQUEEZY_VARIANT_PRO_PLAN"
+      ]);
+      break;
     case "addon":
-      raw = process.env.LEMON_SQUEEZY_VARIANT_PRO_PLAN;
+      raw = firstEnvValue([
+        "LEMON_SQUEEZY_VARIANT_ADDON",
+        "LEMON_SQUEEZY_VARIANT_ADDITIONAL_PACKAGE",
+        "LEMON_SQUEEZY_VARIANT_ADDİTİONAL_PACKAGE",
+        "LEMON_SQUEEZY_VARIANT_PRO_PLAN"
+      ]);
       break;
     default:
       return "";
@@ -2241,7 +2265,7 @@ app.post("/api/create-checkout", async function (req, res) {
       }
       return res.status(400).json({
         error:
-          "Lemon variant ID eksik veya geçersiz. monthly_plan için LEMON_SQUEEZY_VARIANT_MONTHLY_PLAN; pro / monthly_plan_pro / yearly_plan / addon için LEMON_SQUEEZY_VARIANT_PRO_PLAN kontrol edin."
+          "Lemon variant ID eksik. Plan başına: MONTHLY_PLAN, PRO_PLAN (veya MONTHLY_PLAN_PRO), YEARLY_PLAN, ADDON. .env.example satırlarına bakın."
       });
     }
 
@@ -2253,6 +2277,16 @@ app.post("/api/create-checkout", async function (req, res) {
 
     const base = String(process.env.PUBLIC_APP_URL || "").trim().replace(/\/$/, "");
     const redirectUrl = base ? base + "/hesap-ayarlari" : undefined;
+
+    console.log(
+      "[Lemon] create-checkout istek plan=",
+      plan,
+      "storeId=",
+      storeId,
+      "variantId=",
+      variantId,
+      "(Live test variant karıştıysa 422 alırsınız)"
+    );
 
     const { checkoutUrl } = await lemon.createCheckout({
       apiKey,
@@ -2275,6 +2309,7 @@ app.post("/api/create-checkout", async function (req, res) {
   } catch (err) {
     const lemonStatus = err && typeof err.lemonStatus === "number" ? err.lemonStatus : null;
     console.error("[Lemon] create-checkout:", err.message, lemonStatus != null ? "(HTTP " + lemonStatus + ")" : "");
+    if (err.lemonBody) console.error("[Lemon] API gövde özeti:", String(err.lemonBody).slice(0, 500));
     const clientMsg = err.message || "Checkout oluşturulamadı";
     if (lemonStatus === 401 || lemonStatus === 403) {
       return res.status(502).json({
