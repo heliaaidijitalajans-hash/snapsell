@@ -22,6 +22,13 @@ type PlanItem = {
 const YEARLY_STRIKE_PRICE = 440;
 const YEARLY_PROMO_PRICE = 396;
 
+/** API / site-plans.json eski veride aylık=popüler kalmışsa düzelt. */
+function normalizePlanFlags(plan: PlanItem): PlanItem {
+  if (plan.id === "monthly_plan") return { ...plan, highlighted: false };
+  if (plan.id === "yearly_plan") return { ...plan, highlighted: true };
+  return plan;
+}
+
 function localizePlan(plan: PlanItem, locale: "tr" | "en"): PlanItem {
   if (locale !== "en") return plan;
   const id = (plan.id || "").toLowerCase();
@@ -99,29 +106,22 @@ function PlanCard({
   const showPeriod =
     price !== "—" && price !== "" && plan.period && t("pricing.perPeriod");
 
-  const showPopularBadge = plan.highlighted && !isAnnual;
-
   return (
     <div
       className={`relative rounded-2xl border p-8 flex flex-col h-full transition-all duration-200 ${
         isAnnual
-          ? "border-gray-200/90 bg-white pt-12 shadow-lg shadow-gray-900/5 ring-1 ring-black/[0.04] md:p-10 lg:col-span-2 max-w-2xl lg:max-w-none mx-auto w-full"
+          ? "border-gray-200/90 bg-white pt-14 shadow-lg shadow-gray-900/5 ring-1 ring-black/[0.04] md:p-10 lg:col-span-2 max-w-2xl lg:max-w-none mx-auto w-full"
           : plan.highlighted
             ? "border-[#FF5A5F] border-2 bg-white shadow-xl shadow-[#FF5A5F]/10 scale-[1.02] z-10"
             : "border-gray-200 border-2 bg-white hover:border-gray-300 hover:shadow-lg"
       }`}
     >
       {isAnnual && (
-        <div className="absolute -top-3 left-1/2 flex -translate-x-1/2 flex-col items-center gap-1">
+        <div className="absolute -top-3 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
           <span className="inline-flex items-center rounded-full bg-neutral-900 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-white">
             {t("pricing.bestValue")}
           </span>
-          <span className="text-xs font-medium text-gray-500">{t("pricing.recommended")}</span>
-        </div>
-      )}
-      {showPopularBadge && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#FF5A5F] px-3 py-1 text-xs font-semibold text-white">
+          <span className="inline-flex items-center gap-1 rounded-full bg-[#FF5A5F] px-3 py-1 text-xs font-semibold text-white shadow-sm">
             <Sparkles className="w-3.5 h-3.5" />
             {t("pricing.popular")}
           </span>
@@ -271,14 +271,19 @@ export default function PricingPage() {
         const data = await apiJson<{ success?: boolean; plans?: PlanItem[] } | PlanItem[]>(res);
         if (data && typeof data === "object" && "plans" in data && Array.isArray((data as { plans: PlanItem[] }).plans)) {
           return (data as { plans: PlanItem[] }).plans.map((p) =>
-            localizePlan({
-              ...p,
-              features: p.features || [],
-              currency: "USD",
-            }, locale)
+            normalizePlanFlags(
+              localizePlan(
+                {
+                  ...p,
+                  features: p.features || [],
+                  currency: "USD",
+                },
+                locale
+              )
+            )
           );
         }
-        if (Array.isArray(data)) return data;
+        if (Array.isArray(data)) return data.map((p) => normalizePlanFlags(localizePlan({ ...p, currency: "USD" }, locale)));
         return [];
       })
       .then(setPlans)
@@ -287,9 +292,11 @@ export default function PricingPage() {
           .then(async (res) => {
             const data = await apiJson<{ success?: boolean; plans?: PlanItem[] } | PlanItem[]>(res);
             if (data && typeof data === "object" && "plans" in data && Array.isArray((data as { plans: PlanItem[] }).plans)) {
-              return (data as { plans: PlanItem[] }).plans.map((p) => localizePlan({ ...p, currency: "USD" }, locale));
+              return (data as { plans: PlanItem[] }).plans.map((p) =>
+                normalizePlanFlags(localizePlan({ ...p, currency: "USD" }, locale))
+              );
             }
-            if (Array.isArray(data)) return data.map((p) => localizePlan({ ...p, currency: "USD" }, locale));
+            if (Array.isArray(data)) return data.map((p) => normalizePlanFlags(localizePlan({ ...p, currency: "USD" }, locale)));
             return [];
           })
           .then(setPlans)
