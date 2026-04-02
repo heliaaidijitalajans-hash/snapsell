@@ -108,46 +108,46 @@ function PlanCard({
 
   return (
     <div
-      className={`relative rounded-2xl border p-8 flex flex-col h-full transition-all duration-200 ${
+      className={`relative rounded-2xl border flex flex-col h-full transition-all duration-200 ${
         isAnnual
-          ? "border-gray-200/90 bg-white pt-14 shadow-lg shadow-gray-900/5 ring-1 ring-black/[0.04] md:p-10 lg:col-span-2 max-w-2xl lg:max-w-none mx-auto w-full"
+          ? "border-gray-200/90 bg-white p-6 pt-11 shadow-lg shadow-gray-900/5 ring-1 ring-black/[0.04] md:p-8 md:pt-12 lg:col-span-2 max-w-md lg:max-w-lg mx-auto w-full"
           : plan.highlighted
-            ? "border-[#FF5A5F] border-2 bg-white shadow-xl shadow-[#FF5A5F]/10 scale-[1.02] z-10"
-            : "border-gray-200 border-2 bg-white hover:border-gray-300 hover:shadow-lg"
+            ? "border-[#FF5A5F] border-2 bg-white p-8 shadow-xl shadow-[#FF5A5F]/10 scale-[1.02] z-10"
+            : "border-gray-200 border-2 bg-white p-8 hover:border-gray-300 hover:shadow-lg"
       }`}
     >
       {isAnnual && (
-        <div className="absolute -top-3 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
-          <span className="inline-flex items-center rounded-full bg-neutral-900 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-white">
+        <div className="absolute -top-2.5 left-1/2 flex -translate-x-1/2 flex-col items-center gap-1.5">
+          <span className="inline-flex items-center rounded-full bg-neutral-900 px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-white">
             {t("pricing.bestValue")}
           </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#FF5A5F] px-3 py-1 text-xs font-semibold text-white shadow-sm">
-            <Sparkles className="w-3.5 h-3.5" />
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-[#FF5A5F] px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm">
+            <Sparkles className="w-3 h-3" />
             {t("pricing.popular")}
           </span>
         </div>
       )}
-      <div className="mb-6">
-        <h3 className="text-xl font-bold text-gray-900">
+      <div className={isAnnual ? "mb-4" : "mb-6"}>
+        <h3 className={`font-bold text-gray-900 ${isAnnual ? "text-lg" : "text-xl"}`}>
           {isAnnual ? t("pricing.annualName") : plan.name}
         </h3>
         {isAnnual && (
-          <p className="mt-2 text-sm font-semibold tracking-tight text-gray-800">{t("pricing.annualLaunchDiscount")}</p>
+          <p className="mt-1.5 text-xs font-semibold tracking-tight text-gray-800">{t("pricing.annualLaunchDiscount")}</p>
         )}
         {plan.description && (
-          <p className={`text-sm text-gray-600 ${isAnnual ? "mt-2" : "mt-1.5"}`}>{plan.description}</p>
+          <p className={`text-gray-600 ${isAnnual ? "mt-1.5 text-xs" : "mt-1.5 text-sm"}`}>{plan.description}</p>
         )}
       </div>
       {isAnnual && strikePrice != null ? (
-        <div className="mb-6">
-          <p className="text-2xl font-medium text-gray-400 line-through decoration-gray-400">
+        <div className="mb-4">
+          <p className="text-lg font-medium text-gray-400 line-through decoration-gray-400">
             {currency}
             {strikePrice}
           </p>
-          <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className="text-5xl font-extrabold tracking-tight text-gray-900">{priceDisplay}</span>
+          <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="text-4xl font-extrabold tracking-tight text-gray-900">{priceDisplay}</span>
             {showPeriod && (
-              <span className="text-lg text-gray-500">
+              <span className="text-base text-gray-500">
                 {t("pricing.perPeriod")} {plan.period}
               </span>
             )}
@@ -166,15 +166,15 @@ function PlanCard({
           )}
         </div>
       )}
-      <ul className="mb-8 flex-1 space-y-3">
+      <ul className={`flex-1 ${isAnnual ? "mb-5 space-y-2" : "mb-8 space-y-3"}`}>
         {(plan.features || [])
           .filter((f) => !/fiyat analizi|price analysis/i.test(String(f)))
           .map((feature) => (
-          <li key={feature} className="flex items-start gap-3 text-gray-700">
+          <li key={feature} className={`flex items-start text-gray-700 ${isAnnual ? "gap-2" : "gap-3"}`}>
             <span className="mt-0.5 shrink-0 rounded-full bg-[#FF5A5F]/10 p-0.5">
-              <Check className="w-4 h-4 text-[#FF5A5F]" strokeWidth={2.5} />
+              <Check className={isAnnual ? "w-3.5 h-3.5 text-[#FF5A5F]" : "w-4 h-4 text-[#FF5A5F]"} strokeWidth={2.5} />
             </span>
-            <span className="text-sm">{feature}</span>
+            <span className={isAnnual ? "text-xs leading-snug" : "text-sm"}>{feature}</span>
           </li>
         ))}
       </ul>
@@ -182,7 +182,9 @@ function PlanCard({
         type="button"
         onClick={onCtaClick}
         disabled={loading}
-        className={`mt-auto block w-full rounded-xl py-3.5 px-4 text-center font-semibold transition-colors disabled:opacity-70 disabled:cursor-not-allowed ${
+        className={`mt-auto block w-full rounded-xl text-center font-semibold transition-colors disabled:opacity-70 disabled:cursor-not-allowed ${
+          isAnnual ? "py-3 px-4 text-sm" : "py-3.5 px-4"
+        } ${
           plan.highlighted || isAnnual
             ? "bg-[#FF5A5F] text-white hover:bg-[#e54d52]"
             : "bg-gray-100 text-gray-900 hover:bg-gray-200"
