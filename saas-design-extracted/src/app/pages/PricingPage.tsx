@@ -19,6 +19,9 @@ type PlanItem = {
   currency?: string;
 };
 
+const YEARLY_STRIKE_PRICE = 440;
+const YEARLY_PROMO_PRICE = 396;
+
 function localizePlan(plan: PlanItem, locale: "tr" | "en"): PlanItem {
   if (locale !== "en") return plan;
   const id = (plan.id || "").toLowerCase();
@@ -43,7 +46,7 @@ function localizePlan(plan: PlanItem, locale: "tr" | "en"): PlanItem {
       features: ["80 conversions", "All features", "SEO description", "Price analysis"],
     },
     yearly_plan: {
-      name: "Yearly plan",
+      name: "Annual Subscription",
       description: "1200 conversions, 100 monthly credits",
       cta: "Choose yearly",
       features: ["1200 conversions", "100 monthly credits", "All features", "SEO description", "Price analysis", "Includes upcoming feature updates"],
@@ -75,6 +78,7 @@ function PlanCard({
   loading,
   displayCurrency,
   displayPrice,
+  strikePrice,
 }: {
   plan: PlanItem;
   t: (key: string) => string;
@@ -82,8 +86,11 @@ function PlanCard({
   loading?: boolean;
   displayCurrency?: "USD";
   displayPrice?: number | string;
+  /** Yıllık planda eski fiyat (üstü çizili) */
+  strikePrice?: number;
 }) {
   const currency = "$";
+  const isAnnual = plan.id === "yearly_plan";
   const price = displayPrice !== undefined ? displayPrice : plan.price;
   const priceDisplay =
     price === "—" || price === "" || (typeof price === "number" && !Number.isFinite(price))
@@ -92,15 +99,27 @@ function PlanCard({
   const showPeriod =
     price !== "—" && price !== "" && plan.period && t("pricing.perPeriod");
 
+  const showPopularBadge = plan.highlighted && !isAnnual;
+
   return (
     <div
-      className={`relative rounded-2xl border-2 p-8 flex flex-col h-full transition-all duration-200 ${
-        plan.highlighted
-          ? "border-[#FF5A5F] bg-white shadow-xl shadow-[#FF5A5F]/10 scale-[1.02] z-10"
-          : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-lg"
+      className={`relative rounded-2xl border p-8 flex flex-col h-full transition-all duration-200 ${
+        isAnnual
+          ? "border-gray-200/90 bg-white pt-12 shadow-lg shadow-gray-900/5 ring-1 ring-black/[0.04] md:p-10 lg:col-span-2 max-w-2xl lg:max-w-none mx-auto w-full"
+          : plan.highlighted
+            ? "border-[#FF5A5F] border-2 bg-white shadow-xl shadow-[#FF5A5F]/10 scale-[1.02] z-10"
+            : "border-gray-200 border-2 bg-white hover:border-gray-300 hover:shadow-lg"
       }`}
     >
-      {plan.highlighted && (
+      {isAnnual && (
+        <div className="absolute -top-3 left-1/2 flex -translate-x-1/2 flex-col items-center gap-1">
+          <span className="inline-flex items-center rounded-full bg-neutral-900 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-white">
+            {t("pricing.bestValue")}
+          </span>
+          <span className="text-xs font-medium text-gray-500">{t("pricing.recommended")}</span>
+        </div>
+      )}
+      {showPopularBadge && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
           <span className="inline-flex items-center gap-1 rounded-full bg-[#FF5A5F] px-3 py-1 text-xs font-semibold text-white">
             <Sparkles className="w-3.5 h-3.5" />
@@ -109,22 +128,44 @@ function PlanCard({
         </div>
       )}
       <div className="mb-6">
-        <h3 className="text-xl font-bold text-gray-900">{plan.name}</h3>
+        <h3 className="text-xl font-bold text-gray-900">
+          {isAnnual ? t("pricing.annualName") : plan.name}
+        </h3>
+        {isAnnual && (
+          <p className="mt-2 text-sm font-semibold tracking-tight text-gray-800">{t("pricing.annualLaunchDiscount")}</p>
+        )}
         {plan.description && (
-          <p className="mt-1.5 text-sm text-gray-600">{plan.description}</p>
+          <p className={`text-sm text-gray-600 ${isAnnual ? "mt-2" : "mt-1.5"}`}>{plan.description}</p>
         )}
       </div>
-      <div className="mb-6 flex flex-wrap items-baseline gap-x-1">
-        <span className="text-4xl font-extrabold tracking-tight text-gray-900">
-          {priceDisplay}
-        </span>
-        {showPeriod && (
-          <span className="text-gray-500">
-            {" "}
-            {t("pricing.perPeriod")} {plan.period}
+      {isAnnual && strikePrice != null ? (
+        <div className="mb-6">
+          <p className="text-2xl font-medium text-gray-400 line-through decoration-gray-400">
+            {currency}
+            {strikePrice}
+          </p>
+          <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="text-5xl font-extrabold tracking-tight text-gray-900">{priceDisplay}</span>
+            {showPeriod && (
+              <span className="text-lg text-gray-500">
+                {t("pricing.perPeriod")} {plan.period}
+              </span>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="mb-6 flex flex-wrap items-baseline gap-x-1">
+          <span className="text-4xl font-extrabold tracking-tight text-gray-900">
+            {priceDisplay}
           </span>
-        )}
-      </div>
+          {showPeriod && (
+            <span className="text-gray-500">
+              {" "}
+              {t("pricing.perPeriod")} {plan.period}
+            </span>
+          )}
+        </div>
+      )}
       <ul className="mb-8 flex-1 space-y-3">
         {(plan.features || [])
           .filter((f) => !/fiyat analizi|price analysis/i.test(String(f)))
@@ -142,7 +183,7 @@ function PlanCard({
         onClick={onCtaClick}
         disabled={loading}
         className={`mt-auto block w-full rounded-xl py-3.5 px-4 text-center font-semibold transition-colors disabled:opacity-70 disabled:cursor-not-allowed ${
-          plan.highlighted
+          plan.highlighted || isAnnual
             ? "bg-[#FF5A5F] text-white hover:bg-[#e54d52]"
             : "bg-gray-100 text-gray-900 hover:bg-gray-200"
         }`}
@@ -212,12 +253,16 @@ export default function PricingPage() {
     [navigate, user, getAuthHeaders, t]
   );
 
-  const getDisplayForPlan = useCallback(
-    (plan: PlanItem) => {
-      return { displayCurrency: "USD" as const, displayPrice: plan.price };
-    },
-    []
-  );
+  const getDisplayForPlan = useCallback((plan: PlanItem) => {
+    if (plan.id === "yearly_plan") {
+      return {
+        displayCurrency: "USD" as const,
+        displayPrice: YEARLY_PROMO_PRICE,
+        strikePrice: YEARLY_STRIKE_PRICE,
+      };
+    }
+    return { displayCurrency: "USD" as const, displayPrice: plan.price };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -284,6 +329,7 @@ export default function PricingPage() {
                 loading={paymentLoading === (plan.id || plan.name)}
                 displayCurrency={display.displayCurrency}
                 displayPrice={display.displayPrice}
+                strikePrice={"strikePrice" in display ? display.strikePrice : undefined}
               />
             );
           })}
