@@ -21,6 +21,8 @@ type PlanItem = {
 
 const YEARLY_STRIKE_PRICE = 440;
 const YEARLY_PROMO_PRICE = 396;
+const PRO_STRIKE_PRICE = 65;
+const PRO_PROMO_PRICE = 48;
 
 /** API / site-plans.json eski veride aylık=popüler kalmışsa düzelt. */
 function normalizePlanFlags(plan: PlanItem): PlanItem {
@@ -98,6 +100,7 @@ function PlanCard({
 }) {
   const currency = "$";
   const isAnnual = plan.id === "yearly_plan";
+  const isProMonthly = plan.id === "monthly_plan_pro";
   const price = displayPrice !== undefined ? displayPrice : plan.price;
   const priceDisplay =
     price === "—" || price === "" || (typeof price === "number" && !Number.isFinite(price))
@@ -106,14 +109,18 @@ function PlanCard({
   const showPeriod =
     price !== "—" && price !== "" && plan.period && t("pricing.perPeriod");
 
+  const showDiscounted = (isAnnual || isProMonthly) && strikePrice != null;
+
   return (
     <div
       className={`relative rounded-2xl border flex flex-col h-full transition-all duration-200 ${
         isAnnual
           ? "border-gray-200/90 bg-white p-6 pt-11 shadow-lg shadow-gray-900/5 ring-1 ring-black/[0.04] md:p-8 md:pt-12 lg:col-span-2 max-w-md lg:max-w-lg mx-auto w-full"
-          : plan.highlighted
-            ? "border-[#FF5A5F] border-2 bg-white p-8 shadow-xl shadow-[#FF5A5F]/10 scale-[1.02] z-10"
-            : "border-gray-200 border-2 bg-white p-8 hover:border-gray-300 hover:shadow-lg"
+          : isProMonthly
+            ? "border-red-500 border-[3px] bg-white p-8 shadow-md"
+            : plan.highlighted
+              ? "border-[#FF5A5F] border-2 bg-white p-8 shadow-xl shadow-[#FF5A5F]/10 scale-[1.02] z-10"
+              : "border-gray-200 border-2 bg-white p-8 hover:border-gray-300 hover:shadow-lg"
       }`}
     >
       {isAnnual && (
@@ -127,7 +134,13 @@ function PlanCard({
           </span>
         </div>
       )}
-      <div className={isAnnual ? "mb-4" : "mb-6"}>
+      <div className={isAnnual || isProMonthly ? "mb-4" : "mb-6"}>
+        {isProMonthly && (
+          <div className="mb-4 rounded-lg bg-red-50 px-3 py-2.5 text-center border border-red-100">
+            <p className="text-xs font-semibold uppercase tracking-wide text-red-700">{t("pricing.proLaunchLabel")}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-red-600">{t("pricing.proLaunchSlots")}</p>
+          </div>
+        )}
         <h3 className={`font-bold text-gray-900 ${isAnnual ? "text-lg" : "text-xl"}`}>
           {isAnnual ? t("pricing.annualName") : plan.name}
         </h3>
@@ -138,16 +151,18 @@ function PlanCard({
           <p className={`text-gray-600 ${isAnnual ? "mt-1.5 text-xs" : "mt-1.5 text-sm"}`}>{plan.description}</p>
         )}
       </div>
-      {isAnnual && strikePrice != null ? (
-        <div className="mb-4">
-          <p className="text-lg font-medium text-gray-400 line-through decoration-gray-400">
+      {showDiscounted ? (
+        <div className={isAnnual ? "mb-4" : "mb-6"}>
+          <p className={`font-medium text-gray-400 line-through decoration-gray-400 ${isAnnual ? "text-lg" : "text-2xl"}`}>
             {currency}
             {strikePrice}
           </p>
           <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className="text-4xl font-extrabold tracking-tight text-gray-900">{priceDisplay}</span>
+            <span className={`font-extrabold tracking-tight text-gray-900 ${isAnnual ? "text-4xl" : "text-4xl"}`}>
+              {priceDisplay}
+            </span>
             {showPeriod && (
-              <span className="text-base text-gray-500">
+              <span className={`text-gray-500 ${isAnnual ? "text-base" : "text-lg"}`}>
                 {t("pricing.perPeriod")} {plan.period}
               </span>
             )}
@@ -185,7 +200,7 @@ function PlanCard({
         className={`mt-auto block w-full rounded-xl text-center font-semibold transition-colors disabled:opacity-70 disabled:cursor-not-allowed ${
           isAnnual ? "py-3 px-4 text-sm" : "py-3.5 px-4"
         } ${
-          plan.highlighted || isAnnual
+          plan.highlighted || isAnnual || isProMonthly
             ? "bg-[#FF5A5F] text-white hover:bg-[#e54d52]"
             : "bg-gray-100 text-gray-900 hover:bg-gray-200"
         }`}
@@ -263,6 +278,13 @@ export default function PricingPage() {
         strikePrice: YEARLY_STRIKE_PRICE,
       };
     }
+    if (plan.id === "monthly_plan_pro") {
+      return {
+        displayCurrency: "USD" as const,
+        displayPrice: PRO_PROMO_PRICE,
+        strikePrice: PRO_STRIKE_PRICE,
+      };
+    }
     return { displayCurrency: "USD" as const, displayPrice: plan.price };
   }, []);
 
@@ -338,7 +360,7 @@ export default function PricingPage() {
                 loading={paymentLoading === (plan.id || plan.name)}
                 displayCurrency={display.displayCurrency}
                 displayPrice={display.displayPrice}
-                strikePrice={"strikePrice" in display ? display.strikePrice : undefined}
+                strikePrice={"strikePrice" in display && display.strikePrice !== undefined ? display.strikePrice : undefined}
               />
             );
           })}

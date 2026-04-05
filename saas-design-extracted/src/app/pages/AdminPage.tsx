@@ -16,6 +16,7 @@ import {
   Trash2,
   ImageIcon,
   LogIn,
+  Eye,
 } from "lucide-react";
 import { getApiBase } from "../config";
 
@@ -58,7 +59,12 @@ function formatDate(ts: number | null | undefined): string {
 
 type Subscriber = User;
 type Team = { id: string; name: string; memberIds: string[]; enterprisePlanId?: string | null; createdAt?: number };
-type DailyStats = { today: { visitors: number; conversions: number; signups: number }; last7Days: Array<{ date: string; visitors: number; conversions: number; signups: number }> };
+type DailyStats = {
+  today: { visitors: number; conversions: number; signups: number };
+  last7Days: Array<{ date: string; visitors: number; conversions: number; signups: number }>;
+  /** Kayıtlı tüm günlerin ziyaret sayıları toplamı */
+  totalVisitors?: number;
+};
 type ImageEditEntry = { userId: string; email?: string | null; displayName?: string | null; outputUrl: string; createdAt: number };
 type LoginLogEntry = { user_id: string; email?: string | null; display_name?: string | null; logged_at: string | null; source?: string };
 
@@ -183,6 +189,7 @@ export function AdminPage() {
       setDailyStats({
         today: data.today || { visitors: 0, conversions: 0, signups: 0 },
         last7Days: data.last7Days || [],
+        totalVisitors: typeof data.totalVisitors === "number" ? data.totalVisitors : undefined,
       });
     },
     [adminFetch]
@@ -530,6 +537,34 @@ export function AdminPage() {
             <div>
               <p className="text-sm text-gray-500">Farklı Planlar</p>
               <p className="text-2xl font-bold text-gray-900">{uniquePlans}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ——— Site ziyaretçileri ——— */}
+      <section className="rounded-xl border border-[#FF5A5F]/20 bg-gradient-to-br from-white to-[#FF5A5F]/[0.06] shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100/80 flex items-center gap-2 bg-white/80">
+          <Eye className="w-5 h-5 text-[#FF5A5F]" />
+          <h2 className="font-semibold text-gray-800">Site ziyaretçileri</h2>
+        </div>
+        <div className="p-4 sm:p-5">
+          <p className="text-sm text-gray-600 mb-4">
+            Anasayfa ve diğer sayfalar yüklendiğinde <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">/api/track-visit</code> ile sayılır
+            (aynı kullanıcı tekrar girdiğinde de artar).
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+              <p className="text-sm font-medium text-gray-500">Bugün</p>
+              <p className="mt-2 text-3xl font-bold tabular-nums text-gray-900">{dailyStats?.today?.visitors ?? 0}</p>
+              <p className="mt-1 text-xs text-gray-400">Bugünkü oturum / yükleme sayısı</p>
+            </div>
+            <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+              <p className="text-sm font-medium text-gray-500">Toplam (kayıtlı günler)</p>
+              <p className="mt-2 text-3xl font-bold tabular-nums text-[#FF5A5F]">
+                {dailyStats?.totalVisitors ?? 0}
+              </p>
+              <p className="mt-1 text-xs text-gray-400">Sunucuda saklanan günlük sayaçların toplamı</p>
             </div>
           </div>
         </div>

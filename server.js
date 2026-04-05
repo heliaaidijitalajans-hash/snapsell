@@ -119,11 +119,11 @@ function saveSitePlans(updatedPlans) {
 }
 
 /** Tek kaynak: fiyat listesi sadece burada. Dosyadan okuma yok, eski veri geri gelmez. */
-const DEFAULT_PLAN_PRICES = { free: 0, monthly_plan: 40, monthly_plan_pro: 65, yearly_plan: 396, enterprise: 0, addon: 15 };
+const DEFAULT_PLAN_PRICES = { free: 0, monthly_plan: 40, monthly_plan_pro: 48, yearly_plan: 396, enterprise: 0, addon: 15 };
 const DEFAULT_SITE_PLANS = [
   { id: "free", name: "Ücretsiz", price: "0", period: "ay", description: "3 dönüşüm, temel özellikler", features: ["3 dönüşüm", "Temel özellikler"], cta: "Ücretsiz başla", href: "/register", highlighted: false, planType: "conversion", currency: "USD", credits: 3 },
   { id: "monthly_plan", name: "Aylık plan", price: "40", period: "ay", description: "30 dönüşüm", features: ["30 dönüşüm", "Tüm özellikler", "SEO açıklama", "Fiyat analizi"], cta: "Başla", href: "/register?plan=monthly_plan", highlighted: false, planType: "conversion", currency: "USD", credits: 30 },
-  { id: "monthly_plan_pro", name: "Aylık plan Pro", price: "65", period: "ay", description: "80 dönüşüm", features: ["80 dönüşüm", "Tüm özellikler", "SEO açıklama", "Fiyat analizi"], cta: "Pro'ya geç", href: "/register?plan=monthly_plan_pro", highlighted: false, planType: "conversion", currency: "USD", credits: 80 },
+  { id: "monthly_plan_pro", name: "Aylık plan Pro", price: "48", period: "ay", description: "80 dönüşüm", features: ["80 dönüşüm", "Tüm özellikler", "SEO açıklama", "Fiyat analizi"], cta: "Pro'ya geç", href: "/register?plan=monthly_plan_pro", highlighted: false, planType: "conversion", currency: "USD", credits: 80 },
   { id: "yearly_plan", name: "Yıllık plan", price: "396", period: "yıl", description: "1200 dönüşüm, aylık 100 yüklenecek", features: ["1200 dönüşüm", "Aylık 100 dönüşüm yüklenecek", "Tüm özellikler", "SEO açıklama", "Fiyat analizi", "Yüklenecek özellik geliştirmeleri dahil"], cta: "Yıllık seç", href: "/register?plan=yearly_plan", highlighted: true, planType: "conversion", currency: "USD", credits: 1200 },
   { id: "enterprise", name: "Kurumsal", price: "—", period: "yıl", description: "Bize ulaşın", features: ["Ekibiniz ile takım kurma ayrıcalığı", "Tüm özellikler", "SEO açıklama", "Fiyat analizi", "Yüklenecek özellik geliştirmeleri dahil", "Yıllık faturalandırma"], cta: "Bize ulaşın", href: "/destek", highlighted: false, planType: "conversion", currency: "USD", credits: 0 },
   { id: "addon", name: "Ek paket", price: "15", period: "ay", description: "25 dönüşüm", features: ["25 dönüşüm", "Tüm özellikler dahil"], cta: "Ek paket al", href: "/register?plan=addon", highlighted: false, planType: "addon", currency: "USD", credits: 25 }
@@ -166,6 +166,16 @@ function getTodayKey() {
 }
 function loadDailyStats() {
   return loadJsonFile("daily_stats.json", {});
+}
+/** daily_stats.json içindeki tüm günlerin ziyaretçi sayıları toplamı (admin özet). */
+function sumTotalVisitors(stats) {
+  if (!stats || typeof stats !== "object" || Array.isArray(stats)) return 0;
+  var total = 0;
+  Object.keys(stats).forEach(function (k) {
+    var row = stats[k];
+    if (row && typeof row.visitors === "number") total += row.visitors;
+  });
+  return total;
 }
 function incrementDailyStat(field) {
   const key = getTodayKey();
@@ -1011,7 +1021,8 @@ app.get("/admin/stats", requireAdmin, async function (req, res) {
     dailyVisitors: todayData.visitors,
     dailyConversions: todayData.conversions,
     newSignupsToday: todayData.signups,
-    last7Days: last7
+    last7Days: last7,
+    totalVisitors: sumTotalVisitors(stats)
   });
 });
 
@@ -1319,7 +1330,14 @@ app.get("/api/admin/stats", requireAdmin, async function (req, res) {
     last7.push({ date: key, ...(stats[key] || { visitors: 0, conversions: 0, signups: 0 }) });
   }
   last7.reverse();
-  res.json({ today: todayData, dailyVisitors: todayData.visitors, dailyConversions: todayData.conversions, newSignupsToday: todayData.signups, last7Days: last7 });
+  res.json({
+    today: todayData,
+    dailyVisitors: todayData.visitors,
+    dailyConversions: todayData.conversions,
+    newSignupsToday: todayData.signups,
+    last7Days: last7,
+    totalVisitors: sumTotalVisitors(stats)
+  });
 });
 app.get("/api/admin/logins", requireAdmin, async function (req, res) {
   const list = [];
