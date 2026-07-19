@@ -1760,6 +1760,54 @@ YAPMAN GEREKENLER:
   }
 }
 
+/**
+ * Shape legacy ScraperAPI / GPT price analysis into the mobile v1 contract:
+ * { productName, currency, minPrice, avgPrice, maxPrice, platforms, summary }
+ */
+function shapePriceAnalysisV1(raw, fallbackProductName) {
+  const platforms = Array.isArray(raw && raw.platforms) ? raw.platforms : [];
+  const tryRows = platforms.filter(function (p) {
+    return String((p && p.currency) || "TRY").toUpperCase() === "TRY";
+  });
+  const useRows = tryRows.length > 0 ? tryRows : platforms;
+  const mins = useRows
+    .map(function (p) { return p.minPrice; })
+    .filter(function (v) { return typeof v === "number" && Number.isFinite(v); });
+  const avgs = useRows
+    .map(function (p) { return p.avgPrice; })
+    .filter(function (v) { return typeof v === "number" && Number.isFinite(v); });
+  const maxs = useRows
+    .map(function (p) { return p.maxPrice; })
+    .filter(function (v) { return typeof v === "number" && Number.isFinite(v); });
+
+  const currency =
+    (useRows[0] && useRows[0].currency) ||
+    (platforms[0] && platforms[0].currency) ||
+    "TRY";
+
+  const minPrice = mins.length > 0 ? Math.min.apply(null, mins) : null;
+  const maxPrice = maxs.length > 0 ? Math.max.apply(null, maxs) : null;
+  const avgPrice =
+    avgs.length > 0
+      ? Math.round((avgs.reduce(function (a, b) { return a + b; }, 0) / avgs.length) * 100) / 100
+      : null;
+
+  return {
+    productName:
+      (raw && raw.productName) ||
+      fallbackProductName ||
+      "Ürün",
+    currency: String(currency || "TRY").toUpperCase(),
+    minPrice: minPrice != null ? Math.round(minPrice * 100) / 100 : null,
+    avgPrice: avgPrice != null ? Math.round(avgPrice * 100) / 100 : null,
+    maxPrice: maxPrice != null ? Math.round(maxPrice * 100) / 100 : null,
+    platforms: platforms,
+    summary:
+      (raw && (raw.summaryText || raw.summary) && String(raw.summaryText || raw.summary).trim()) ||
+      ""
+  };
+}
+
 /** Shopier ödeme: v1 REST API — OAuth2 (SHOPIER_CLIENT_ID / SHOPIER_CLIENT_SECRET) */
 const SHOPIER_API_BASE = "https://api.shopier.com/v1";
 const SHOPIER_OAUTH_TOKEN_PRIMARY = "https://api.shopier.com/v1/oauth/token";
@@ -2307,6 +2355,63 @@ app.post("/api/auth/mobile-register", async (req, res) => {
     console.error("api/auth/mobile-register:", err.message || err);
     return res.status(500).json({
       error: err.message || "Kayıt hatası",
+      code: "internal_error",
+    });
+  }
+});
+
+/**
+ * POST /api/price-analysis — independent of PhotoRoom / AI image pipeline.
+ * Reuses existing ScraperAPI + GPT fallback helpers (same as former website flow).
+ * Body: { productName, description, language }
+ * Response: { productName, currency, minPrice, avgPrice, maxPrice, platforms, summary }
+ */
+app.post("/api/price-analysis", async (req, res) => {
+  try {
+    const productName = String((req.body && req.body.productName) || "").trim();
+    const description = String((req.body && req.body.description) || "").trim();
+    const language = String((req.body && req.body.language) || "tr").trim() || "tr";
+    const query = [productName, description].filter(Boolean).join(" ").trim();
+
+    if (!query) {
+      return res.status(400).json({
+        error: "productName or description required",
+        code: "invalid_input",
+      });
+    }
+
+    // Prefer live marketplace scrape; fall back to GPT ranges (same as /api/process price path).
+    let raw = null;
+    try {
+      raw = await getPriceAnalysisWithScraperAPI(query);
+    } catch (e) {
+      console.warn("api/price-analysis scraper:", e.message || e);
+    }
+    if (!raw || !raw.platforms || raw.platforms.length === 0) {
+      try {
+        raw = await getPriceAnalysisFallbackWithGPT(query);
+      } catch (e) {
+        console.warn("api/price-analysis gpt fallback:", e.message || e);
+      }
+    }
+
+    if (!raw || !raw.platforms || raw.platforms.length === 0) {
+      return res.status(502).json({
+        error: "Price analysis unavailable",
+        code: "price_analysis_failed",
+      });
+    }
+
+    // `language` reserved for future summary localization; scraper path already
+    // picks TR/EN from product text. Keep accepted for mobile contract.
+    void language;
+
+    const shaped = shapePriceAnalysisV1(raw, productName || query.slice(0, 200));
+    return res.json(shaped);
+  } catch (err) {
+    console.error("api/price-analysis:", err.message || err);
+    return res.status(500).json({
+      error: err.message || "Price analysis error",
       code: "internal_error",
     });
   }
