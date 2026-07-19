@@ -2241,6 +2241,77 @@ async function syncSupabaseUserHandler(req, res) {
 app.post("/api/auth/supabase", syncSupabaseUserHandler);
 app.post("/api/auth/google", syncSupabaseUserHandler);
 
+/**
+ * Mobile email/password register — creates a confirmed Auth user (same Supabase
+ * project as the website) so the app can signInWithPassword without waiting
+ * for a confirmation email. Does NOT reset password for existing accounts.
+ */
+app.post("/api/auth/mobile-register", async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({
+        error: "Supabase yapılandırılmadı",
+        code: "supabase_unavailable",
+      });
+    }
+    const email = String((req.body && req.body.email) || "")
+      .trim()
+      .toLowerCase();
+    const password = String((req.body && req.body.password) || "");
+    if (!email || !email.includes("@")) {
+      return res.status(400).json({ error: "Geçerli e-posta gerekli", code: "invalid_email" });
+    }
+    if (!password || password.length < 8) {
+      return res.status(400).json({
+        error: "Şifre en az 8 karakter olmalı",
+        code: "invalid_password",
+      });
+    }
+
+    const { data, error } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
+
+    if (error) {
+      const msg = String(error.message || "");
+      const already =
+        /already|registered|exists|duplicate/i.test(msg) ||
+        error.code === "email_exists" ||
+        error.status === 422;
+      if (already) {
+        return res.status(409).json({
+          error:
+            "Bu e-posta zaten kayıtlı. Giriş yapın veya Google ile devam edin.",
+          code: "email_exists",
+        });
+      }
+      console.error("api/auth/mobile-register:", msg);
+      return res.status(400).json({ error: msg || "Kayıt başarısız", code: error.code || "signup_failed" });
+    }
+
+    const uid = data?.user?.id;
+    if (uid) {
+      try {
+        const displayName =
+          (email && email.split("@")[0]) || "Kullanici";
+        await getOrCreateUser(uid, { email, displayName });
+      } catch (e) {
+        console.warn("mobile-register profile:", e.message || e);
+      }
+    }
+
+    return res.json({ ok: true, userId: uid || null });
+  } catch (err) {
+    console.error("api/auth/mobile-register:", err.message || err);
+    return res.status(500).json({
+      error: err.message || "Kayıt hatası",
+      code: "internal_error",
+    });
+  }
+});
+
 app.get("/api/credits", async (req, res) => {
   const user = await getRequestUser(req);
   if (!user) return res.status(401).json({ error: "Oturum gerekli" });
