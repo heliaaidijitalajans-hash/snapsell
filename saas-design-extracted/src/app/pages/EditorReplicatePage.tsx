@@ -1,8 +1,26 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
-import { Upload, Sparkles, ImageIcon, Check, Store } from "lucide-react";
+import { Upload, Sparkles, ImageIcon } from "lucide-react";
 import { Link } from "react-router";
+import { PriceAnalysisSection } from "../components/price/PriceAnalysisSection";
+import { OptionGroup } from "../components/aiConfig/OptionGroup";
+import { ProcessingView } from "../components/processing/ProcessingView";
+import { useAiConfiguration } from "../hooks/useAiConfiguration";
+import {
+  BACKGROUND_IDS,
+  BRAND_STYLE_IDS,
+  CATEGORY_IDS,
+  MARKETPLACE_IDS,
+  QUALITY_IDS,
+  RATIOS,
+  type GenerationConfig,
+} from "../services/aiConfig/aiConfigContent";
+import {
+  buildPipelinePrompt,
+  toPhotoQuality,
+} from "../services/aiConfig/buildPipelinePrompt";
+
 /** Boş = aynı origin (Vercel). Farklı backend için `VITE_API_BASE_URL`. */
 const EDITOR_API_BASE = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || "").toString().trim().replace(/\/$/, "");
 const APP_BASE_URL = (import.meta.env.VITE_APP_URL || "https://www.snapsell.website").toString().trim().replace(/\/$/, "");
@@ -20,29 +38,13 @@ function ensureReplicateImageFromRailway(url: string): string {
   }
 }
 
-/** Backend bazen yourdomain.com döndürüyor; ERR_CERT önlemek için Railway API origin ile değiştir. */
-function normalizeImageUrl(url: string): string {
-  const origin = (EDITOR_API_BASE || APP_BASE_URL).replace(/\/$/, "");
-  let u = url.replace(/https?:\/\/[^/]*yourdomain\.com/gi, origin);
-  return ensureReplicateImageFromRailway(u);
-}
+type Phase = "config" | "processing" | "result";
 
-const MARKETPLACES = [
-  { id: "trendyol", name: "Trendyol" },
-  { id: "hepsiburada", name: "Hepsiburada" },
-  { id: "n11", name: "n11" },
-  { id: "amazon", name: "Amazon" },
-  { id: "etsy", name: "Etsy" },
-  { id: "temu", name: "Temu" },
-  { id: "ciceksepeti", name: "Çiçek Sepeti" },
-  { id: "tiktokshop", name: "TikTok Shop" },
-] as const;
-
-const QUALITY_OPTIONS = [
-  { id: "studio" as const, nameKey: "editor.qualityStudio" },
-  { id: "professional" as const, nameKey: "editor.qualityPro" },
-  { id: "luxury" as const, nameKey: "editor.qualityLuxury" },
-] as const;
+type PipelineError = Error & {
+  billingUrl?: string;
+  photoroomDashboard?: boolean;
+  upgradeUrl?: string;
+};
 
 export function EditorReplicatePage() {
   const { user, getAuthHeaders } = useAuth();
@@ -52,24 +54,24 @@ export function EditorReplicatePage() {
   const [freeLimitReached, setFreeLimitReached] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [prompt, setPrompt] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [phase, setPhase] = useState<Phase>("config");
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
   const [seoDescription, setSeoDescription] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorBillingUrl, setErrorBillingUrl] = useState<string | null>(null);
   const [errorUpgradeUrl, setErrorUpgradeUrl] = useState<string | null>(null);
   const [errorPhotoRoomDashboard, setErrorPhotoRoomDashboard] = useState(false);
-  const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>([]);
-  const [photoQuality, setPhotoQuality] = useState<"studio" | "professional" | "luxury">("studio");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const resultRef = useRef<HTMLDivElement>(null);
 
-  const toggleMarketplace = useCallback((id: string) => {
-    setSelectedMarketplaces((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  }, []);
+  const { values, select, setCustomPrompt, reset, isCustomBackground, canGenerate, buildConfig } =
+    useAiConfiguration();
+
+  // Localized option groups (ids stable; labels react to language) — mirrors mobile useAiConfigOptions.
+  const marketplaces = MARKETPLACE_IDS.map((id) => ({ id, label: t(`aiConfig.marketplaces.${id}`) }));
+  const categories = CATEGORY_IDS.map((id) => ({ id, label: t(`aiConfig.categories.${id}`) }));
+  const backgrounds = BACKGROUND_IDS.map((id) => ({ id, label: t(`aiConfig.backgrounds.${id}`) }));
+  const qualities = QUALITY_IDS.map((id) => ({ id, label: t(`aiConfig.qualities.${id}`) }));
+  const brandStyles = BRAND_STYLE_IDS.map((id) => ({ id, label: t(`aiConfig.brandStyles.${id}`) }));
 
   // Giriş yapmış kullanıcı için her zaman Bearer (user) kullan; sayfa yenilenince session ile 3 hak dönmesin
   useEffect(() => {
@@ -114,13 +116,21 @@ export function EditorReplicatePage() {
     setPreviewUrl(URL.createObjectURL(file));
   }, [previewUrl, t]);
 
-  const runPipeline = useCallback(async () => {
-    if (!selectedFile || !hasEditor) return;
-    setError(null);
-    setOutputUrl(null);
-    setSeoDescription(null);
-    setLoading(true);
-    try {
+  /**
+   * Runs the same AI conversion as before (`POST /api/photoroom/pipeline`) but
+   * with the prompt/quality composed from the full AI Configuration (mirrors
+   * mobile `runProcessJob`). Rejects on failure so ProcessingView can react.
+   */
+  const executePipeline = useCallback(
+    async (signal: AbortSignal): Promise<void> => {
+      if (!selectedFile || !hasEditor) {
+        throw new Error(t("editor.failed"));
+      }
+      const config: GenerationConfig | null = buildConfig(previewUrl || selectedFile.name);
+      if (!config) {
+        throw new Error(t("editor.failed"));
+      }
+
       const headers = await getAuthHeaders();
       const base64 = await new Promise<string>((resolve, reject) => {
         const r = new FileReader();
@@ -128,27 +138,49 @@ export function EditorReplicatePage() {
         r.onerror = reject;
         r.readAsDataURL(selectedFile);
       });
-      const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 100000);
-      const res = await fetch(`${EDITOR_API_BASE}/api/photoroom/pipeline`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
-        body: JSON.stringify({
-          image: base64,
-          prompt: prompt.trim() || (photoQuality === "luxury" ? "luxury product photography, premium lighting, elegant background" : photoQuality === "professional" ? "commercial product shot, clean neutral background, professional" : "professional product photography, studio lighting, soft daylight"),
-          photoQuality,
-          language: locale,
-        }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
+
+      // Link the processing (cancel) signal with a 100s request timeout.
+      const requestController = new AbortController();
+      let timedOut = false;
+      const onOuterAbort = () => requestController.abort();
+      if (signal.aborted) requestController.abort();
+      else signal.addEventListener("abort", onOuterAbort);
+      const timeoutId = window.setTimeout(() => {
+        timedOut = true;
+        requestController.abort();
+      }, 100000);
+
+      let res: Response;
+      try {
+        res = await fetch(`${EDITOR_API_BASE}/api/photoroom/pipeline`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...headers },
+          body: JSON.stringify({
+            image: base64,
+            prompt: buildPipelinePrompt(config),
+            photoQuality: toPhotoQuality(config.quality),
+            language: locale,
+          }),
+          signal: requestController.signal,
+        });
+      } catch (e) {
+        if (timedOut) {
+          const err = new Error(t("editor.timeout"));
+          err.name = "AbortError";
+          throw err;
+        }
+        throw e;
+      } finally {
+        window.clearTimeout(timeoutId);
+        signal.removeEventListener("abort", onOuterAbort);
+      }
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         if (res.status === 402 && (data as any).limitReached) {
           setFreeLimitReached(true);
           setHasEditor(false);
-          setLoading(false);
-          return;
+          const limitErr = new Error(t("editor.freeLimitReached")) as PipelineError;
+          throw limitErr;
         }
         const normalize = (v: unknown) => {
           if (!v) return "";
@@ -158,12 +190,13 @@ export function EditorReplicatePage() {
         const errMsg = [normalize((data as any).error), normalize((data as any).detail)]
           .filter((s) => s && s.trim().length > 0)
           .join(" — ") || t("editor.failed");
-        const err = new Error(errMsg) as Error & { billingUrl?: string; photoroomDashboard?: boolean; upgradeUrl?: string };
+        const err = new Error(errMsg) as PipelineError;
         if ((data as any).billingUrl) err.billingUrl = (data as any).billingUrl;
         if ((data as any).photoroomDashboardUrl) err.photoroomDashboard = true;
         if ((data as any).upgradeUrl) err.upgradeUrl = (data as any).upgradeUrl;
         throw err;
       }
+
       const libErr = (data as { libraryError?: string | null }).libraryError;
       if (libErr) console.warn("[SnapSell] Kütüphane kaydı (sunucu):", libErr);
       let imageUrl = (data.image ?? data.outputUrl ?? data.output?.[0] ?? (Array.isArray(data.output) ? data.output[0] : data.output)) as string | undefined;
@@ -181,7 +214,8 @@ export function EditorReplicatePage() {
         imageUrl = ensureReplicateImageFromRailway(imageUrl);
         const finalUrl = imageUrl.startsWith("data:") ? imageUrl : imageUrl + (imageUrl.includes("?") ? "&" : "?") + "_t=" + Date.now();
         setOutputUrl(finalUrl);
-        /* Kütüphane kaydı sunucuda /api/photoroom/pipeline içinde yapılır (aynı istekte Storage + images; Vercel/Railway uyumlu). */
+      } else {
+        throw new Error(t("editor.failed"));
       }
       const d = data as Record<string, unknown>;
       const rawSeo =
@@ -201,35 +235,50 @@ export function EditorReplicatePage() {
       if (freeEditorUsesRemaining !== null) {
         setFreeEditorUsesRemaining(Math.max(0, freeEditorUsesRemaining - 1));
       }
-    } catch (e) {
-      const msg =
-        e instanceof Error && e.name === "AbortError"
-          ? t("editor.timeout")
-          : e instanceof Error ? e.message : t("editor.failed");
-      const errWithExtras = e instanceof Error && ("billingUrl" in e || "upgradeUrl" in e) ? (e as Error & { billingUrl?: string; upgradeUrl?: string; photoroomDashboard?: boolean }) : null;
-      setError(msg);
-      setErrorBillingUrl(errWithExtras?.billingUrl || null);
-      setErrorUpgradeUrl(errWithExtras?.upgradeUrl || null);
-      setErrorPhotoRoomDashboard(!!errWithExtras?.photoroomDashboard);
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedFile, prompt, photoQuality, hasEditor, getAuthHeaders, t, locale, freeEditorUsesRemaining]);
+    },
+    [selectedFile, hasEditor, buildConfig, previewUrl, getAuthHeaders, locale, freeEditorUsesRemaining, t],
+  );
+
+  const handleTransform = useCallback(() => {
+    if (!selectedFile || !canGenerate) return;
+    setError(null);
+    setErrorBillingUrl(null);
+    setErrorUpgradeUrl(null);
+    setErrorPhotoRoomDashboard(false);
+    setOutputUrl(null);
+    setSeoDescription(null);
+    setPhase("processing");
+  }, [selectedFile, canGenerate]);
+
+  const handleProcessingError = useCallback((e: unknown) => {
+    const msg =
+      e instanceof Error && e.name === "AbortError"
+        ? t("editor.timeout")
+        : e instanceof Error ? e.message : t("editor.failed");
+    const extras =
+      e instanceof Error && ("billingUrl" in e || "upgradeUrl" in e)
+        ? (e as PipelineError)
+        : null;
+    setError(msg);
+    setErrorBillingUrl(extras?.billingUrl || null);
+    setErrorUpgradeUrl(extras?.upgradeUrl || null);
+    setErrorPhotoRoomDashboard(!!extras?.photoroomDashboard);
+    setPhase("config");
+  }, [t]);
 
   const clearSelection = useCallback(() => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
     setSelectedFile(null);
-    setPrompt("");
+    reset();
     setOutputUrl(null);
     setSeoDescription(null);
     setError(null);
     setErrorBillingUrl(null);
     setErrorUpgradeUrl(null);
-    setSelectedMarketplaces([]);
-    setPhotoQuality("studio");
+    setPhase("config");
     if (fileInputRef.current) fileInputRef.current.value = "";
-  }, [previewUrl]);
+  }, [previewUrl, reset]);
 
   if (hasEditor === null) {
     return (
@@ -263,10 +312,24 @@ export function EditorReplicatePage() {
     );
   }
 
+  // Processing phase — full SnapSell app processing experience.
+  if (phase === "processing") {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <ProcessingView
+          runJob={executePipeline}
+          onComplete={() => setPhase("result")}
+          onError={handleProcessingError}
+          onCancel={() => setPhase("config")}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{t("editor.title")}</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t("aiConfig.title")}</h1>
         {freeEditorUsesRemaining !== null && (
           <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1.5 rounded-lg">
             {t("editor.freeUsesRemaining").replace("{{count}}", String(freeEditorUsesRemaining))}
@@ -274,258 +337,249 @@ export function EditorReplicatePage() {
         )}
       </div>
 
-      {!selectedFile ? (
-        <div
-          onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer?.files?.[0]; if (f) handleFileSelect(f); }}
-          onDragOver={(e) => e.preventDefault()}
-          onClick={() => fileInputRef.current?.click()}
-          className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center cursor-pointer hover:border-[#FF5A5F] hover:bg-gray-50 transition"
-        >
-          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ""; }} />
-          <div className="flex justify-center mb-4">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-[#FF5A5F]/10 text-[#FF5A5F]">
-              <Upload className="w-8 h-8" />
-            </div>
-          </div>
-          <p className="text-gray-800 font-semibold mb-1">{t("editor.dragOrClick")}</p>
-          <p className="text-sm text-gray-500">{t("editor.formats")}</p>
-        </div>
+      {phase === "result" && outputUrl ? (
+        <ResultView
+          previewUrl={previewUrl}
+          outputUrl={outputUrl}
+          seoDescription={seoDescription}
+          onNew={clearSelection}
+          t={t}
+        />
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-2">
-                <ImageIcon className="w-4 h-4 text-[#FF5A5F]" />
-                {t("editor.uploadedImage")}
-              </h3>
-              <img src={previewUrl || ""} alt={t("editor.uploadedAlt")} className="max-h-64 w-auto max-w-full object-contain rounded-lg border border-gray-200 bg-gray-50" />
+        <>
+          {!selectedFile ? (
+            <div
+              onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer?.files?.[0]; if (f) handleFileSelect(f); }}
+              onDragOver={(e) => e.preventDefault()}
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center cursor-pointer hover:border-[#FF5A5F] hover:bg-gray-50 transition"
+            >
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ""; }} />
+              <div className="flex justify-center mb-4">
+                <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-[#FF5A5F]/10 text-[#FF5A5F]">
+                  <Upload className="w-8 h-8" />
+                </div>
+              </div>
+              <p className="text-gray-800 font-semibold mb-1">{t("editor.dragOrClick")}</p>
+              <p className="text-sm text-gray-500">{t("editor.formats")}</p>
             </div>
-            <button type="button" onClick={clearSelection} className="text-sm text-gray-500 hover:text-gray-700 shrink-0">{t("editor.selectDifferent")}</button>
-          </div>
-        </div>
-      )}
-
-      <section className="mt-8">
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/60">
-            <h2 className="text-base font-semibold text-gray-900">{t("editor.whereList")}</h2>
-            <p className="text-sm text-gray-500 mt-0.5">{t("editor.multiStore")}</p>
-          </div>
-          <div className="p-4 sm:p-5">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {(MARKETPLACES || []).map((m) => {
-                const isSelected = selectedMarketplaces.includes(m.id);
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => toggleMarketplace(m.id)}
-                    className={`relative flex items-center gap-3 rounded-xl p-3 sm:p-4 text-left transition-all duration-200 ${
-                      isSelected
-                        ? "bg-[#FF5A5F]/10 ring-2 ring-[#FF5A5F] ring-inset shadow-sm"
-                        : "bg-gray-50/80 hover:bg-gray-100 border border-transparent hover:border-gray-200"
-                    }`}
-                  >
-                    <span
-                      className={`flex shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
-                        isSelected ? "bg-[#FF5A5F] text-white" : "bg-white border border-gray-200 text-gray-500"
-                      }`}
-                    >
-                      {isSelected ? (
-                        <Check className="w-5 h-5" strokeWidth={2.5} />
-                      ) : (
-                        <Store className="w-5 h-5" />
-                      )}
-                    </span>
-                    <span className={`text-sm font-medium truncate ${isSelected ? "text-[#FF5A5F]" : "text-gray-700"}`}>
-                      {m.name}
-                    </span>
-                    {isSelected && (
-                      <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#FF5A5F]" aria-hidden />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="mt-6">
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/60">
-            <h2 className="text-base font-semibold text-gray-900">{t("editor.photoQuality")}</h2>
-            <p className="text-sm text-gray-500 mt-0.5">{t("editor.selectStyle")}</p>
-          </div>
-          <div className="p-4 sm:p-5">
-            <div className="grid grid-cols-3 gap-3">
-              {(QUALITY_OPTIONS || []).map((q) => {
-                const isSelected = photoQuality === q.id;
-                return (
-                  <button
-                    key={q.id}
-                    type="button"
-                    onClick={() => setPhotoQuality(q.id)}
-                    className={`relative flex flex-col items-center gap-2 rounded-xl py-4 transition-all duration-200 ${
-                      isSelected
-                        ? "bg-[#FF5A5F]/10 ring-2 ring-[#FF5A5F] ring-inset shadow-sm"
-                        : "bg-gray-50/80 hover:bg-gray-100 border border-transparent hover:border-gray-200"
-                    }`}
-                  >
-                    <span
-                      className={`flex shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
-                        isSelected ? "bg-[#FF5A5F] text-white" : "bg-white border border-gray-200 text-gray-500"
-                      }`}
-                    >
-                      <Sparkles className="w-5 h-5" />
-                    </span>
-                    <span className={`text-sm font-medium ${isSelected ? "text-[#FF5A5F]" : "text-gray-700"}`}>
-                      {t(q.nameKey)}
-                    </span>
-                    {isSelected && (
-                      <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#FF5A5F]" aria-hidden />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="mt-6">
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/60">
-            <h2 className="text-base font-semibold text-gray-900">{t("editor.conversionText")}</h2>
-            <p className="text-sm text-gray-500 mt-0.5">{t("editor.conversionHint")}</p>
-          </div>
-          <div className="p-4 sm:p-5">
-            <input
-              id="photoroom-prompt"
-              type="text"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder={t("editor.promptPlaceholder")}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:ring-2 focus:ring-[#FF5A5F] focus:border-[#FF5A5F] outline-none"
-            />
-          </div>
-        </div>
-      </section>
-
-      <div className="mt-6">
-        <button
-          type="button"
-          onClick={runPipeline}
-          disabled={loading || !selectedFile}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl font-medium text-white bg-[#FF5A5F] hover:bg-[#FF5A5F]/90 disabled:opacity-50 disabled:cursor-not-allowed transition"
-        >
-          {loading ? (
-            <>
-              <span className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
-              {t("editor.processing")}
-            </>
           ) : (
-            <>
-              <Sparkles className="w-5 h-5" />
-              {t("editor.convert")}
-            </>
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+              {/* Hero — product photo + caption + subtitle (mirrors mobile AiConfiguration) */}
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-full max-w-sm aspect-square rounded-[24px] overflow-hidden border border-gray-200 bg-gray-50">
+                  <img src={previewUrl || ""} alt={t("aiConfig.productCaption")} className="w-full h-full object-cover" />
+                </div>
+                <p className="text-sm font-semibold text-gray-500 mt-2 flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-[#FF5A5F]" />
+                  {t("aiConfig.productCaption")}
+                </p>
+                <p className="text-base text-gray-500 text-center leading-relaxed">{t("aiConfig.subtitle")}</p>
+                <button type="button" onClick={clearSelection} className="text-sm text-gray-500 hover:text-gray-700 mt-1">
+                  {t("editor.selectDifferent")}
+                </button>
+              </div>
+
+              <div className="mt-8 flex flex-col gap-8">
+                <OptionGroup
+                  title={t("aiConfig.marketplace")}
+                  options={marketplaces}
+                  value={values.marketplace}
+                  onSelect={(id) => select("marketplace", id)}
+                  variant="grid"
+                />
+                <OptionGroup
+                  title={t("aiConfig.category")}
+                  options={categories}
+                  value={values.category}
+                  onSelect={(id) => select("category", id)}
+                  variant="grid"
+                />
+                <div className="flex flex-col gap-4">
+                  <OptionGroup
+                    title={t("aiConfig.background")}
+                    options={backgrounds}
+                    value={values.background}
+                    onSelect={(id) => select("background", id)}
+                    variant="grid"
+                  />
+                  {isCustomBackground ? (
+                    <div className="flex flex-col gap-2">
+                      <label htmlFor="ai-custom-prompt" className="text-sm font-semibold text-gray-700">
+                        {t("aiConfig.customPromptLabel")}
+                      </label>
+                      <input
+                        id="ai-custom-prompt"
+                        type="text"
+                        value={values.customPrompt}
+                        onChange={(e) => setCustomPrompt(e.target.value)}
+                        placeholder={t("aiConfig.customPromptPlaceholder")}
+                        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:ring-2 focus:ring-[#FF5A5F] focus:border-[#FF5A5F] outline-none"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+                <OptionGroup
+                  title={t("aiConfig.ratio")}
+                  options={RATIOS}
+                  value={values.ratio}
+                  onSelect={(id) => select("ratio", id)}
+                  variant="chips"
+                />
+                <OptionGroup
+                  title={t("aiConfig.quality")}
+                  options={qualities}
+                  value={values.quality}
+                  onSelect={(id) => select("quality", id)}
+                  variant="chips"
+                />
+                <OptionGroup
+                  title={t("aiConfig.brandStyle")}
+                  options={brandStyles}
+                  value={values.brandStyle}
+                  onSelect={(id) => select("brandStyle", id)}
+                  variant="chips"
+                />
+              </div>
+            </div>
           )}
+
+          {error && (
+            <div className="mt-4 p-4 rounded-lg bg-red-50 text-red-700 text-sm">
+              {error}
+              {errorBillingUrl && (
+                <p className="mt-2">
+                  <a href={errorBillingUrl} target="_blank" rel="noopener noreferrer" className="underline font-medium">
+                    {errorPhotoRoomDashboard ? t("editor.renewPhotoRoom") : t("editor.paymentBalance")}
+                  </a>
+                </p>
+              )}
+              {errorUpgradeUrl && (
+                <p className="mt-2">
+                  <Link to={errorUpgradeUrl} className="underline font-medium text-[#FF5A5F]">
+                    {t("editor.goPricing")}
+                  </Link>
+                </p>
+              )}
+            </div>
+          )}
+
+          {selectedFile ? (
+            <div className="mt-6">
+              <button
+                type="button"
+                onClick={handleTransform}
+                disabled={!canGenerate}
+                className="w-full inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl font-semibold text-white bg-[#FF5A5F] hover:bg-[#FF5A5F]/90 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-[0_10px_18px_-6px_rgba(255,90,95,0.5)]"
+              >
+                <Sparkles className="w-5 h-5" />
+                {t("aiConfig.generate")}
+              </button>
+            </div>
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Result view — generated image + SEO + Price Analysis (SnapSell app parity). */
+function ResultView({
+  previewUrl,
+  outputUrl,
+  seoDescription,
+  onNew,
+  t,
+}: {
+  previewUrl: string | null;
+  outputUrl: string;
+  seoDescription: string | null;
+  onNew: () => void;
+  t: (key: string) => string;
+}) {
+  const apiOrigin = (EDITOR_API_BASE || APP_BASE_URL).replace(/\/$/, "");
+  let displayUrl = outputUrl;
+  if (displayUrl.includes("yourdomain.com")) {
+    displayUrl = displayUrl.replace(/https?:\/\/[^/]*yourdomain\.com/gi, apiOrigin);
+  }
+  displayUrl = ensureReplicateImageFromRailway(displayUrl);
+  if (!displayUrl.startsWith("http") && !displayUrl.startsWith("data:image")) {
+    displayUrl = `data:image/png;base64,${displayUrl}`;
+  }
+  if (displayUrl.startsWith("/")) {
+    displayUrl = apiOrigin ? `${apiOrigin}${displayUrl}` : `${APP_BASE_URL}${displayUrl}`;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-end">
+        <button type="button" onClick={onNew} className="text-sm font-medium text-[#FF5A5F] hover:underline">
+          {t("editor.selectDifferent")}
         </button>
       </div>
 
-      {error && (
-        <div className="mt-4 p-4 rounded-lg bg-red-50 text-red-700 text-sm">
-          {error}
-          {errorBillingUrl && (
-            <p className="mt-2">
-              <a href={errorBillingUrl} target="_blank" rel="noopener noreferrer" className="underline font-medium">
-                {errorPhotoRoomDashboard ? t("editor.renewPhotoRoom") : t("editor.paymentBalance")}
-              </a>
-            </p>
-          )}
-          {errorUpgradeUrl && (
-            <p className="mt-2">
-              <Link to={errorUpgradeUrl} className="underline font-medium text-[#FF5A5F]">
-                {t("editor.goPricing")}
-              </Link>
-            </p>
-          )}
+      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+        <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+          <span className="w-1 h-5 rounded-full bg-gray-400" />
+          {t("editor.original")}
+        </h3>
+        <p className="text-sm text-gray-500 mb-3">{t("editor.originalHint")}</p>
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 flex justify-center">
+          <img src={previewUrl || ""} alt={t("editor.original")} className="max-w-full max-h-72 object-contain rounded-lg" />
         </div>
-      )}
+      </div>
 
-      {outputUrl && (() => {
-        const apiOrigin = (EDITOR_API_BASE || APP_BASE_URL).replace(/\/$/, "");
-        let displayUrl = outputUrl;
-        if (displayUrl.includes("yourdomain.com")) {
-          displayUrl = displayUrl.replace(/https?:\/\/[^/]*yourdomain\.com/gi, apiOrigin);
-        }
-        displayUrl = ensureReplicateImageFromRailway(displayUrl);
-        if (!displayUrl.startsWith("http") && !displayUrl.startsWith("data:image")) {
-          displayUrl = `data:image/png;base64,${displayUrl}`;
-        }
-        if (displayUrl.startsWith("/")) {
-          displayUrl = apiOrigin ? `${apiOrigin}${displayUrl}` : `${APP_BASE_URL}${displayUrl}`;
-        }
-        return (
-        <div ref={resultRef} className="mt-8 space-y-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-            <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
-              <span className="w-1 h-5 rounded-full bg-gray-400" />
-              {t("editor.original")}
-            </h3>
-            <p className="text-sm text-gray-500 mb-3">{t("editor.originalHint")}</p>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 flex justify-center">
-              <img src={previewUrl || ""} alt={t("editor.original")} className="max-w-full max-h-72 object-contain rounded-lg" />
-            </div>
-          </div>
-          <div className="bg-white rounded-xl border-2 border-[#FF5A5F]/30 border-gray-200 p-6 shadow-sm">
-            <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
-              <span className="w-1 h-5 rounded-full bg-[#FF5A5F]" />
-              {t("editor.result")}
-            </h3>
-            <p className="text-sm text-gray-500 mb-4">{t("editor.resultHint")}</p>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 flex flex-col items-center">
-              <img
-                src={displayUrl}
-                alt="Generated result"
-                className="max-w-full max-h-96 object-contain rounded-lg"
-                onError={(e) => {
-                  const img = e.target as HTMLImageElement;
-                  img.style.display = "none";
-                  const next = img.nextElementSibling as HTMLElement | null;
-                  if (next) next.classList.remove("hidden");
-                }}
-              />
-              <p className="mt-2 text-sm text-amber-700 hidden">
-                {t("editor.imageLoadFailed")}{" "}
-                <a href={displayUrl} target="_blank" rel="noopener noreferrer" className="text-[#FF5A5F] underline">
-                  {t("editor.openInNewTab")}
-                </a>
-              </p>
-            </div>
-            <a
-              href={displayUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-3 inline-flex text-sm font-medium text-[#FF5A5F] hover:underline"
-            >
-              {t("editor.downloadOrOpen")}
+      <div className="bg-white rounded-xl border-2 border-[#FF5A5F]/30 p-6 shadow-sm">
+        <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+          <span className="w-1 h-5 rounded-full bg-[#FF5A5F]" />
+          {t("editor.result")}
+        </h3>
+        <p className="text-sm text-gray-500 mb-4">{t("editor.resultHint")}</p>
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 flex flex-col items-center">
+          <img
+            src={displayUrl}
+            alt="Generated result"
+            className="max-w-full max-h-96 object-contain rounded-lg"
+            onError={(e) => {
+              const img = e.target as HTMLImageElement;
+              img.style.display = "none";
+              const next = img.nextElementSibling as HTMLElement | null;
+              if (next) next.classList.remove("hidden");
+            }}
+          />
+          <p className="mt-2 text-sm text-amber-700 hidden">
+            {t("editor.imageLoadFailed")}{" "}
+            <a href={displayUrl} target="_blank" rel="noopener noreferrer" className="text-[#FF5A5F] underline">
+              {t("editor.openInNewTab")}
             </a>
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-            <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-              <span className="w-1 h-5 rounded-full bg-blue-500" />
-              {t("editor.seoDescription")}
-            </h3>
-            <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">
-              {seoDescription || t("editor.seoLoadingOrUnavailable")}
-            </p>
-          </div>
-
+          </p>
         </div>
-      );
-      })()}
+        <a
+          href={displayUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex text-sm font-medium text-[#FF5A5F] hover:underline"
+        >
+          {t("editor.downloadOrOpen")}
+        </a>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+        <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+          <span className="w-1 h-5 rounded-full bg-blue-500" />
+          {t("editor.seoDescription")}
+        </h3>
+        <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">
+          {seoDescription || t("editor.seoLoadingOrUnavailable")}
+        </p>
+      </div>
+
+      <PriceAnalysisSection
+        id={outputUrl}
+        productName=""
+        description={(seoDescription || "").trim()}
+        enabled={Boolean(outputUrl)}
+      />
     </div>
   );
 }

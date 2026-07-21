@@ -543,7 +543,7 @@ export function AdminPage() {
       </section>
 
       {/* ——— Site ziyaretçileri ——— */}
-      <section className="rounded-xl border border-[#FF5A5F]/20 bg-gradient-to-br from-white to-[#FF5A5F]/[0.06] shadow-sm overflow-hidden">
+      <section className="rounded-xl border border-[#FF5A5F]/20 bg-gradient-to-br from-[#1E1E1E] to-[#FF5A5F]/[0.10] shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100/80 flex items-center gap-2 bg-white/80">
           <Eye className="w-5 h-5 text-[#FF5A5F]" />
           <h2 className="font-semibold text-gray-800">Site ziyaretçileri</h2>

@@ -1,3 +1,247 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * SnapSell dark design system — ported from the SnapSell application theme
+ * (src/theme: colors, typography, radius, spacing, shadows).
+ * This layer only re-skins the existing light utilities to the app's dark
+ * palette. No markup, layout, or business logic is changed.
+ *
+ * Tokens (app parity):
+ *   background #121212 · surface #1E1E1E · border #2B2B2B
+ *   primary #FF5A5F · text #FFFFFF · textSecondary #AAAAAA
+ *   success #00C853 · warning #FFC107 · danger #FF5252
+ */
+@layer base {
+  :root {
+    --ss-bg: #121212;
+    --ss-surface: #1e1e1e;
+    --ss-surface-2: #242424;
+    --ss-surface-3: #2b2b2b;
+    --ss-border: #2b2b2b;
+    --ss-border-strong: #3a3a3a;
+    --ss-text: #ffffff;
+    --ss-text-2: #aaaaaa;
+    --ss-text-3: #7a7a7a;
+    --ss-primary: #ff5a5f;
+    --ss-success: #00c853;
+    --ss-warning: #ffc107;
+    --ss-danger: #ff5252;
+  }
+
+  html,
+  body {
+    background-color: var(--ss-bg);
+    color: var(--ss-text);
+  }
+
+  /* Default (uncolored) borders → app border. Color utilities still win. */
+  *,
+  ::before,
+  ::after {
+    border-color: var(--ss-border);
+  }
+
+  ::selection {
+    background: rgba(255, 90, 95, 0.35);
+    color: #fff;
+  }
+
+  input,
+  textarea,
+  select {
+    background-color: var(--ss-surface-2);
+    color: var(--ss-text);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--ss-text-3);
+  }
+
+  option {
+    background-color: var(--ss-surface);
+    color: var(--ss-text);
+  }
+
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--ss-bg);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #3a3a3a;
+    border-radius: 999px;
+    border: 3px solid var(--ss-bg);
+  }
+}
+
+/*
+ * Re-skin the exact light utilities used across the site to dark equivalents.
+ * !important guarantees the remap wins regardless of utility source order.
+ */
+@layer utilities {
+  /* Surfaces */
+  .bg-white {
+    background-color: var(--ss-surface) !important;
+  }
+  .bg-white\/70 {
+    background-color: rgba(30, 30, 30, 0.7) !important;
+  }
+  .bg-white\/80 {
+    background-color: rgba(30, 30, 30, 0.85) !important;
+  }
+  .bg-gray-50 {
+    background-color: var(--ss-bg) !important;
+  }
+  .bg-gray-50\/50 {
+    background-color: rgba(18, 18, 18, 0.5) !important;
+  }
+  .bg-gray-100 {
+    background-color: #262626 !important;
+  }
+  .bg-gray-200 {
+    background-color: #2f2f2f !important;
+  }
+  .bg-gray-400 {
+    background-color: #5a5a5a !important;
+  }
+  .bg-gray-700 {
+    background-color: #1a1a1a !important;
+  }
+  .bg-gray-900 {
+    background-color: #0e0e0e !important;
+  }
+
+  /* Text */
+  .text-gray-900 {
+    color: var(--ss-text) !important;
+  }
+  .text-gray-800 {
+    color: #f2f2f2 !important;
+  }
+  .text-gray-700 {
+    color: #d6d6d6 !important;
+  }
+  .text-gray-600 {
+    color: var(--ss-text-2) !important;
+  }
+  .text-gray-500 {
+    color: #9a9a9a !important;
+  }
+  .text-gray-400 {
+    color: var(--ss-text-3) !important;
+  }
+  .text-gray-300 {
+    color: #aaaaaa !important;
+  }
+  .text-gray-200 {
+    color: #c7c7c7 !important;
+  }
+
+  /* Borders */
+  .border-gray-100,
+  .border-gray-100\/80,
+  .border-gray-200,
+  .border-gray-200\/80,
+  .border-gray-200\/90,
+  .border-gray-300,
+  .border-gray-600,
+  .border-gray-800 {
+    border-color: var(--ss-border) !important;
+  }
+  .border-gray-400 {
+    border-color: var(--ss-border-strong) !important;
+  }
+  .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
+    border-color: var(--ss-border) !important;
+  }
+
+  /* Rings & colored shadows */
+  .ring-black\/\[0\.04\] {
+    --tw-ring-color: rgba(255, 255, 255, 0.06) !important;
+  }
+  .shadow-gray-200\/30,
+  .shadow-gray-900\/5 {
+    --tw-shadow-color: rgba(0, 0, 0, 0.5) !important;
+    --tw-shadow: var(--tw-shadow-colored) !important;
+  }
+
+  /* Hover states */
+  .hover\:bg-gray-50:hover {
+    background-color: #1a1a1a !important;
+  }
+  .hover\:bg-gray-50\/50:hover {
+    background-color: rgba(26, 26, 26, 0.6) !important;
+  }
+  .hover\:bg-gray-100:hover {
+    background-color: #262626 !important;
+  }
+  .hover\:bg-gray-200:hover {
+    background-color: #2f2f2f !important;
+  }
+  .hover\:border-gray-200:hover,
+  .hover\:border-gray-300:hover {
+    border-color: var(--ss-border-strong) !important;
+  }
+  .hover\:text-gray-700:hover {
+    color: #ffffff !important;
+  }
+
+  /* Status — danger */
+  .bg-red-50 {
+    background-color: rgba(255, 82, 82, 0.12) !important;
+  }
+  .hover\:bg-red-50:hover {
+    background-color: rgba(255, 82, 82, 0.18) !important;
+  }
+  .border-red-100,
+  .border-red-200,
+  .border-red-500 {
+    border-color: rgba(255, 82, 82, 0.45) !important;
+  }
+  .text-red-500,
+  .text-red-600,
+  .text-red-700,
+  .text-red-800 {
+    color: #ff6b6b !important;
+  }
+
+  /* Status — warning */
+  .bg-amber-50,
+  .bg-amber-50\/80,
+  .bg-amber-100 {
+    background-color: rgba(255, 193, 7, 0.12) !important;
+  }
+  .hover\:bg-amber-200:hover {
+    background-color: rgba(255, 193, 7, 0.2) !important;
+  }
+  .border-amber-100,
+  .border-amber-200 {
+    border-color: rgba(255, 193, 7, 0.45) !important;
+  }
+  .text-amber-700,
+  .text-amber-800,
+  .text-amber-800\/90,
+  .text-amber-900,
+  .text-amber-900\/80 {
+    color: #ffce3a !important;
+  }
+
+  /* Status — success */
+  .bg-emerald-50 {
+    background-color: rgba(0, 200, 83, 0.12) !important;
+  }
+  .border-emerald-200 {
+    border-color: rgba(0, 200, 83, 0.45) !important;
+  }
+  .text-emerald-800 {
+    color: #3ddc84 !important;
+  }
+  .text-green-600 {
+    color: #33d17a !important;
+  }
+}

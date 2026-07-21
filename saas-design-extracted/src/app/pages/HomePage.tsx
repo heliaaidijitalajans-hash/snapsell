@@ -96,7 +96,7 @@ export function HomePage() {
             />
           </div>
           <div className="mt-20">
-            <div className="relative max-w-4xl mx-auto rounded-3xl bg-gradient-to-br from-[#FF5A5F]/5 via-white to-gray-50/80 border border-gray-200/80 shadow-xl shadow-gray-200/30 overflow-hidden">
+            <div className="relative max-w-4xl mx-auto rounded-3xl bg-gradient-to-br from-[#FF5A5F]/10 via-[#1E1E1E] to-[#121212] border border-gray-200/80 shadow-xl shadow-gray-200/30 overflow-hidden">
               <div className="absolute top-0 right-0 w-64 h-64 bg-[#FF5A5F]/[0.06] rounded-full -translate-y-1/2 translate-x-1/2" aria-hidden />
               <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#FF5A5F]/[0.04] rounded-full translate-y-1/2 -translate-x-1/2" aria-hidden />
               <div className="relative px-6 sm:px-10 py-10 sm:py-12">
