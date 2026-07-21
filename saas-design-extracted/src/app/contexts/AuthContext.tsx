@@ -146,8 +146,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     void (async () => {
       if (typeof window !== "undefined") {
+        const path = window.location.pathname || "";
         const search = window.location.search || "";
-        if (search.includes("code=")) {
+        // Mobile Expo AuthSession callback — do NOT consume the one-time code here.
+        const isMobileOAuthCallback =
+          path.includes("mobile-callback") || path.includes("/auth/mobile-callback");
+        if (search.includes("code=") && !isMobileOAuthCallback) {
           authLog("OAuth PKCE: exchangeCodeForSession …");
           try {
             const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
@@ -155,6 +159,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } catch (e) {
             authLog("exchangeCodeForSession failed", e);
           }
+        } else if (isMobileOAuthCallback) {
+          authLog("mobile OAuth callback — skip exchange (app will exchange)");
         }
       }
 

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Cache-Control"
+      content="no-cache, no-store, must-revalidate"
+    />
+    <title>Returning to SnapSell…</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        background: #0a0a0a;
+        color: #f5f5f5;
+        display: flex;
+        min-height: 100vh;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+        padding: 24px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <p id="msg">Returning to SnapSell…</p>
+    <script>
+      (function () {
+        try {
+          var params = new URLSearchParams(window.location.search || "");
+          var app = params.get("r") || params.get("app_redirect") || "";
+          params.delete("r");
+          params.delete("app_redirect");
+          var rest = params.toString();
+          var hash = window.location.hash || "";
+          if (!app) {
+            document.getElementById("msg").textContent =
+              "Missing app redirect. Close this window and return to SnapSell.";
+            return;
+          }
+          var sep = app.indexOf("?") >= 0 ? "&" : "?";
+          var target = app + (rest ? sep + rest : "") + hash;
+          window.location.replace(target);
+          setTimeout(function () {
+            document.getElementById("msg").textContent =
+              "If SnapSell did not open, close this window and return to the app.";
+          }, 1600);
+        } catch (e) {
+          document.getElementById("msg").textContent =
+            "Could not return to SnapSell. Close this window.";
+        }
+      })();
+    </script>
+  </body>
+</html>

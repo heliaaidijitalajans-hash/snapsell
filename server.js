@@ -719,6 +719,66 @@ app.get("/", (req, res) => res.send("OK"));
 
 app.get("/health", (req, res) => res.status(200).send("OK"));
 
+/**
+ * Static OAuth bridge for Expo Go / Android AuthSession.
+ * Supabase redirects here with ?code=…&r=<deep-link>; this page forwards to the app.
+ * File: deploy/auth/expo-bridge.html (must be COPYed in Dockerfile for Railway).
+ */
+const EXPO_BRIDGE_CANDIDATES = [
+  path.join(__dirname, "deploy", "auth", "expo-bridge.html"),
+  path.join(__dirname, "public", "auth", "expo-bridge.html"),
+  path.join(process.cwd(), "deploy", "auth", "expo-bridge.html"),
+];
+
+const EXPO_BRIDGE_INLINE = `<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<title>Returning to SnapSell…</title>
+<style>body{font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px;text-align:center}</style>
+</head><body><p id="msg">Returning to SnapSell…</p>
+<script>
+(function(){try{var p=new URLSearchParams(location.search||"");var app=p.get("r")||p.get("app_redirect")||"";p.delete("r");p.delete("app_redirect");var rest=p.toString();var hash=location.hash||"";if(!app){document.getElementById("msg").textContent="Missing app redirect. Close this window and return to SnapSell.";return;}var sep=app.indexOf("?")>=0?"&":"?";location.replace(app+(rest?sep+rest:"")+hash);setTimeout(function(){document.getElementById("msg").textContent="If SnapSell did not open, close this window and return to the app.";},1600);}catch(e){document.getElementById("msg").textContent="Could not return to SnapSell. Close this window.";}})();
+</script></body></html>`;
+
+function resolveExpoBridgeFile() {
+  for (let i = 0; i < EXPO_BRIDGE_CANDIDATES.length; i++) {
+    try {
+      if (fs.existsSync(EXPO_BRIDGE_CANDIDATES[i])) {
+        return EXPO_BRIDGE_CANDIDATES[i];
+      }
+    } catch (_) {}
+  }
+  return null;
+}
+
+function serveExpoOAuthBridge(_req, res) {
+  res.setHeader("Cache-Control", "no-store");
+  const filePath = resolveExpoBridgeFile();
+  if (filePath) {
+    return res.sendFile(filePath, function (err) {
+      if (err) {
+        console.warn("[expo-bridge] sendFile failed:", err && err.message);
+        if (!res.headersSent) {
+          res.type("html").status(200).send(EXPO_BRIDGE_INLINE);
+        }
+      }
+    });
+  }
+  console.warn(
+    "[expo-bridge] file missing; serving inline HTML. Checked:",
+    EXPO_BRIDGE_CANDIDATES.join(" | ")
+  );
+  return res.type("html").status(200).send(EXPO_BRIDGE_INLINE);
+}
+
+app.get("/auth/expo-bridge.html", serveExpoOAuthBridge);
+app.get("/auth/expo-bridge", serveExpoOAuthBridge);
+app.get("/api/auth/expo-bridge.html", serveExpoOAuthBridge);
+app.get("/api/auth/expo-bridge", serveExpoOAuthBridge);
+app.get("/api/expo-bridge", serveExpoOAuthBridge);
+
 app.get("/favicon.ico", function (req, res) {
   res.status(204).end();
 });
