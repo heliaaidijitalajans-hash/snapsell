@@ -12,12 +12,18 @@ import {
   type Team,
   getStoredAdminToken,
 } from "./types";
+import { appendAudit } from "./lib/workspace";
+import { useRbac } from "./rbac/RbacContext";
 
 type AdminContextValue = {
   authenticated: boolean | null;
+  /** True when signed in via local RBAC only (no server admin token). */
+  localOnly: boolean;
   loading: boolean;
   password: string;
   setPassword: (v: string) => void;
+  loginEmail: string;
+  setLoginEmail: (v: string) => void;
   loginError: string;
   handleLogin: (e: React.FormEvent) => Promise<void>;
   handleLogout: () => Promise<void>;
@@ -67,9 +73,12 @@ export function useAdmin() {
 }
 
 export function AdminProvider({ children }: { children: ReactNode }) {
+  const { setSessionFromServerLogin, tryLocalLogin, clearSession, session } = useRbac();
   const [adminToken, setAdminToken] = useState<string | null>(() => getStoredAdminToken());
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  const [localOnly, setLocalOnly] = useState(false);
   const [password, setPassword] = useState("");
+  const [loginEmail, setLoginEmail] = useState("");
   const [loginError, setLoginError] = useState("");
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [planPrices, setPlanPrices] = useState<PlanPrices>({});
@@ -229,8 +238,10 @@ export function AdminProvider({ children }: { children: ReactNode }) {
       try {
         const ok = await checkAuth();
         if (cancelled) return;
-        setAuthenticated(ok);
         if (ok) {
+          setAuthenticated(true);
+          setLocalOnly(false);
+          setSessionFromServerLogin(loginEmail || undefined);
           await Promise.all([
             loadUsers(),
             loadPlans(undefined, plansVer),
@@ -240,9 +251,23 @@ export function AdminProvider({ children }: { children: ReactNode }) {
             loadImageEdits(),
             loadLoginLogs(),
           ]);
+        } else if (session) {
+          // Restored local RBAC session (no server token)
+          setAuthenticated(true);
+          setLocalOnly(true);
+        } else {
+          setAuthenticated(false);
+          setLocalOnly(false);
         }
       } catch {
-        if (!cancelled) setAuthenticated(false);
+        if (!cancelled) {
+          if (session) {
+            setAuthenticated(true);
+            setLocalOnly(true);
+          } else {
+            setAuthenticated(false);
+          }
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -250,11 +275,26 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bootstrap once on mount
   }, [checkAuth, loadUsers, loadPlans, loadStats, loadSubscribers, loadTeams, loadImageEdits, loadLoginLogs]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError("");
+    const email = loginEmail.trim();
+
+    // 1) Local administrator (email + password) when email is provided
+    if (email) {
+      const local = await tryLocalLogin(email, password);
+      if (local.ok) {
+        setLocalOnly(true);
+        setAuthenticated(true);
+        setPassword("");
+        return;
+      }
+      // Fall through to server login (Super Admin may use email + master password)
+    }
+
     try {
       const r = await fetch(getApiBase() + "/api/admin/login", {
         method: "POST",
@@ -264,7 +304,14 @@ export function AdminProvider({ children }: { children: ReactNode }) {
       });
       const data = await r.json().catch(() => ({}));
       if (data.error) {
-        setLoginError(data.error);
+        appendAudit({
+          admin: email || "unknown",
+          action: "Failed login",
+          target: "server",
+          status: "warning",
+          meta: String(data.error),
+        });
+        setLoginError(email ? "Invalid email or password" : data.error);
         return;
       }
       const token =
@@ -277,7 +324,9 @@ export function AdminProvider({ children }: { children: ReactNode }) {
         }
         setAdminToken(token);
       }
+      setLocalOnly(false);
       setAuthenticated(true);
+      setSessionFromServerLogin(email || undefined);
       await Promise.all([
         loadUsers(token || undefined),
         loadPlans(token || undefined),
@@ -287,23 +336,27 @@ export function AdminProvider({ children }: { children: ReactNode }) {
         loadImageEdits(token || undefined),
         loadLoginLogs(token || undefined),
       ]);
+      setPassword("");
     } catch {
+      appendAudit({ admin: email || "unknown", action: "Failed login", target: "server", status: "warning" });
       setLoginError("Bağlantı hatası");
     }
   };
 
   const handleLogout = async () => {
     try {
-      await adminFetch("/admin/logout", { method: "POST" });
+      if (!localOnly) await adminFetch("/admin/logout", { method: "POST" });
     } catch {
       /* ignore */
     }
+    clearSession();
     try {
       sessionStorage.removeItem(ADMIN_TOKEN_KEY);
     } catch {
       /* ignore */
     }
     setAdminToken(null);
+    setLocalOnly(false);
     setAuthenticated(false);
   };
 
@@ -444,9 +497,12 @@ export function AdminProvider({ children }: { children: ReactNode }) {
 
   const value: AdminContextValue = {
     authenticated,
+    localOnly,
     loading,
     password,
     setPassword,
+    loginEmail,
+    setLoginEmail,
     loginError,
     handleLogin,
     handleLogout,

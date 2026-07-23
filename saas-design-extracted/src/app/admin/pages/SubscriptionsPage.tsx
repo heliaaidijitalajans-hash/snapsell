@@ -59,7 +59,7 @@ export function AdminSubscriptionsPage() {
   if (section === "payments") {
     return (
       <div>
-        <PageHeader title="Payments" subtitle="Estimated recurring revenue from active plans." />
+        <PageHeader title="Revenue" subtitle="Estimated recurring revenue from active plans." />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <StatCard label="Monthly revenue (est.)" value={`$${monthlyRevenue}`} icon={DollarSign} />
           <StatCard label="Annual revenue (est.)" value={`$${annualRevenue}`} icon={CreditCard} delay={0.05} />
@@ -69,6 +69,45 @@ export function AdminSubscriptionsPage() {
           <p className="text-sm text-white/50">
             Payment processing runs via Lemon Squeezy. Amounts shown are estimates from assigned plan prices × active subscribers.
           </p>
+        </GlassCard>
+      </div>
+    );
+  }
+
+  if (section === "credits") {
+    return (
+      <div>
+        <PageHeader title="Credits" subtitle="Plan credit allocations from site plans (editable under Plans)." />
+        <GlassCard className="overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-white/40 border-b border-white/[0.06]">
+                <th className="px-4 py-3">Plan</th>
+                <th className="px-4 py-3">Credits</th>
+                <th className="px-4 py-3">Price</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sitePlansEdit.map((p) => (
+                <tr key={p.id} className="border-b border-white/[0.04]">
+                  <td className="px-4 py-3 text-white">{p.name}</td>
+                  <td className="px-4 py-3 text-white/70 tabular-nums">{p.credits ?? "—"}</td>
+                  <td className="px-4 py-3 text-white/70">${p.price}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </GlassCard>
+      </div>
+    );
+  }
+
+  if (section === "coupons") {
+    return (
+      <div>
+        <PageHeader title="Coupons" subtitle="Coupon engine requires a dedicated API — UI ready for future wiring." />
+        <GlassCard className="p-8 text-center">
+          <p className="text-white/50 text-sm">No coupon API exists yet. Backend was intentionally left unchanged.</p>
         </GlassCard>
       </div>
     );

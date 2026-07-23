@@ -125,7 +125,7 @@ export function AdminAnalyticsPage() {
       )}
 
       {days.length > 0 && (
-        <GlassCard className="overflow-hidden">
+        <GlassCard className="overflow-hidden mb-4">
           <div className="px-4 py-3 border-b border-white/[0.06]">
             <h3 className="text-sm font-semibold text-white">Last 7 days detail</h3>
           </div>
@@ -153,6 +153,27 @@ export function AdminAnalyticsPage() {
           </div>
         </GlassCard>
       )}
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {[
+          { title: "Top Countries", rows: [["—", "Geo data requires analytics API"]] },
+          { title: "Top Devices", rows: [["Desktop", "—"], ["Mobile", "—"], ["Tablet", "—"]] },
+          { title: "Top Browsers", rows: [["Chrome", "—"], ["Safari", "—"], ["Firefox", "—"]] },
+        ].map((card) => (
+          <GlassCard key={card.title} className="p-5">
+            <h3 className="text-sm font-semibold text-white mb-3">{card.title}</h3>
+            <ul className="space-y-2 text-sm text-white/50">
+              {card.rows.map(([a, b]) => (
+                <li key={a} className="flex justify-between gap-2">
+                  <span>{a}</span>
+                  <span className="text-white/30">{b}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-[11px] text-white/25">Device/geo breakdown needs a future telemetry endpoint.</p>
+          </GlassCard>
+        ))}
+      </div>
     </div>
   );
 }

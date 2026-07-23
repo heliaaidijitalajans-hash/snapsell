@@ -2,9 +2,10 @@ import { Loader2, Shield } from "lucide-react";
 import { Outlet } from "react-router";
 import { AdminProvider, useAdmin } from "./AdminContext";
 import { AdminShell } from "./AdminShell";
+import { RbacProvider } from "./rbac/RbacContext";
 
 function AdminLogin() {
-  const { password, setPassword, loginError, handleLogin } = useAdmin();
+  const { password, setPassword, loginEmail, setLoginEmail, loginError, handleLogin } = useAdmin();
   return (
     <div className="min-h-screen bg-[#0B0B0B] flex items-center justify-center p-4">
       <div className="w-full max-w-sm rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-xl p-8 shadow-[0_8px_40px_rgba(0,0,0,0.5)]">
@@ -12,22 +13,34 @@ function AdminLogin() {
           <Shield className="w-8 h-8 text-[#FF5A5F]" />
           <h2 className="text-xl font-bold text-white">Admin Login</h2>
         </div>
-        <form onSubmit={(e) => void handleLogin(e)}>
+        <form onSubmit={(e) => void handleLogin(e)} className="space-y-3">
+          <input
+            type="email"
+            value={loginEmail}
+            onChange={(e) => setLoginEmail(e.target.value)}
+            placeholder="Email (optional for Super Admin)"
+            className="w-full px-4 py-2.5 rounded-xl border border-white/[0.1] bg-[#121212] text-white placeholder:text-white/30 focus:ring-2 focus:ring-[#FF5A5F]/50 outline-none"
+            autoComplete="username"
+          />
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
-            className="w-full px-4 py-2.5 rounded-xl border border-white/[0.1] bg-[#121212] text-white placeholder:text-white/30 focus:ring-2 focus:ring-[#FF5A5F]/50 outline-none mb-2"
+            className="w-full px-4 py-2.5 rounded-xl border border-white/[0.1] bg-[#121212] text-white placeholder:text-white/30 focus:ring-2 focus:ring-[#FF5A5F]/50 outline-none"
             required
+            autoComplete="current-password"
           />
-          {loginError && <p className="text-sm text-red-400 mb-2">{loginError}</p>}
+          {loginError && <p className="text-sm text-red-400">{loginError}</p>}
           <button
             type="submit"
             className="w-full py-3 rounded-xl font-semibold text-white bg-[#FF5A5F] hover:bg-[#FF5A5F]/90 transition"
           >
             Sign in
           </button>
+          <p className="text-[11px] text-white/35 leading-relaxed text-center">
+            Super Admin: master password only. Other roles: email + assigned password from Administrators.
+          </p>
         </form>
       </div>
     </div>
@@ -53,9 +66,11 @@ function AdminGate() {
 /** Root layout for /admin — auth gate + shell. Child routes render via Outlet. */
 export function AdminApp() {
   return (
-    <AdminProvider>
-      <AdminGate />
-    </AdminProvider>
+    <RbacProvider>
+      <AdminProvider>
+        <AdminGate />
+      </AdminProvider>
+    </RbacProvider>
   );
 }
 

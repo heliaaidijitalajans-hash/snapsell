@@ -46,6 +46,24 @@ const AdminAnalyticsPage = lazy(() =>
 const AdminSettingsPage = lazy(() =>
   import("./admin/pages/SettingsPage").then((m) => ({ default: m.AdminSettingsPage }))
 );
+const AdminContentPage = lazy(() =>
+  import("./admin/pages/ContentPage").then((m) => ({ default: m.AdminContentPage }))
+);
+const AdminLegalPage = lazy(() =>
+  import("./admin/pages/LegalPage").then((m) => ({ default: m.AdminLegalPage }))
+);
+const AdminSupportPage = lazy(() =>
+  import("./admin/pages/SupportPage").then((m) => ({ default: m.AdminSupportPage }))
+);
+const AdminAnnouncementsPage = lazy(() =>
+  import("./admin/pages/AnnouncementsPage").then((m) => ({ default: m.AdminAnnouncementsPage }))
+);
+const AdminAuditPage = lazy(() =>
+  import("./admin/pages/AuditPage").then((m) => ({ default: m.AdminAuditPage }))
+);
+const AdminAdministratorsPage = lazy(() =>
+  import("./admin/pages/AdministratorsPage").then((m) => ({ default: m.AdministratorsPage }))
+);
 
 function PageFallback() {
   return (
@@ -82,6 +100,15 @@ export const router = createBrowserRouter(
         { path: "subscriptions/:section", element: <AdminSuspense><AdminSubscriptionsPage /></AdminSuspense> },
         { path: "analytics", element: <AdminSuspense><AdminAnalyticsPage /></AdminSuspense> },
         { path: "analytics/:section", element: <AdminSuspense><AdminAnalyticsPage /></AdminSuspense> },
+        { path: "content", element: <AdminSuspense><AdminContentPage /></AdminSuspense> },
+        { path: "content/:section", element: <AdminSuspense><AdminContentPage /></AdminSuspense> },
+        { path: "legal", element: <AdminSuspense><AdminLegalPage /></AdminSuspense> },
+        { path: "legal/:section", element: <AdminSuspense><AdminLegalPage /></AdminSuspense> },
+        { path: "support", element: <AdminSuspense><AdminSupportPage /></AdminSuspense> },
+        { path: "support/:section", element: <AdminSuspense><AdminSupportPage /></AdminSuspense> },
+        { path: "announcements", element: <AdminSuspense><AdminAnnouncementsPage /></AdminSuspense> },
+        { path: "audit", element: <AdminSuspense><AdminAuditPage /></AdminSuspense> },
+        { path: "administrators", element: <AdminSuspense><AdminAdministratorsPage /></AdminSuspense> },
         { path: "settings", element: <AdminSuspense><AdminSettingsPage /></AdminSuspense> },
         { path: "settings/:section", element: <AdminSuspense><AdminSettingsPage /></AdminSuspense> },
         { path: "*", element: <Navigate to="/admin" replace /> },
