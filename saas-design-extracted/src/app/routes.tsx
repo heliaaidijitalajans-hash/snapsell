@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { createBrowserRouter, Navigate, useLocation } from "react-router";
 import { Layout } from "./components/Layout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+
 function RedirectDashboardToRoot() {
   const loc = useLocation();
   const to = loc.pathname.replace(/^\/dashboard\/?/, "") || "/";
@@ -24,15 +25,38 @@ const KvkkPage = lazy(() => import("./pages/KvkkPage").then((m) => ({ default: m
 const EditorReplicatePage = lazy(() => import("./pages/EditorReplicatePage").then((m) => ({ default: m.EditorReplicatePage })));
 const LibraryPage = lazy(() => import("./pages/LibraryPage").then((m) => ({ default: m.LibraryPage })));
 const AccountPage = lazy(() => import("./pages/AccountPage").then((m) => ({ default: m.AccountPage })));
-const AdminPage = lazy(() => import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })));
 const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
+
+const AdminApp = lazy(() => import("./admin/AdminApp").then((m) => ({ default: m.AdminApp })));
+const AdminDashboardPage = lazy(() =>
+  import("./admin/pages/DashboardPage").then((m) => ({ default: m.AdminDashboardPage }))
+);
+const AdminUsersPage = lazy(() =>
+  import("./admin/pages/UsersPage").then((m) => ({ default: m.AdminUsersPage }))
+);
+const AdminImagesPage = lazy(() =>
+  import("./admin/pages/ImagesPage").then((m) => ({ default: m.AdminImagesPage }))
+);
+const AdminSubscriptionsPage = lazy(() =>
+  import("./admin/pages/SubscriptionsPage").then((m) => ({ default: m.AdminSubscriptionsPage }))
+);
+const AdminAnalyticsPage = lazy(() =>
+  import("./admin/pages/AnalyticsPage").then((m) => ({ default: m.AdminAnalyticsPage }))
+);
+const AdminSettingsPage = lazy(() =>
+  import("./admin/pages/SettingsPage").then((m) => ({ default: m.AdminSettingsPage }))
+);
 
 function PageFallback() {
   return (
-    <div className="flex items-center justify-center min-h-[50vh]">
-      <div className="animate-pulse text-gray-500">Yükleniyor…</div>
+    <div className="flex items-center justify-center min-h-[50vh] bg-[#0B0B0B]">
+      <div className="animate-pulse text-white/40">Yükleniyor…</div>
     </div>
   );
+}
+
+function AdminSuspense({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<PageFallback />}>{children}</Suspense>;
 }
 
 export const router = createBrowserRouter(
@@ -41,13 +65,35 @@ export const router = createBrowserRouter(
     { path: "/dashboard/*", element: <RedirectDashboardToRoot /> },
     { path: "/register", element: <Navigate to="/login" replace /> },
     {
+      path: "/admin",
+      element: (
+        <AdminSuspense>
+          <AdminApp />
+        </AdminSuspense>
+      ),
+      errorElement: <ErrorBoundary />,
+      children: [
+        { index: true, element: <AdminSuspense><AdminDashboardPage /></AdminSuspense> },
+        { path: "users", element: <AdminSuspense><AdminUsersPage /></AdminSuspense> },
+        { path: "users/:filter", element: <AdminSuspense><AdminUsersPage /></AdminSuspense> },
+        { path: "images", element: <AdminSuspense><AdminImagesPage /></AdminSuspense> },
+        { path: "images/:filter", element: <AdminSuspense><AdminImagesPage /></AdminSuspense> },
+        { path: "subscriptions", element: <AdminSuspense><AdminSubscriptionsPage /></AdminSuspense> },
+        { path: "subscriptions/:section", element: <AdminSuspense><AdminSubscriptionsPage /></AdminSuspense> },
+        { path: "analytics", element: <AdminSuspense><AdminAnalyticsPage /></AdminSuspense> },
+        { path: "analytics/:section", element: <AdminSuspense><AdminAnalyticsPage /></AdminSuspense> },
+        { path: "settings", element: <AdminSuspense><AdminSettingsPage /></AdminSuspense> },
+        { path: "settings/:section", element: <AdminSuspense><AdminSettingsPage /></AdminSuspense> },
+        { path: "*", element: <Navigate to="/admin" replace /> },
+      ],
+    },
+    {
       path: "/",
       Component: Layout,
       errorElement: <ErrorBoundary />,
       children: [
         { index: true, element: <Suspense fallback={<PageFallback />}><HomePage /></Suspense> },
         { path: "login", element: <Suspense fallback={<PageFallback />}><LoginPage /></Suspense> },
-        { path: "admin", element: <Suspense fallback={<PageFallback />}><AdminPage /></Suspense> },
         { path: "ornekler", element: <Suspense fallback={<PageFallback />}><ExamplesPage /></Suspense> },
         { path: "fiyatlandirma", element: <Suspense fallback={<PageFallback />}><PricingPage /></Suspense> },
         { path: "odeme", element: <Navigate to="/fiyatlandirma" replace /> },
