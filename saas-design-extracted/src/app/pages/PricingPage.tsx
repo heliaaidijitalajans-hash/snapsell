@@ -19,11 +19,6 @@ type PlanItem = {
   currency?: string;
 };
 
-const YEARLY_STRIKE_PRICE = 440;
-const YEARLY_PROMO_PRICE = 396;
-const PRO_STRIKE_PRICE = 65;
-const PRO_PROMO_PRICE = 48;
-
 /** API / site-plans.json eski veride aylık=popüler kalmışsa düzelt. */
 function normalizePlanFlags(plan: PlanItem): PlanItem {
   if (plan.id === "monthly_plan") return { ...plan, highlighted: false };
@@ -85,31 +80,22 @@ function PlanCard({
   t,
   onCtaClick,
   loading,
-  displayCurrency,
-  displayPrice,
-  strikePrice,
 }: {
   plan: PlanItem;
   t: (key: string) => string;
   onCtaClick: () => void;
   loading?: boolean;
-  displayCurrency?: "USD";
-  displayPrice?: number | string;
-  /** Yıllık planda eski fiyat (üstü çizili) */
-  strikePrice?: number;
 }) {
   const currency = "$";
   const isAnnual = plan.id === "yearly_plan";
   const isProMonthly = plan.id === "monthly_plan_pro";
-  const price = displayPrice !== undefined ? displayPrice : plan.price;
+  const price = plan.price;
   const priceDisplay =
     price === "—" || price === "" || (typeof price === "number" && !Number.isFinite(price))
       ? t("pricing.custom")
       : `${currency}${typeof price === "number" ? (Number.isInteger(price) ? price : price.toFixed(2)) : price}`;
   const showPeriod =
     price !== "—" && price !== "" && plan.period && t("pricing.perPeriod");
-
-  const showDiscounted = (isAnnual || isProMonthly) && strikePrice != null;
 
   return (
     <div
@@ -135,52 +121,24 @@ function PlanCard({
         </div>
       )}
       <div className={isAnnual || isProMonthly ? "mb-4" : "mb-6"}>
-        {isProMonthly && (
-          <div className="mb-4 rounded-lg bg-red-50 px-3 py-2.5 text-center border border-red-100">
-            <p className="text-xs font-semibold uppercase tracking-wide text-red-700">{t("pricing.proLaunchLabel")}</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-red-600">{t("pricing.proLaunchSlots")}</p>
-          </div>
-        )}
         <h3 className={`font-bold text-gray-900 ${isAnnual ? "text-lg" : "text-xl"}`}>
           {isAnnual ? t("pricing.annualName") : plan.name}
         </h3>
-        {isAnnual && (
-          <p className="mt-1.5 text-xs font-semibold tracking-tight text-gray-800">{t("pricing.annualLaunchDiscount")}</p>
-        )}
         {plan.description && (
           <p className={`text-gray-600 ${isAnnual ? "mt-1.5 text-xs" : "mt-1.5 text-sm"}`}>{plan.description}</p>
         )}
       </div>
-      {showDiscounted ? (
-        <div className={isAnnual ? "mb-4" : "mb-6"}>
-          <p className={`font-medium text-gray-400 line-through decoration-gray-400 ${isAnnual ? "text-lg" : "text-2xl"}`}>
-            {currency}
-            {strikePrice}
-          </p>
-          <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className={`font-extrabold tracking-tight text-gray-900 ${isAnnual ? "text-4xl" : "text-4xl"}`}>
-              {priceDisplay}
-            </span>
-            {showPeriod && (
-              <span className={`text-gray-500 ${isAnnual ? "text-base" : "text-lg"}`}>
-                {t("pricing.perPeriod")} {plan.period}
-              </span>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="mb-6 flex flex-wrap items-baseline gap-x-1">
-          <span className="text-4xl font-extrabold tracking-tight text-gray-900">
-            {priceDisplay}
+      <div className="mb-6 flex flex-wrap items-baseline gap-x-1">
+        <span className="text-4xl font-extrabold tracking-tight text-gray-900">
+          {priceDisplay}
+        </span>
+        {showPeriod && (
+          <span className="text-gray-500">
+            {" "}
+            {t("pricing.perPeriod")} {plan.period}
           </span>
-          {showPeriod && (
-            <span className="text-gray-500">
-              {" "}
-              {t("pricing.perPeriod")} {plan.period}
-            </span>
-          )}
-        </div>
-      )}
+        )}
+      </div>
       <ul className={`flex-1 ${isAnnual ? "mb-5 space-y-2" : "mb-8 space-y-3"}`}>
         {(plan.features || [])
           .filter((f) => !/fiyat analizi|price analysis/i.test(String(f)))
@@ -270,24 +228,6 @@ export default function PricingPage() {
     [navigate, user, getAuthHeaders, t]
   );
 
-  const getDisplayForPlan = useCallback((plan: PlanItem) => {
-    if (plan.id === "yearly_plan") {
-      return {
-        displayCurrency: "USD" as const,
-        displayPrice: YEARLY_PROMO_PRICE,
-        strikePrice: YEARLY_STRIKE_PRICE,
-      };
-    }
-    if (plan.id === "monthly_plan_pro") {
-      return {
-        displayCurrency: "USD" as const,
-        displayPrice: PRO_PROMO_PRICE,
-        strikePrice: PRO_STRIKE_PRICE,
-      };
-    }
-    return { displayCurrency: "USD" as const, displayPrice: plan.price };
-  }, []);
-
   useEffect(() => {
     const controller = new AbortController();
     fetch(`${getApiBase()}/api/site-plans`, { signal: controller.signal })
@@ -349,21 +289,15 @@ export default function PricingPage() {
 
       <section>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
-          {plans.map((plan) => {
-            const display = getDisplayForPlan(plan);
-            return (
-              <PlanCard
-                key={plan.id || plan.name}
-                plan={plan}
-                t={t}
-                onCtaClick={() => handleCtaClick(plan)}
-                loading={paymentLoading === (plan.id || plan.name)}
-                displayCurrency={display.displayCurrency}
-                displayPrice={display.displayPrice}
-                strikePrice={"strikePrice" in display && display.strikePrice !== undefined ? display.strikePrice : undefined}
-              />
-            );
-          })}
+          {plans.map((plan) => (
+            <PlanCard
+              key={plan.id || plan.name}
+              plan={plan}
+              t={t}
+              onCtaClick={() => handleCtaClick(plan)}
+              loading={paymentLoading === (plan.id || plan.name)}
+            />
+          ))}
         </div>
         <p className="text-center text-gray-500 mt-10 text-sm">
           {t("pricing.autoRenew")}

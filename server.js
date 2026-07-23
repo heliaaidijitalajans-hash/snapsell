@@ -119,12 +119,12 @@ function saveSitePlans(updatedPlans) {
 }
 
 /** Tek kaynak: fiyat listesi sadece burada. Dosyadan okuma yok, eski veri geri gelmez. */
-const DEFAULT_PLAN_PRICES = { free: 0, monthly_plan: 40, monthly_plan_pro: 48, yearly_plan: 396, enterprise: 0, addon: 15 };
+const DEFAULT_PLAN_PRICES = { free: 0, monthly_plan: 40, monthly_plan_pro: 65, yearly_plan: 440, enterprise: 0, addon: 15 };
 const DEFAULT_SITE_PLANS = [
   { id: "free", name: "Ücretsiz", price: "0", period: "ay", description: "3 dönüşüm, temel özellikler", features: ["3 dönüşüm", "Temel özellikler"], cta: "Ücretsiz başla", href: "/register", highlighted: false, planType: "conversion", currency: "USD", credits: 3 },
   { id: "monthly_plan", name: "Aylık plan", price: "40", period: "ay", description: "30 dönüşüm", features: ["30 dönüşüm", "Tüm özellikler", "SEO açıklama", "Fiyat analizi"], cta: "Başla", href: "/register?plan=monthly_plan", highlighted: false, planType: "conversion", currency: "USD", credits: 30 },
-  { id: "monthly_plan_pro", name: "Aylık plan Pro", price: "48", period: "ay", description: "80 dönüşüm", features: ["80 dönüşüm", "Tüm özellikler", "SEO açıklama", "Fiyat analizi"], cta: "Pro'ya geç", href: "/register?plan=monthly_plan_pro", highlighted: false, planType: "conversion", currency: "USD", credits: 80 },
-  { id: "yearly_plan", name: "Yıllık plan", price: "396", period: "yıl", description: "1200 dönüşüm, aylık 100 yüklenecek", features: ["1200 dönüşüm", "Aylık 100 dönüşüm yüklenecek", "Tüm özellikler", "SEO açıklama", "Fiyat analizi", "Yüklenecek özellik geliştirmeleri dahil"], cta: "Yıllık seç", href: "/register?plan=yearly_plan", highlighted: true, planType: "conversion", currency: "USD", credits: 1200 },
+  { id: "monthly_plan_pro", name: "Aylık plan Pro", price: "65", period: "ay", description: "80 dönüşüm", features: ["80 dönüşüm", "Tüm özellikler", "SEO açıklama", "Fiyat analizi"], cta: "Pro'ya geç", href: "/register?plan=monthly_plan_pro", highlighted: false, planType: "conversion", currency: "USD", credits: 80 },
+  { id: "yearly_plan", name: "Yıllık plan", price: "440", period: "yıl", description: "1200 dönüşüm, aylık 100 yüklenecek", features: ["1200 dönüşüm", "Aylık 100 dönüşüm yüklenecek", "Tüm özellikler", "SEO açıklama", "Fiyat analizi", "Yüklenecek özellik geliştirmeleri dahil"], cta: "Yıllık seç", href: "/register?plan=yearly_plan", highlighted: true, planType: "conversion", currency: "USD", credits: 1200 },
   { id: "enterprise", name: "Kurumsal", price: "—", period: "yıl", description: "Bize ulaşın", features: ["Ekibiniz ile takım kurma ayrıcalığı", "Tüm özellikler", "SEO açıklama", "Fiyat analizi", "Yüklenecek özellik geliştirmeleri dahil", "Yıllık faturalandırma"], cta: "Bize ulaşın", href: "/destek", highlighted: false, planType: "conversion", currency: "USD", credits: 0 },
   { id: "addon", name: "Ek paket", price: "15", period: "ay", description: "25 dönüşüm", features: ["25 dönüşüm", "Tüm özellikler dahil"], cta: "Ek paket al", href: "/register?plan=addon", highlighted: false, planType: "addon", currency: "USD", credits: 25 }
 ];
@@ -3239,13 +3239,14 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
       if (!openaiKey) console.warn("PhotoRoom pipeline: OPENAI_API_KEY tanımlı değil, SEO atlanıyor. Railway Environment Variables'a ekleyin.");
     }
 
-    // Tüm planlarda dönüşüm başına krediyi düşür (admin / özel izinli kullanıcılar hariç)
-    const email = (user.email || "").trim().toLowerCase();
-    const isUnlimitedUser = REPLICATE_ALLOWED_EMAILS.indexOf(email) >= 0 || isAdminUser(user);
+    // Always deduct 1 credit per successful conversion (ADMIN_EMAIL only is unlimited).
+    const isUnlimitedUser = isAdminUser(user);
+    let creditsAfter = user.credits ?? FREE_CREDITS;
     if (!isUnlimitedUser) {
       const credits = user.credits ?? FREE_CREDITS;
       const newCredits = Math.max(0, credits - CREDITS_PER_CONVERSION);
       const newTotal = (user.totalConversions ?? 0) + 1;
+      creditsAfter = newCredits;
       if (user._memory) {
         const u = memoryUsers.get(user.id);
         if (u) {
@@ -3262,12 +3263,13 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
       console.warn("PhotoRoom pipeline: kütüphaneye kayıt başarısız:", libResult.error);
     }
 
-    console.log("PhotoRoom pipeline: res.json gönderiliyor (seo uzunluk:", (seoText || "").length, ")");
+    console.log("PhotoRoom pipeline: res.json gönderiliyor (seo uzunluk:", (seoText || "").length, ", credits:", creditsAfter, ")");
     return res.json({
       ok: true,
       outputUrl,
       output: [outputUrl],
       seo: seoText || "",
+      credits: creditsAfter,
       librarySaved: libResult.ok,
       libraryError: libResult.ok ? null : libResult.error
     });
