@@ -939,6 +939,15 @@ app.get("/admin/ping", function (req, res) {
   res.json({ ok: true, msg: "admin routes loaded", hasPlans: true, hasImageEdits: true });
 });
 
+/** Classic admin.html + browser Helia client (no secrets in these files). */
+app.get("/admin.html", function (req, res) {
+  res.sendFile(path.join(__dirname, "admin.html"));
+});
+app.get("/services/helia.js", function (req, res) {
+  res.type("application/javascript; charset=utf-8");
+  res.sendFile(path.join(__dirname, "services", "helia.js"));
+});
+
 app.post("/admin/login", function (req, res) {
   const password = (req.body && req.body.password) || "";
   if (!ADMIN_PASSWORD) {
@@ -1507,6 +1516,55 @@ app.delete("/api/admin/teams/:id", requireAdmin, function (req, res) {
   saveTeams(teams);
   res.json({ ok: true });
 });
+
+// --- Helia AI (server-side only; HELIA_API_KEY never leaves Railway) ---
+const heliaServer = require("./services/helia-server");
+
+function sendHeliaChat(req, res) {
+  const message = req.body && req.body.message != null ? String(req.body.message) : "";
+  const senderId = req.body && req.body.senderId != null ? String(req.body.senderId) : "snapsell-admin";
+  const language = req.body && req.body.language != null ? String(req.body.language) : undefined;
+
+  heliaServer
+    .callHeliaChat({ message: message, senderId: senderId, language: language }, { timeoutMs: 45000 })
+    .then(function (result) {
+      // Safe payload only — never echo secrets or raw upstream bodies.
+      res.json({ ok: true, reply: result.reply });
+    })
+    .catch(function (err) {
+      const status = err && err.status ? err.status : 500;
+      const code = err && err.code ? err.code : "HELIA_ERROR";
+      const friendly =
+        (err && err.message) ||
+        (status === 503
+          ? "Helia sunucuda yapılandırılmamış."
+          : "Helia isteği başarısız oldu.");
+      console.warn("helia/chat:", code, status, friendly);
+      res.status(status >= 400 && status < 600 ? status : 500).json({
+        ok: false,
+        error: friendly,
+        code: code,
+      });
+    });
+}
+
+function sendHeliaStatus(req, res) {
+  const configured = heliaServer.isHeliaConfigured();
+  const env = heliaServer.getHeliaEnv();
+  res.json({
+    ok: true,
+    configured: configured && Boolean(env.handle),
+    // Boolean flags only — never return apiKey / baseUrl / handle values.
+    hasApiKey: Boolean(env.apiKey),
+    hasBaseUrl: Boolean(env.baseUrl),
+    hasHandle: Boolean(env.handle),
+  });
+}
+
+app.get("/api/admin/helia/status", requireAdmin, sendHeliaStatus);
+app.post("/api/admin/helia/chat", requireAdmin, sendHeliaChat);
+app.get("/admin/helia/status", requireAdmin, sendHeliaStatus);
+app.post("/admin/helia/chat", requireAdmin, sendHeliaChat);
 
 let _openai;
 function getOpenAI() {

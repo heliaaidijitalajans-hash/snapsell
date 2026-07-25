@@ -32,6 +32,8 @@ export default async function handler(
   if (auth && typeof auth === "string") headers["Authorization"] = auth;
   const sid = req.headers?.["x-session-id"];
   if (sid && typeof sid === "string") headers["X-Session-Id"] = sid;
+  const cookie = req.headers?.cookie;
+  if (cookie && typeof cookie === "string") headers["Cookie"] = cookie;
 
   const response = await fetch(url, {
     method: req.method || "GET",
