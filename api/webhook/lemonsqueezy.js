@@ -122,6 +122,9 @@ module.exports = async function lemonWebhookHandler(req, res) {
     const id = String(userId).trim();
     const { data: row, error } = await supabase.from("users").select("*").eq("id", id).maybeSingle();
     if (error || !row) return null;
+    if (row.identity_status === "merged" && row.merged_into) {
+      return getUserById(String(row.merged_into));
+    }
     return {
       id: row.id,
       credits: row.credits ?? FREE_CREDITS,
@@ -134,16 +137,39 @@ module.exports = async function lemonWebhookHandler(req, res) {
   async function getUserByEmail(email) {
     if (!email || String(email).trim() === "") return null;
     const emailNorm = String(email).trim().toLowerCase();
-    const { data: rows, error } = await supabase.from("users").select("*").ilike("email", emailNorm).limit(1);
-    if (error || !rows || !rows.length) return null;
-    const row = rows[0];
-    return {
-      id: row.id,
-      credits: row.credits ?? FREE_CREDITS,
-      plan: row.plan || "free",
-      email: row.email,
-      displayName: row.display_name
-    };
+    const { data: activeRows, error } = await supabase
+      .from("users")
+      .select("*")
+      .ilike("email", emailNorm)
+      .eq("identity_status", "active")
+      .limit(2);
+    if (!error && activeRows && activeRows.length === 1) {
+      const row = activeRows[0];
+      return {
+        id: row.id,
+        credits: row.credits ?? FREE_CREDITS,
+        plan: row.plan || "free",
+        email: row.email,
+        displayName: row.display_name
+      };
+    }
+    if (!error && activeRows && activeRows.length > 1) {
+      console.warn("[Lemon Vercel] multiple active users for email:", emailNorm);
+      const row = activeRows[0];
+      return {
+        id: row.id,
+        credits: row.credits ?? FREE_CREDITS,
+        plan: row.plan || "free",
+        email: row.email,
+        displayName: row.display_name
+      };
+    }
+    const { data: anyRows } = await supabase.from("users").select("*").ilike("email", emailNorm).limit(5);
+    if (anyRows && anyRows.length) {
+      const merged = anyRows.find((r) => r.identity_status === "merged" && r.merged_into);
+      if (merged) return getUserById(String(merged.merged_into));
+    }
+    return null;
   }
 
   async function updateUserInDb(userId, data) {

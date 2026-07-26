@@ -289,15 +289,46 @@ function cleanupProcessedImages() {
   }
 }
 
-/** E-posta ile kullanıcı bul (Supabase veya bellek). Webhook için. */
+/** E-posta ile kullanıcı bul (Supabase veya bellek). Webhook için — yalnızca active; merged ise canonical. */
 async function getUserByEmail(email) {
   if (!email || String(email).trim() === "") return null;
   const emailNorm = String(email).trim().toLowerCase();
   if (supabase) {
-    const { data: rows, error } = await supabase.from("users").select("*").ilike("email", emailNorm).limit(1);
-    if (error || !rows || !rows.length) return null;
-    const row = rows[0];
-    return { id: row.id, credits: row.credits ?? FREE_CREDITS, plan: row.plan || "free", email: row.email, displayName: row.display_name };
+    const { data: activeRows, error } = await supabase
+      .from("users")
+      .select("*")
+      .ilike("email", emailNorm)
+      .eq("identity_status", "active")
+      .limit(2);
+    if (!error && activeRows && activeRows.length === 1) {
+      const row = activeRows[0];
+      return {
+        id: row.id,
+        credits: row.credits ?? FREE_CREDITS,
+        plan: row.plan || "free",
+        email: row.email,
+        displayName: row.display_name,
+        identity_status: row.identity_status,
+        merged_into: row.merged_into || null,
+      };
+    }
+    if (!error && activeRows && activeRows.length > 1) {
+      console.warn("[users] multiple active rows for email (manual review):", emailNorm);
+      const row = activeRows[0];
+      return {
+        id: row.id,
+        credits: row.credits ?? FREE_CREDITS,
+        plan: row.plan || "free",
+        email: row.email,
+        displayName: row.display_name,
+      };
+    }
+    const { data: anyRows } = await supabase.from("users").select("*").ilike("email", emailNorm).limit(5);
+    if (anyRows && anyRows.length) {
+      const merged = anyRows.find((r) => r.identity_status === "merged" && r.merged_into);
+      if (merged) return getUserById(merged.merged_into);
+    }
+    return null;
   }
   for (const [id, u] of memoryUsers.entries()) {
     if (u.email && String(u.email).trim().toLowerCase() === emailNorm) {
@@ -307,14 +338,25 @@ async function getUserByEmail(email) {
   return null;
 }
 
-/** ID ile kullanıcı (Lemon webhook ek paket / kredi). */
+/** ID ile kullanıcı (Lemon webhook ek paket / kredi). merged → canonical. */
 async function getUserById(userId) {
   if (!userId || String(userId).trim() === "") return null;
   const id = String(userId).trim();
   if (supabase) {
     const { data: row, error } = await supabase.from("users").select("*").eq("id", id).maybeSingle();
     if (error || !row) return null;
-    return { id: row.id, credits: row.credits ?? FREE_CREDITS, plan: row.plan || "free", email: row.email, displayName: row.display_name };
+    if (row.identity_status === "merged" && row.merged_into) {
+      return getUserById(String(row.merged_into));
+    }
+    return {
+      id: row.id,
+      credits: row.credits ?? FREE_CREDITS,
+      plan: row.plan || "free",
+      email: row.email,
+      displayName: row.display_name,
+      identity_status: row.identity_status,
+      merged_into: row.merged_into || null,
+    };
   }
   const u = memoryUsers.get(id);
   if (!u) return null;
@@ -471,6 +513,17 @@ async function requireProUser(req, res, next) {
 
 const { runLemonWebhook } = require("./lib/lemonWebhookProcess");
 const { ensureLemonUserRow } = require("./lib/ensureLemonUserRow");
+const { claimUserIdentity } = require("./lib/identityClaim");
+
+function invalidateUserIdentityCache(legacyUserId, authUserId) {
+  try {
+    if (legacyUserId && memoryUsers.has(legacyUserId)) memoryUsers.delete(legacyUserId);
+    if (authUserId && memoryUsers.has(authUserId)) memoryUsers.delete(authUserId);
+    saveMemoryUsers();
+  } catch (e) {
+    console.warn("[identity-claim] cache invalidate:", e && e.message);
+  }
+}
 
 async function ensureSupabaseUserRowForLemon(authUserId, email) {
   if (!supabase) return;
@@ -494,27 +547,30 @@ async function processLemonWebhookPayload(body) {
 async function getOrCreateUser(sessionIdOrUid, opts) {
   opts = opts || {};
   if (supabase) {
-    const { data: row, error: fetchErr } = await supabase.from("users").select("*").eq("id", sessionIdOrUid).maybeSingle();
+    const { data: row0, error: fetchErr } = await supabase.from("users").select("*").eq("id", sessionIdOrUid).maybeSingle();
     if (fetchErr) throw new Error(fetchErr.message);
+    let row = row0;
+    if (row && row.identity_status === "merged" && row.merged_into) {
+      const { data: canon, error: canonErr } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", row.merged_into)
+        .maybeSingle();
+      if (canonErr) throw new Error(canonErr.message);
+      if (canon) row = canon;
+    }
     if (row) {
-      return userFromSupabaseRow(row, sessionIdOrUid);
+      return userFromSupabaseRow(row, row.id);
     }
-    // Aynı e-posta ile daha önce kayıt varsa onu kullan (ücretsiz hak yenilenmesin)
-    if (opts.email != null && String(opts.email).trim() !== "") {
-      const emailNorm = String(opts.email).trim().toLowerCase();
-      const { data: existingByEmail, error: emailErr } = await supabase.from("users").select("*").ilike("email", emailNorm).maybeSingle();
-      if (!emailErr && existingByEmail) {
-        return userFromSupabaseRow(existingByEmail, existingByEmail.id);
-      }
-    }
-    // Session (X-Session-Id) ile gelip kullanıcı yoksa yeni oluşturma; ücretsiz 3 hak sadece POST /api/register ile verilsin
+    // Hot path: do NOT attach to another public.users row by email (identity claim is one-time via RPC).
     if (opts.email == null && opts.displayName == null) return null;
     const plan = resolvePlan("free");
     const insertRow = {
       id: sessionIdOrUid,
       plan: "free",
       credits: FREE_CREDITS,
-      total_conversions: 0
+      total_conversions: 0,
+      identity_status: "active",
     };
     if (opts.email != null) insertRow.email = String(opts.email).trim().toLowerCase();
     if (opts.displayName != null) insertRow.display_name = String(opts.displayName);
@@ -525,16 +581,16 @@ async function getOrCreateUser(sessionIdOrUid, opts) {
         const { data: again, error: fetchAgain } = await supabase.from("users").select("*").eq("id", sessionIdOrUid).maybeSingle();
         if (!fetchAgain && again) {
           console.log("✅ User created");
-          return userFromSupabaseRow(again, sessionIdOrUid);
+          return userFromSupabaseRow(again, again.id);
         }
-        if (opts.email) {
-          const emailNorm = String(opts.email).trim().toLowerCase();
-          const { data: byEmail, error: emailFetchErr } = await supabase.from("users").select("*").eq("email", emailNorm).maybeSingle();
-          if (!emailFetchErr && byEmail) {
-            console.log("✅ User created");
-            return userFromSupabaseRow(byEmail, byEmail.id);
-          }
-        }
+        console.warn(
+          "[identity] public.users insert conflict for id=",
+          sessionIdOrUid,
+          "email=",
+          opts.email,
+          "— run claim or resolve user_identity_conflicts"
+        );
+        return null;
       }
       throw new Error(insertErr.message);
     }
@@ -2323,7 +2379,8 @@ app.post("/api/register", async (req, res) => {
         id: sessionId,
         credits: FREE_CREDITS,
         plan: "free",
-        total_conversions: 0
+        total_conversions: 0,
+        identity_status: "anonymous",
       });
       if (error) throw new Error(error.message);
     } else {
@@ -2351,7 +2408,22 @@ async function syncSupabaseUserHandler(req, res) {
     const uid = sbUser.id;
     const email = sbUser.email || null;
     const displayName = (sbUser.user_metadata && (sbUser.user_metadata.full_name || sbUser.user_metadata.name)) || sbUser.email || null;
+
+    if (supabase && email) {
+      await claimUserIdentity(supabase, uid, email, {
+        mergeReason: "email_claim_v1",
+        onInvalidate: invalidateUserIdentityCache,
+      });
+    }
+
     const user = await getOrCreateUser(uid, { email, displayName });
+    if (!user) {
+      return res.status(409).json({
+        error: "Customer identity conflict",
+        code: "identity_conflict",
+        message: "Multiple customer rows for this email require manual review (user_identity_conflicts).",
+      });
+    }
     try {
       await recordLogin(uid, email, displayName);
     } catch (_) {}
@@ -2360,7 +2432,7 @@ async function syncSupabaseUserHandler(req, res) {
     const isAdmin = email && email.toLowerCase() === ADMIN_EMAIL;
     return res.json({
       ok: true,
-      user: { uid, email, displayName: displayName || email || "Kullanici" },
+      user: { uid: user.id, email, displayName: displayName || email || "Kullanici" },
       credits,
       plan,
       conversions: Math.floor(credits / CREDITS_PER_CONVERSION),
@@ -2433,6 +2505,12 @@ app.post("/api/auth/mobile-register", async (req, res) => {
       try {
         const displayName =
           (email && email.split("@")[0]) || "Kullanici";
+        if (supabase && email) {
+          await claimUserIdentity(supabase, uid, email, {
+            mergeReason: "email_claim_v1_mobile_register",
+            onInvalidate: invalidateUserIdentityCache,
+          });
+        }
         await getOrCreateUser(uid, { email, displayName });
       } catch (e) {
         console.warn("mobile-register profile:", e.message || e);
