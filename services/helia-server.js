@@ -220,6 +220,17 @@ async function callHeliaChat(input, opts) {
   if (input.senderId && body.sender) body.sender.id = String(input.senderId).slice(0, 128);
 
   const timeoutMs = (opts && opts.timeoutMs) || 45000;
+  const authPrefix = String(env.apiKey || "").slice(0, 15);
+  console.log(
+    "HELIA_BASE_URL=" +
+      env.baseUrl +
+      "\nHELIA_CHAT_PATH=" +
+      env.chatPath +
+      "\nAuthorization=Bearer " +
+      authPrefix +
+      "...\nURL=" +
+      url
+  );
   let res;
   try {
     res = await fetch(url, {
