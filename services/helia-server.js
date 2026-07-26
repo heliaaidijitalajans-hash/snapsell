@@ -278,21 +278,32 @@ async function callHeliaChat(input, opts) {
         : data && typeof data.error === "string"
           ? data.error
           : null;
-    const err = new Error(
-      res.status === 401 || res.status === 403
-        ? "Helia authentication failed. Check HELIA_API_KEY."
-        : res.status === 404
-          ? "Helia chat endpoint not found. Check HELIA_BASE_URL / HELIA_CHAT_PATH."
-          : upstreamMsg && res.status < 500
-            ? upstreamMsg
-            : res.status >= 500
-              ? "Helia is temporarily unavailable. Please try again."
-              : "Helia rejected the request."
-    );
-    err.code = "HELIA_UPSTREAM";
-    err.status = res.status === 401 || res.status === 403 ? 502 : res.status === 404 ? 502 : 502;
+    const upstreamCode =
+      data && data.error && typeof data.error === "object" && typeof data.error.code === "string"
+        ? data.error.code
+        : null;
+
+    let friendly;
+    if (res.status === 401 || res.status === 403 || upstreamCode === "UNAUTHORIZED") {
+      friendly =
+        upstreamMsg && /session|log in|login/i.test(upstreamMsg)
+          ? "Helia API key rejected for this endpoint (session/login required). Use a project API key that Helia Suite documents for Brain, or ask Helia for the external chat path."
+          : "Helia authentication failed. Check HELIA_API_KEY on Railway.";
+    } else if (res.status === 404) {
+      friendly = "Helia chat endpoint not found. Check HELIA_BASE_URL / HELIA_CHAT_PATH.";
+    } else if (upstreamMsg && res.status < 500) {
+      friendly = upstreamMsg;
+    } else if (res.status >= 500) {
+      friendly = "Helia is temporarily unavailable. Please try again.";
+    } else {
+      friendly = "Helia rejected the request.";
+    }
+
+    const err = new Error(friendly);
+    err.code = upstreamCode === "UNAUTHORIZED" ? "HELIA_UNAUTHORIZED" : "HELIA_UPSTREAM";
+    err.status = 502;
     err.upstreamStatus = res.status;
-    console.warn("helia upstream", res.status, url.replace(/\/\/[^/]+/, "//***"));
+    console.warn("helia upstream", res.status, upstreamCode || "", url.replace(/\/\/[^/@]+@?/, "//"));
     throw err;
   }
 

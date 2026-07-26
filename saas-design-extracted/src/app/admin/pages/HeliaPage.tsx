@@ -123,7 +123,8 @@ export function AdminHeliaPage() {
       setStatus((s) => (s ? { ...s, configured: true } : { configured: true, hasApiKey: true, hasBaseUrl: true }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Bir hata oluştu. Lütfen tekrar deneyin.";
-      setMessages((prev) => [...prev, { role: "error", text: msg }]);
+      const code = e && typeof e === "object" && "code" in e ? String((e as { code?: string }).code || "") : "";
+      setMessages((prev) => [...prev, { role: "error", text: code ? `${msg} (${code})` : msg }]);
       appendAudit({ action: "Helia chat failed", target: "helia", status: "warning", meta: msg });
     } finally {
       setBusy(false);
