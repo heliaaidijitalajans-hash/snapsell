@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useProcessing } from "../../hooks/useProcessing";
 import {
@@ -37,12 +38,26 @@ export function ProcessingView({
   onCancel,
 }: ProcessingViewProps) {
   const { t } = useLanguage();
+  const loadingSectionRef = useRef<HTMLDivElement>(null);
   const { snapshot, canCancel, cancel } = useProcessing({
     runJob,
     onComplete,
     onError,
     onCancel,
   });
+
+  // Scroll as soon as the loading UI is mounted (generation start), not when it finishes.
+  useEffect(() => {
+    const el = loadingSectionRef.current;
+    if (!el) return;
+    const frame = requestAnimationFrame(() => {
+      el.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   const stepLabel = (id: (typeof PROCESSING_PIPELINE)[number]["id"]) =>
     t(`processing.steps.${id}`);
@@ -56,7 +71,10 @@ export function ProcessingView({
       );
 
   return (
-    <div className="max-w-xl mx-auto flex flex-col items-center gap-6 py-6">
+    <div
+      ref={loadingSectionRef}
+      className="max-w-xl mx-auto flex flex-col items-center gap-6 py-6 scroll-mt-24"
+    >
       <style>{`@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
       <div className="self-stretch flex justify-start min-h-[36px]">
         {canCancel ? (
