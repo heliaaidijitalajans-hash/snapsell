@@ -3,7 +3,7 @@
  * Secrets stay in process.env — never returned to clients.
  *
  * Required: HELIA_API_KEY, HELIA_BASE_URL
- * Optional: HELIA_CHAT_PATH (default for heliasuit.com: /api/brain/ask)
+ * Optional: HELIA_CHAT_PATH (joined with HELIA_BASE_URL; else /api/events)
  * Optional: HELIA_MODEL (OpenAI-compatible providers only)
  * Optional: HELIA_HANDLE (legacy Helvia Events API only)
  */
@@ -48,8 +48,8 @@ function resolveHelviaEventsUrl(baseUrl) {
 
 /**
  * Resolve the chat POST URL.
- * Helia Suite (heliasuit.com): same-origin /api/brain/ask
- * Otherwise: OpenAI-compatible /v1/chat/completions
+ * If HELIA_CHAT_PATH is set: HELIA_BASE_URL + HELIA_CHAT_PATH
+ * Else: /api/events (backward compatible)
  * @param {string} baseUrl
  * @param {{ chatPath?: string, handle?: string }} [opts]
  */
@@ -61,23 +61,10 @@ function resolveChatUrl(baseUrl, opts) {
   if (chatPath) {
     if (/^https?:\/\//i.test(chatPath)) return chatPath;
     const path = chatPath.startsWith("/") ? chatPath : "/" + chatPath;
-    return raw.replace(/\/api$/i, "") + path;
+    return raw + path;
   }
 
-  // Already a full chat/ask endpoint
-  if (/\/(brain\/ask|chat\/completions|api\/events|events)$/i.test(raw)) return raw;
-
-  if (opts && opts.handle) return resolveHelviaEventsUrl(raw);
-
-  // Helia Suite Cloud — public API lives on www.heliasuit.com (NOT api.heliasuit.com)
-  if (isHeliaSuitHost(raw)) {
-    const origin = raw.replace(/\/api$/i, "");
-    return origin + "/api/brain/ask";
-  }
-
-  if (/\/v1$/i.test(raw)) return raw + "/chat/completions";
-  if (/\/api$/i.test(raw)) return raw + "/v1/chat/completions";
-  return raw + "/v1/chat/completions";
+  return resolveHelviaEventsUrl(raw);
 }
 
 /** @deprecated */
