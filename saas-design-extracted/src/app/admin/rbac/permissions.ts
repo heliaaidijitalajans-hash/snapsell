@@ -128,6 +128,7 @@ export const ROLE_PERMISSIONS: Record<RoleId, readonly Permission[]> = {
 /** Path prefix → permission required to open the page. */
 export const ROUTE_PERMISSIONS: { match: (path: string) => boolean; permission: Permission }[] = [
   { match: (p) => p === "/admin" || p === "/admin/", permission: PERMISSIONS.VIEW_DASHBOARD },
+  { match: (p) => p.startsWith("/admin/test-donusumu"), permission: PERMISSIONS.MANAGE_IMAGES },
   { match: (p) => p.startsWith("/admin/users"), permission: PERMISSIONS.VIEW_USERS },
   { match: (p) => p.startsWith("/admin/images"), permission: PERMISSIONS.VIEW_IMAGES },
   { match: (p) => p.startsWith("/admin/subscriptions"), permission: PERMISSIONS.VIEW_SUBSCRIPTIONS },

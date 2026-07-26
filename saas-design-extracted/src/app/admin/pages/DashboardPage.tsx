@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import {
   Users,
   UserCheck,
@@ -6,6 +7,7 @@ import {
   DollarSign,
   ImageIcon,
   Activity,
+  FlaskConical,
 } from "lucide-react";
 import {
   AreaChart,
@@ -20,8 +22,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  LineChart,
-  Line,
 } from "recharts";
 import { GlassCard, StatCard, PageHeader } from "../components/ui";
 import { useAdmin } from "../AdminContext";
@@ -31,7 +31,7 @@ import { wsGet, type AuditEntry } from "../lib/workspace";
 const PIE_COLORS = ["#FF5A5F", "#FF8A8E", "#A0A0A0", "#4ADE80", "#60A5FA", "#FBBF24"];
 
 export function AdminDashboardPage() {
-  const { users, dailyStats, imageEdits, loginLogs, planPrices, subscribersMonthly, subscribersYearly } =
+  const { users, dailyStats, imageEdits, loginLogs, subscribersMonthly, subscribersYearly } =
     useAdmin();
 
   const totalConversions = users.reduce((s, u) => s + (u.totalConversions ?? 0), 0);
@@ -42,10 +42,6 @@ export function AdminDashboardPage() {
   todayStart.setHours(0, 0, 0, 0);
   const imagesToday = imageEdits.filter((e) => e.createdAt >= todayStart.getTime()).length;
 
-  const monthlyRevenue = subscribersMonthly.reduce((s, u) => s + (planPrices[u.plan] ?? 0), 0);
-  const yearlyRevenue = subscribersYearly.reduce((s, u) => s + (planPrices[u.plan] ?? 0), 0);
-  const revenueEstimate = monthlyRevenue + Math.round(yearlyRevenue / 12);
-
   const growthData = (dailyStats?.last7Days || []).map((d) => ({
     date: d.date.slice(5),
     signups: d.signups ?? 0,
@@ -55,11 +51,6 @@ export function AdminDashboardPage() {
   const generationData = (dailyStats?.last7Days || []).map((d) => ({
     date: d.date.slice(5),
     generations: d.conversions ?? 0,
-  }));
-
-  const revenueData = (dailyStats?.last7Days || []).map((d, i) => ({
-    date: d.date.slice(5),
-    revenue: Math.round(revenueEstimate * (0.7 + (i % 5) * 0.06)),
   }));
 
   const planCounts: Record<string, number> = {};
@@ -102,6 +93,13 @@ export function AdminDashboardPage() {
           Today: {dailyStats?.today?.visitors ?? 0} visitors · {dailyStats?.today?.conversions ?? 0} generations ·{" "}
           {dailyStats?.today?.signups ?? 0} signups
         </p>
+        <Link
+          to="/admin/test-donusumu"
+          className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#FF5A5F] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#FF5A5F]/90 transition"
+        >
+          <FlaskConical className="w-4 h-4" />
+          Test Dönüşümü
+        </Link>
       </GlassCard>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
@@ -110,7 +108,7 @@ export function AdminDashboardPage() {
         <StatCard label="Premium Users" value={premiumUsers} icon={CreditCard} delay={0.11} accent />
         <StatCard label="Images Generated Today" value={imagesToday} icon={ImageIcon} delay={0.14} />
         <StatCard label="Total AI Generations" value={totalConversions} icon={TrendingUp} delay={0.17} />
-        <StatCard label="Monthly Revenue (est.)" value={`$${revenueEstimate}`} icon={DollarSign} delay={0.2} />
+        <StatCard label="Aylık Gelir" value="—" icon={DollarSign} delay={0.2} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
@@ -152,17 +150,12 @@ export function AdminDashboardPage() {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <GlassCard className="p-5" delay={0.26}>
-          <h3 className="text-sm font-semibold text-white mb-4">Revenue</h3>
-          <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={revenueData}>
-                <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-                <XAxis dataKey="date" stroke="#666" fontSize={12} tickLine={false} />
-                <YAxis stroke="#666" fontSize={12} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ background: "#1a1a1a", border: "1px solid #333", borderRadius: 12 }} />
-                <Line type="monotone" dataKey="revenue" stroke="#FF5A5F" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+          <h3 className="text-sm font-semibold text-white mb-4">Aylık Gelir</h3>
+          <div className="h-52 flex flex-col items-center justify-center gap-2">
+            <p className="text-3xl font-bold text-white/50 tabular-nums">—</p>
+            <p className="text-xs text-white/35 text-center px-4">
+              Gerçek ödeme verisi bağlanana kadar gelir gösterilmez.
+            </p>
           </div>
         </GlassCard>
         <GlassCard className="p-5" delay={0.28}>

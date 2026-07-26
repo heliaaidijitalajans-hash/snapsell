@@ -67,6 +67,9 @@ const AdminAuditPage = lazy(() =>
 const AdminAdministratorsPage = lazy(() =>
   import("./admin/pages/AdministratorsPage").then((m) => ({ default: m.AdministratorsPage }))
 );
+const AdminTestTransformPage = lazy(() =>
+  import("./admin/pages/TestTransformPage").then((m) => ({ default: m.AdminTestTransformPage }))
+);
 
 function PageFallback() {
   return (
@@ -95,6 +98,7 @@ export const router = createBrowserRouter(
       errorElement: <ErrorBoundary />,
       children: [
         { index: true, element: <AdminSuspense><AdminDashboardPage /></AdminSuspense> },
+        { path: "test-donusumu", element: <AdminSuspense><AdminTestTransformPage /></AdminSuspense> },
         { path: "users", element: <AdminSuspense><AdminUsersPage /></AdminSuspense> },
         { path: "users/:filter", element: <AdminSuspense><AdminUsersPage /></AdminSuspense> },
         { path: "images", element: <AdminSuspense><AdminImagesPage /></AdminSuspense> },

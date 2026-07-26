@@ -19,6 +19,7 @@ import {
   Megaphone,
   ScrollText,
   UserCog,
+  FlaskConical,
 } from "lucide-react";
 import { useAdmin } from "./AdminContext";
 import { useRbac } from "./rbac/RbacContext";
@@ -35,6 +36,7 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/admin/test-donusumu", label: "Test Dönüşümü", icon: FlaskConical },
   {
     to: "/admin/users",
     label: "User Management",
