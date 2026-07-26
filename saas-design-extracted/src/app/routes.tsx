@@ -24,6 +24,9 @@ const CookiePolicyPage = lazy(() => import("./pages/CookiePolicyPage").then((m) 
 const KvkkPage = lazy(() => import("./pages/KvkkPage").then((m) => ({ default: m.KvkkPage })));
 const EditorReplicatePage = lazy(() => import("./pages/EditorReplicatePage").then((m) => ({ default: m.EditorReplicatePage })));
 const LibraryPage = lazy(() => import("./pages/LibraryPage").then((m) => ({ default: m.LibraryPage })));
+const LibrarySessionPage = lazy(() =>
+  import("./pages/LibrarySessionPage").then((m) => ({ default: m.LibrarySessionPage }))
+);
 const AccountPage = lazy(() => import("./pages/AccountPage").then((m) => ({ default: m.AccountPage })));
 const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
 
@@ -129,6 +132,7 @@ export const router = createBrowserRouter(
         { path: "editor", element: <Navigate to="/gorsel-duzenleme" replace /> },
         { path: "gorsel-duzenleme", element: <Suspense fallback={<PageFallback />}><EditorReplicatePage /></Suspense> },
         { path: "kutuphane", element: <Suspense fallback={<PageFallback />}><LibraryPage /></Suspense> },
+        { path: "kutuphane/:imageId", element: <Suspense fallback={<PageFallback />}><LibrarySessionPage /></Suspense> },
         { path: "hesap-ayarlari", element: <Suspense fallback={<PageFallback />}><AccountPage /></Suspense> },
         { path: "hakkimizda", element: <Suspense fallback={<PageFallback />}><AboutPage /></Suspense> },
         { path: "kullanim-kosullari", element: <Suspense fallback={<PageFallback />}><TermsPage /></Suspense> },

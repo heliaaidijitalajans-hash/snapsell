@@ -2991,19 +2991,22 @@ app.get("/api/replicate/temp/:id/nobg", function (req, res) {
 
 /**
  * Görsel düzenleme çıktısını Storage + images tablosuna yazar (servis rolü; istemciden bağımsız).
- * @returns {Promise<{ ok: true, id?: string }|{ ok: false, error: string }>}
+ * Opsiyonel session alanları: originalBuffer, seoDescription, config, metadata.
+ * @returns {Promise<{ ok: true, id?: string, imageUrl?: string, originalImageUrl?: string }|{ ok: false, error: string }>}
  */
-async function saveEditorImageToLibraryFromBuffer(user, buffer, contentType, prompt) {
+async function saveEditorImageToLibraryFromBuffer(user, buffer, contentType, prompt, session) {
   if (!supabase) {
     return { ok: false, error: "Supabase sunucuda yok (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY kontrol edin)" };
   }
   if (!user || !user.id || !buffer || buffer.length === 0) {
     return { ok: false, error: "Yapılandırma veya görsel eksik" };
   }
+  const sess = session && typeof session === "object" ? session : {};
   try {
     const ct = contentType || "image/png";
     const ext = String(ct).indexOf("jpeg") >= 0 ? "jpg" : "png";
-    const path = user.id + "/" + Date.now() + "." + ext;
+    const ts = Date.now();
+    const path = user.id + "/" + ts + "." + ext;
     const { error: upErr } = await supabase.storage.from("generated-images").upload(path, buffer, {
       contentType: ct,
       upsert: false
@@ -3015,17 +3018,49 @@ async function saveEditorImageToLibraryFromBuffer(user, buffer, contentType, pro
       };
     }
     const { data: pub } = supabase.storage.from("generated-images").getPublicUrl(path);
+    const imageUrl = pub.publicUrl;
+
+    let originalImageUrl = null;
+    const origBuf = sess.originalBuffer;
+    if (origBuf && Buffer.isBuffer(origBuf) && origBuf.length > 0) {
+      const origPath = user.id + "/" + ts + "-original." + ext;
+      const { error: origErr } = await supabase.storage.from("generated-images").upload(origPath, origBuf, {
+        contentType: ct,
+        upsert: false
+      });
+      if (!origErr) {
+        const { data: origPub } = supabase.storage.from("generated-images").getPublicUrl(origPath);
+        originalImageUrl = origPub && origPub.publicUrl ? origPub.publicUrl : null;
+      } else {
+        console.warn("saveEditorImageToLibraryFromBuffer original upload:", origErr.message);
+      }
+    }
+
     const basePayload = {
       user_id: user.id,
-      image_url: pub.publicUrl,
+      image_url: imageUrl,
       created_at: new Date().toISOString(),
-      prompt: String(prompt || "").slice(0, 500)
+      prompt: String(prompt || "").slice(0, 2000)
     };
-    let payload = Object.assign({ source: "editor" }, basePayload);
+    const richPayload = Object.assign({}, basePayload, {
+      source: "editor",
+      original_image_url: originalImageUrl || null,
+      seo_description: sess.seoDescription != null ? String(sess.seoDescription).slice(0, 8000) : null,
+      config: sess.config && typeof sess.config === "object" ? sess.config : null,
+      metadata: sess.metadata && typeof sess.metadata === "object" ? sess.metadata : null
+    });
+
+    let payload = richPayload;
     let { data: ins, error: insErr } = await supabase.from("images").insert(payload).select("id").single();
-    if (insErr && /source|column|schema/i.test(String(insErr.message || ""))) {
-      payload = basePayload;
-      const retry = await supabase.from("images").insert(payload).select("id").single();
+    // Older schemas: drop unknown columns and retry (source / session columns).
+    if (insErr && /column|schema|does not exist/i.test(String(insErr.message || ""))) {
+      console.warn("saveEditorImageToLibraryFromBuffer schema fallback:", insErr.message);
+      payload = Object.assign({ source: "editor" }, basePayload);
+      let retry = await supabase.from("images").insert(payload).select("id").single();
+      if (retry.error && /source|column|schema/i.test(String(retry.error.message || ""))) {
+        payload = basePayload;
+        retry = await supabase.from("images").insert(payload).select("id").single();
+      }
       ins = retry.data;
       insErr = retry.error;
     }
@@ -3033,7 +3068,12 @@ async function saveEditorImageToLibraryFromBuffer(user, buffer, contentType, pro
       console.warn("saveEditorImageToLibraryFromBuffer insert:", insErr.code, insErr.message, insErr.details || "");
       return { ok: false, error: insErr.message + (insErr.hint ? " — " + insErr.hint : "") };
     }
-    return { ok: true, id: ins && ins.id };
+    return {
+      ok: true,
+      id: ins && ins.id,
+      imageUrl: imageUrl,
+      originalImageUrl: originalImageUrl || undefined
+    };
   } catch (e) {
     return { ok: false, error: e.message || String(e) };
   }
@@ -3083,10 +3123,22 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
     return res.status(403).json({ error: "Bu özellik Pro plan (Görsel Düzenleme) gerektirir. PhotoRoom ile arka plan silme ve yeni arka plan oluşturma.", upgradeUrl: "/dashboard/fiyatlandirma" });
   }
   if (!PHOTOROOM_API_KEY) return res.status(503).json({ error: "PHOTOROOM_API_KEY .env dosyasına ekleyin." });
-  const { image: base64, prompt, language } = req.body || {};
+  const { image: base64, prompt, language, generationConfig } = req.body || {};
   const acceptLanguage = String(req.headers["accept-language"] || "").toLowerCase();
   const isEnglish = String(language || "").toLowerCase() === "en" || acceptLanguage.startsWith("en");
   if (!base64 || typeof base64 !== "string") return res.status(400).json({ error: "image (base64) gerekli" });
+  let sessionConfig = null;
+  if (generationConfig && typeof generationConfig === "object" && !Array.isArray(generationConfig)) {
+    sessionConfig = {
+      marketplace: generationConfig.marketplace != null ? String(generationConfig.marketplace) : null,
+      category: generationConfig.category != null ? String(generationConfig.category) : null,
+      background: generationConfig.background != null ? String(generationConfig.background) : null,
+      ratio: generationConfig.ratio != null ? String(generationConfig.ratio) : null,
+      quality: generationConfig.quality != null ? String(generationConfig.quality) : null,
+      brandStyle: generationConfig.brandStyle != null ? String(generationConfig.brandStyle) : null,
+      customPrompt: generationConfig.customPrompt != null ? String(generationConfig.customPrompt).slice(0, 2000) : null
+    };
+  }
   let buf;
   try {
     const data = base64.replace(/^data:image\/\w+;base64,/, "");
@@ -3263,7 +3315,12 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
       }
     }
 
-    const libResult = await saveEditorImageToLibraryFromBuffer(user, resultBuffer, contentType, bgPrompt);
+    const libResult = await saveEditorImageToLibraryFromBuffer(user, resultBuffer, contentType, bgPrompt, {
+      originalBuffer: buf,
+      seoDescription: seoText || "",
+      config: sessionConfig,
+      metadata: { language: isEnglish ? "en" : "tr" }
+    });
     if (!libResult.ok) {
       console.warn("PhotoRoom pipeline: kütüphaneye kayıt başarısız:", libResult.error);
     }
@@ -3276,6 +3333,9 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
       seo: seoText || "",
       credits: creditsAfter,
       librarySaved: libResult.ok,
+      libraryId: libResult.ok ? (libResult.id || null) : null,
+      libraryImageUrl: libResult.ok ? (libResult.imageUrl || null) : null,
+      libraryOriginalImageUrl: libResult.ok ? (libResult.originalImageUrl || null) : null,
       libraryError: libResult.ok ? null : libResult.error
     });
   } catch (e) {

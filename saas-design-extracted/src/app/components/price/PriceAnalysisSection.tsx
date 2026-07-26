@@ -2,6 +2,7 @@ import { useLanguage } from "../../contexts/LanguageContext";
 import { usePriceAnalysis } from "../../hooks/usePriceAnalysis";
 import { StatCard } from "./StatCard";
 import { PriceHighlight } from "./PriceHighlight";
+import type { PriceAnalysisViewFields } from "../../services/price/priceTypes";
 
 type PriceAnalysisSectionProps = {
   /** Stable id for this result (dedupes duplicate requests). */
@@ -10,6 +11,12 @@ type PriceAnalysisSectionProps = {
   description: string;
   /** Only fetch once a result exists (mirrors mobile Result screen). */
   enabled: boolean;
+  /** Restored library cache — never refetch when present. */
+  cachedPriceAnalysis?: PriceAnalysisViewFields | null;
+  /** Persist first analysis onto this library row. */
+  libraryImageId?: string | null;
+  /** History restore: block all price-analysis API calls. */
+  disableFetch?: boolean;
 };
 
 /**
@@ -22,6 +29,9 @@ export function PriceAnalysisSection({
   productName,
   description,
   enabled,
+  cachedPriceAnalysis = null,
+  libraryImageId = null,
+  disableFetch = false,
 }: PriceAnalysisSectionProps) {
   const { t, locale } = useLanguage();
   const averageLabel = t("editor.priceAverageLabel");
@@ -39,6 +49,9 @@ export function PriceAnalysisSection({
     language: locale,
     enabled,
     averageLabel,
+    cachedPriceAnalysis,
+    libraryImageId,
+    disableFetch,
   });
 
   const showPriceSection =

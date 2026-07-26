@@ -20,6 +20,8 @@ import {
   buildPipelinePrompt,
   toPhotoQuality,
 } from "../services/aiConfig/buildPipelinePrompt";
+import type { StoredGenerationConfig } from "../lib/libraryImages";
+import type { PriceAnalysisViewFields } from "../services/price/priceTypes";
 
 /** Boş = aynı origin (Vercel). Farklı backend için `VITE_API_BASE_URL`. */
 const EDITOR_API_BASE = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || "").toString().trim().replace(/\/$/, "");
@@ -57,6 +59,8 @@ export function EditorReplicatePage() {
   const [phase, setPhase] = useState<Phase>("config");
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
   const [seoDescription, setSeoDescription] = useState<string | null>(null);
+  const [libraryImageId, setLibraryImageId] = useState<string | null>(null);
+  const [sessionConfig, setSessionConfig] = useState<GenerationConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorBillingUrl, setErrorBillingUrl] = useState<string | null>(null);
   const [errorUpgradeUrl, setErrorUpgradeUrl] = useState<string | null>(null);
@@ -130,6 +134,8 @@ export function EditorReplicatePage() {
       if (!config) {
         throw new Error(t("editor.failed"));
       }
+      setSessionConfig(config);
+      setLibraryImageId(null);
 
       const headers = await getAuthHeaders();
       const base64 = await new Promise<string>((resolve, reject) => {
@@ -160,6 +166,15 @@ export function EditorReplicatePage() {
             prompt: buildPipelinePrompt(config),
             photoQuality: toPhotoQuality(config.quality),
             language: locale,
+            generationConfig: {
+              marketplace: config.marketplace,
+              category: config.category,
+              background: config.background,
+              ratio: config.ratio,
+              quality: config.quality,
+              brandStyle: config.brandStyle,
+              customPrompt: config.customPrompt,
+            },
           }),
           signal: requestController.signal,
         });
@@ -199,6 +214,12 @@ export function EditorReplicatePage() {
 
       const libErr = (data as { libraryError?: string | null }).libraryError;
       if (libErr) console.warn("[SnapSell] Kütüphane kaydı (sunucu):", libErr);
+      const libId = (data as { libraryId?: string | null }).libraryId;
+      if (libId) setLibraryImageId(String(libId));
+      const libOriginal = (data as { libraryOriginalImageUrl?: string | null }).libraryOriginalImageUrl;
+      if (libOriginal && typeof libOriginal === "string" && libOriginal.startsWith("http")) {
+        setPreviewUrl(libOriginal);
+      }
       let imageUrl = (data.image ?? data.outputUrl ?? data.output?.[0] ?? (Array.isArray(data.output) ? data.output[0] : data.output)) as string | undefined;
       if (imageUrl && typeof imageUrl === "string") {
         if (!imageUrl.startsWith("http") && !imageUrl.startsWith("data:image")) {
@@ -247,6 +268,8 @@ export function EditorReplicatePage() {
     setErrorPhotoRoomDashboard(false);
     setOutputUrl(null);
     setSeoDescription(null);
+    setLibraryImageId(null);
+    setSessionConfig(null);
     setPhase("processing");
   }, [selectedFile, canGenerate]);
 
@@ -273,6 +296,8 @@ export function EditorReplicatePage() {
     reset();
     setOutputUrl(null);
     setSeoDescription(null);
+    setLibraryImageId(null);
+    setSessionConfig(null);
     setError(null);
     setErrorBillingUrl(null);
     setErrorUpgradeUrl(null);
@@ -342,6 +367,8 @@ export function EditorReplicatePage() {
           previewUrl={previewUrl}
           outputUrl={outputUrl}
           seoDescription={seoDescription}
+          sessionConfig={sessionConfig}
+          libraryImageId={libraryImageId}
           onNew={clearSelection}
           t={t}
         />
@@ -484,20 +511,33 @@ export function EditorReplicatePage() {
 }
 
 /** Result view — generated image + SEO + Price Analysis (SnapSell app parity). */
-function ResultView({
+export function ResultView({
   previewUrl,
   outputUrl,
   seoDescription,
   onNew,
   t,
+  sessionConfig = null,
+  libraryImageId = null,
+  cachedPriceAnalysis = null,
+  disablePriceFetch = false,
+  autoScroll = true,
+  createdAt = null,
 }: {
   previewUrl: string | null;
   outputUrl: string;
   seoDescription: string | null;
   onNew: () => void;
   t: (key: string) => string;
+  sessionConfig?: GenerationConfig | StoredGenerationConfig | null;
+  libraryImageId?: string | null;
+  cachedPriceAnalysis?: PriceAnalysisViewFields | null;
+  disablePriceFetch?: boolean;
+  autoScroll?: boolean;
+  createdAt?: string | null;
 }) {
   const resultSectionRef = useRef<HTMLDivElement>(null);
+  const [zoomSrc, setZoomSrc] = useState<string | null>(null);
   const apiOrigin = (EDITOR_API_BASE || APP_BASE_URL).replace(/\/$/, "");
   let displayUrl = outputUrl;
   if (displayUrl.includes("yourdomain.com")) {
@@ -513,6 +553,7 @@ function ResultView({
 
   // Scroll only after the newest result section is mounted/rendered (not when the request starts).
   useEffect(() => {
+    if (!autoScroll) return;
     const el = resultSectionRef.current;
     if (!el) return;
     const frame = requestAnimationFrame(() => {
@@ -522,15 +563,50 @@ function ResultView({
       });
     });
     return () => cancelAnimationFrame(frame);
-  }, [outputUrl]);
+  }, [outputUrl, autoScroll]);
+
+  const settingChips: { label: string; value: string }[] = [];
+  if (sessionConfig) {
+    const cfg = sessionConfig;
+    if (cfg.marketplace) settingChips.push({ label: t("aiConfig.marketplace"), value: t(`aiConfig.marketplaces.${cfg.marketplace}`) });
+    if (cfg.category) settingChips.push({ label: t("aiConfig.category"), value: t(`aiConfig.categories.${cfg.category}`) });
+    if (cfg.background) settingChips.push({ label: t("aiConfig.background"), value: t(`aiConfig.backgrounds.${cfg.background}`) });
+    if (cfg.ratio) settingChips.push({ label: t("aiConfig.ratio"), value: String(cfg.ratio) });
+    if (cfg.quality) settingChips.push({ label: t("aiConfig.quality"), value: t(`aiConfig.qualities.${cfg.quality}`) });
+    if (cfg.brandStyle) settingChips.push({ label: t("aiConfig.brandStyle"), value: t(`aiConfig.brandStyles.${cfg.brandStyle}`) });
+    if (cfg.customPrompt) settingChips.push({ label: t("aiConfig.customPromptLabel"), value: String(cfg.customPrompt) });
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {createdAt ? (
+          <p className="text-sm text-gray-500">
+            {t("library.sessionSavedAt")}{" "}
+            <time dateTime={createdAt}>{new Date(createdAt).toLocaleString()}</time>
+          </p>
+        ) : <span />}
         <button type="button" onClick={onNew} className="text-sm font-medium text-[#FF5A5F] hover:underline">
           {t("editor.selectDifferent")}
         </button>
       </div>
+
+      {settingChips.length > 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h3 className="font-semibold text-gray-900 mb-3">{t("library.sessionSettings")}</h3>
+          <div className="flex flex-wrap gap-2">
+            {settingChips.map((chip) => (
+              <div
+                key={chip.label + chip.value}
+                className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
+              >
+                <span className="text-gray-500">{chip.label}: </span>
+                <span className="font-medium text-gray-900">{chip.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
         <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
@@ -539,7 +615,13 @@ function ResultView({
         </h3>
         <p className="text-sm text-gray-500 mb-3">{t("editor.originalHint")}</p>
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 flex justify-center">
-          <img src={previewUrl || ""} alt={t("editor.original")} className="max-w-full max-h-72 object-contain rounded-lg" />
+          {previewUrl ? (
+            <button type="button" className="cursor-zoom-in" onClick={() => setZoomSrc(previewUrl)}>
+              <img src={previewUrl} alt={t("editor.original")} className="max-w-full max-h-72 object-contain rounded-lg" />
+            </button>
+          ) : (
+            <p className="text-sm text-gray-500 py-8">{t("library.originalUnavailable")}</p>
+          )}
         </div>
       </div>
 
@@ -553,17 +635,19 @@ function ResultView({
         </h3>
         <p className="text-sm text-gray-500 mb-4">{t("editor.resultHint")}</p>
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 flex flex-col items-center">
-          <img
-            src={displayUrl}
-            alt="Generated result"
-            className="max-w-full max-h-96 object-contain rounded-lg"
-            onError={(e) => {
-              const img = e.target as HTMLImageElement;
-              img.style.display = "none";
-              const next = img.nextElementSibling as HTMLElement | null;
-              if (next) next.classList.remove("hidden");
-            }}
-          />
+          <button type="button" className="cursor-zoom-in" onClick={() => setZoomSrc(displayUrl)}>
+            <img
+              src={displayUrl}
+              alt="Generated result"
+              className="max-w-full max-h-96 object-contain rounded-lg"
+              onError={(e) => {
+                const img = e.target as HTMLImageElement;
+                img.style.display = "none";
+                const next = img.nextElementSibling as HTMLElement | null;
+                if (next) next.classList.remove("hidden");
+              }}
+            />
+          </button>
           <p className="mt-2 text-sm text-amber-700 hidden">
             {t("editor.imageLoadFailed")}{" "}
             <a href={displayUrl} target="_blank" rel="noopener noreferrer" className="text-[#FF5A5F] underline">
@@ -571,14 +655,24 @@ function ResultView({
             </a>
           </p>
         </div>
-        <a
-          href={displayUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-3 inline-flex text-sm font-medium text-[#FF5A5F] hover:underline"
-        >
-          {t("editor.downloadOrOpen")}
-        </a>
+        <div className="mt-3 flex flex-wrap gap-4">
+          <a
+            href={displayUrl}
+            download
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex text-sm font-medium text-[#FF5A5F] hover:underline"
+          >
+            {t("editor.downloadOrOpen")}
+          </a>
+          <button
+            type="button"
+            onClick={() => setZoomSrc(displayUrl)}
+            className="inline-flex text-sm font-medium text-gray-700 hover:underline"
+          >
+            {t("library.zoom")}
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
@@ -592,11 +686,38 @@ function ResultView({
       </div>
 
       <PriceAnalysisSection
-        id={outputUrl}
+        id={libraryImageId || outputUrl}
         productName=""
         description={(seoDescription || "").trim()}
         enabled={Boolean(outputUrl)}
+        cachedPriceAnalysis={cachedPriceAnalysis}
+        libraryImageId={libraryImageId}
+        disableFetch={disablePriceFetch || Boolean(cachedPriceAnalysis)}
       />
+
+      {zoomSrc ? (
+        <div
+          className="fixed inset-0 z-[80] bg-black/80 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setZoomSrc(null)}
+        >
+          <button
+            type="button"
+            className="absolute top-4 right-4 text-white/90 text-sm font-medium underline"
+            onClick={() => setZoomSrc(null)}
+          >
+            {t("library.closeZoom")}
+          </button>
+          <img
+            src={zoomSrc}
+            alt=""
+            className="max-w-full max-h-full object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
+

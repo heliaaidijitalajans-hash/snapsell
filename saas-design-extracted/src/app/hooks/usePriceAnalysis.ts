@@ -10,6 +10,7 @@ import type {
   PriceAnalysisViewFields,
   StatDescriptor,
 } from "../services/price/priceTypes";
+import { savePriceAnalysisToLibrary } from "../lib/libraryImages";
 
 type UsePriceAnalysisInput = {
   /** Stable id for this generation/result (dedupes duplicate requests). */
@@ -21,6 +22,16 @@ type UsePriceAnalysisInput = {
   enabled: boolean;
   /** Localized stat label for the average price row. */
   averageLabel: string;
+  /**
+   * When set (e.g. restored library session), use this and never call the API.
+   */
+  cachedPriceAnalysis?: PriceAnalysisViewFields | null;
+  /**
+   * Library row id — after the first successful analysis, persist so history reopen skips API.
+   */
+  libraryImageId?: string | null;
+  /** When true, never call /api/price-analysis (history restore). */
+  disableFetch?: boolean;
 };
 
 type UsePriceAnalysisResult = {
@@ -43,20 +54,33 @@ export const usePriceAnalysis = ({
   language,
   enabled,
   averageLabel,
+  cachedPriceAnalysis = null,
+  libraryImageId = null,
+  disableFetch = false,
 }: UsePriceAnalysisInput): UsePriceAnalysisResult => {
   const [priceOverlay, setPriceOverlay] =
-    useState<PriceAnalysisViewFields | null>(null);
+    useState<PriceAnalysisViewFields | null>(cachedPriceAnalysis ?? null);
   const [priceStatus, setPriceStatus] =
-    useState<PriceAnalysisUiStatus>("loading");
+    useState<PriceAnalysisUiStatus>(cachedPriceAnalysis ? "ready" : "loading");
   const [retryToken, setRetryToken] = useState(0);
   const priceOverlayRef = useRef<PriceAnalysisViewFields | null>(null);
   priceOverlayRef.current = priceOverlay;
+  const persistedRef = useRef(false);
 
-  const canRetryPriceAnalysis = true;
+  useEffect(() => {
+    if (cachedPriceAnalysis) {
+      setPriceOverlay(cachedPriceAnalysis);
+      setPriceStatus("ready");
+      persistedRef.current = true;
+    }
+  }, [cachedPriceAnalysis]);
+
+  const canRetryPriceAnalysis = !disableFetch && !cachedPriceAnalysis;
 
   const retryPriceAnalysis = useCallback(() => {
+    if (disableFetch || cachedPriceAnalysis) return;
     setRetryToken((token) => token + 1);
-  }, []);
+  }, [disableFetch, cachedPriceAnalysis]);
 
   const trimmedProductName = productName.trim();
   const trimmedDescription = description.trim();
@@ -70,6 +94,16 @@ export const usePriceAnalysis = ({
     };
 
     void (async () => {
+      if (cachedPriceAnalysis || disableFetch) {
+        if (cachedPriceAnalysis) {
+          setPriceOverlay(cachedPriceAnalysis);
+          setPriceStatus("ready");
+        } else if (!priceOverlayRef.current) {
+          setPriceStatus("unavailable");
+        }
+        return;
+      }
+
       if (!enabled) {
         return;
       }
@@ -111,6 +145,11 @@ export const usePriceAnalysis = ({
 
       setPriceOverlay(mapped);
       setPriceStatus("ready");
+
+      if (libraryImageId && !persistedRef.current) {
+        persistedRef.current = true;
+        void savePriceAnalysisToLibrary(libraryImageId, mapped);
+      }
     })();
 
     return () => {
@@ -123,6 +162,9 @@ export const usePriceAnalysis = ({
     language,
     enabled,
     retryToken,
+    cachedPriceAnalysis,
+    disableFetch,
+    libraryImageId,
   ]);
 
   const showPriceMetrics =

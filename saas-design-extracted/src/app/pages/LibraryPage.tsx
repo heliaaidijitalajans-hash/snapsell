@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLanguage } from "../contexts/LanguageContext";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 
 export type LibraryImage = {
   id: string;
@@ -26,6 +26,7 @@ function logSupabaseLibraryError(err: unknown) {
 export function LibraryPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [images, setImages] = useState<LibraryImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -123,9 +124,11 @@ export function LibraryPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {images.map((img) => (
-            <div
+            <button
               key={img.id}
-              className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition"
+              type="button"
+              onClick={() => navigate(`/kutuphane/${img.id}`)}
+              className="text-left bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md hover:border-[#FF5A5F]/40 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5A5F]/50"
             >
               <div className="aspect-square bg-gray-100">
                 {img.imageUrl && (
@@ -141,8 +144,9 @@ export function LibraryPage() {
                   {(img.prompt || "").substring(0, 120)}
                   {(img.prompt || "").length > 120 ? "…" : ""}
                 </p>
+                <p className="mt-2 text-xs font-medium text-[#FF5A5F]">{t("library.openSession")}</p>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}
