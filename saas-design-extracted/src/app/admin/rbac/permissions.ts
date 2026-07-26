@@ -28,6 +28,7 @@ export const PERMISSIONS = {
   MANAGE_SETTINGS: "manage_settings",
   MANAGE_ADMINS: "manage_admins",
   ASSIGN_PERMISSIONS: "assign_permissions",
+  USE_HELIA: "use_helia",
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -59,6 +60,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   [PERMISSIONS.MANAGE_SETTINGS]: "Manage System Settings",
   [PERMISSIONS.MANAGE_ADMINS]: "Manage Administrators",
   [PERMISSIONS.ASSIGN_PERMISSIONS]: "Assign Permissions",
+  [PERMISSIONS.USE_HELIA]: "Use Helia AI Chat",
 };
 
 export type RoleId = "super_admin" | "admin" | "support" | "analyst" | "content_editor";
@@ -103,6 +105,7 @@ export const ROLE_PERMISSIONS: Record<RoleId, readonly Permission[]> = {
     PERMISSIONS.REPLY_SUPPORT,
     PERMISSIONS.MANAGE_FAQ,
     PERMISSIONS.VIEW_AUDIT,
+    PERMISSIONS.USE_HELIA,
   ],
   support: [
     PERMISSIONS.VIEW_DASHBOARD,
@@ -140,6 +143,7 @@ export const ROUTE_PERMISSIONS: { match: (path: string) => boolean; permission: 
   },
   { match: (p) => p.startsWith("/admin/support"), permission: PERMISSIONS.MANAGE_CONTACT },
   { match: (p) => p.startsWith("/admin/announcements"), permission: PERMISSIONS.MANAGE_ANNOUNCEMENTS },
+  { match: (p) => p.startsWith("/admin/helia"), permission: PERMISSIONS.USE_HELIA },
   { match: (p) => p.startsWith("/admin/audit"), permission: PERMISSIONS.VIEW_AUDIT },
   { match: (p) => p.startsWith("/admin/administrators"), permission: PERMISSIONS.MANAGE_ADMINS },
   { match: (p) => p.startsWith("/admin/settings/api"), permission: PERMISSIONS.MANAGE_API_KEYS },

@@ -1553,11 +1553,10 @@ function sendHeliaStatus(req, res) {
   const env = heliaServer.getHeliaEnv();
   res.json({
     ok: true,
-    configured: configured && Boolean(env.handle),
+    configured: configured,
     // Boolean flags only — never return apiKey / baseUrl / handle values.
     hasApiKey: Boolean(env.apiKey),
     hasBaseUrl: Boolean(env.baseUrl),
-    hasHandle: Boolean(env.handle),
   });
 }
 

@@ -144,7 +144,12 @@ export function RbacProvider({ children }: { children: ReactNode }) {
     saveSession(session);
   }, [session]);
 
-  const permissions = useMemo(() => session?.permissions ?? [], [session]);
+  const permissions = useMemo(() => {
+    if (!session) return [];
+    const admin = administrators.find((a) => a.id === session.adminId);
+    if (admin) return resolvePermissions(admin.roles, admin.permissions);
+    return resolvePermissions(session.roles, session.permissions || []);
+  }, [session, administrators]);
 
   const can = useCallback(
     (permission: Permission | Permission[]) => checkHas(permissions, permission),
