@@ -19,6 +19,8 @@ type AdminContextValue = {
   authenticated: boolean | null;
   /** True when signed in via local RBAC only (no server admin token). */
   localOnly: boolean;
+  /** Server admin token from /api/admin/login (ADMIN_PASSWORD). Null for local-only RBAC sessions. */
+  adminToken: string | null;
   loading: boolean;
   password: string;
   setPassword: (v: string) => void;
@@ -498,6 +500,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   const value: AdminContextValue = {
     authenticated,
     localOnly,
+    adminToken,
     loading,
     password,
     setPassword,

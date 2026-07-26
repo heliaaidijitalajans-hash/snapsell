@@ -642,7 +642,7 @@ const corsOptions = {
   origin: CORS_ALLOWED_ORIGINS,
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Session-Id"]
+  allowedHeaders: ["Content-Type", "Authorization", "X-Session-Id", "X-Admin-Token"]
 };
 
 const app = express();
@@ -694,7 +694,7 @@ app.use(function (req, res, next) {
       res.setHeader("Access-Control-Allow-Origin", origin);
       res.setHeader("Access-Control-Allow-Credentials", "true");
       res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Session-Id");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Session-Id, X-Admin-Token");
       res.setHeader("Access-Control-Max-Age", "86400");
     }
     return res.status(204).end();
@@ -803,6 +803,30 @@ const REPLICATE_ALLOWED_EMAILS = (process.env.REPLICATE_ALLOWED_EMAILS || "helyo
 function isAdminUser(user) {
   if (!ADMIN_EMAIL) return false;
   return user && user.email && String(user.email).toLowerCase() === ADMIN_EMAIL;
+}
+/** Admin Panel auth (cookie, X-Admin-Token, or Bearer admin password) — same secret as /api/admin/login. Does not change customer plans/credits. */
+function isAdminPanelAuthenticated(req) {
+  if (!ADMIN_PASSWORD || !req) return false;
+  const headerToken = String(
+    req.headers["x-admin-token"] || req.headers["x-snapsell-admin-token"] || ""
+  ).trim();
+  if (headerToken && headerToken === ADMIN_PASSWORD) return true;
+  const cookieToken = parseCookie(req.headers.cookie || "").snapsell_admin || "";
+  if (cookieToken && cookieToken === ADMIN_PASSWORD) return true;
+  const authHeader = req.headers.authorization;
+  if (authHeader && typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+    const bearer = authHeader.slice(7).trim();
+    if (bearer && bearer === ADMIN_PASSWORD) return true;
+  }
+  return false;
+}
+/**
+ * PhotoRoom access: Admin Panel / ADMIN_EMAIL bypass, else existing production checks.
+ * Production users without admin auth are completely unaffected.
+ */
+function canUsePhotoRoomAccess(user, req) {
+  if (isAdminPanelAuthenticated(req) || isAdminUser(user)) return true;
+  return canUsePhotoRoom(user);
 }
 function canUseReplicate(user) {
   if (!user) return false;
@@ -2801,10 +2825,22 @@ app.get("/api/leonardo/status", async (req, res) => {
 
 app.get("/api/replicate/status", async (req, res) => {
   try {
+    const adminBypass = isAdminPanelAuthenticated(req);
     const user = await getRequestUser(req);
-    if (!user) return res.status(401).json({ error: "Oturum gerekli" });
+    if (!user && !adminBypass) return res.status(401).json({ error: "Oturum gerekli" });
     const publicUrl = (process.env.PUBLIC_APP_URL || "").trim().replace(/\/$/, "");
-    const photoRoom = canUsePhotoRoom(user);
+    if (adminBypass) {
+      return res.json({
+        available: true,
+        photoRoomAvailable: true,
+        pixianAvailable: false,
+        needsPublicUrl: !publicUrl,
+        freeEditorUsesRemaining: null,
+        conversions: null,
+        adminTestBypass: true
+      });
+    }
+    const photoRoom = canUsePhotoRoomAccess(user, req);
     const pixian = canUsePixian(user);
     const credits = user.credits ?? FREE_CREDITS;
     const plan = user.plan || "free";
@@ -3106,9 +3142,23 @@ app.post("/api/library/save-replicate-temp", async function (req, res) {
 
 /** PhotoRoom: ürün algılama → arka plan silme → yeni AI arka plan → ürün orantılı ölçeklenir (fit), kesme izi yok, profesyonel stüdyo çıktısı. */
 app.post("/api/photoroom/pipeline", async (req, res) => {
-  const user = await getRequestUser(req);
+  const adminBypass = isAdminPanelAuthenticated(req);
+  let user = await getRequestUser(req);
+  if (!user && adminBypass) {
+    // Ephemeral admin-test actor — never written to customer credit/plan tables.
+    user = {
+      id: "admin-panel-test",
+      email: ADMIN_EMAIL || "admin-panel@snapsell.local",
+      plan: "monthly_plan_pro",
+      credits: 999999,
+      totalConversions: 0,
+      _memory: true,
+      _adminTest: true
+    };
+  }
   if (!user) return res.status(401).json({ error: "Oturum gerekli" });
-  if (!canUsePhotoRoom(user)) {
+  // Admin Panel / ADMIN_EMAIL: unlimited test access. Else existing production validation.
+  if (!canUsePhotoRoomAccess(user, req)) {
     const plan = user.plan || "free";
     const credits = user.credits ?? FREE_CREDITS;
     const totalConversions = user.totalConversions ?? 0;
@@ -3296,8 +3346,9 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
       if (!openaiKey) console.warn("PhotoRoom pipeline: OPENAI_API_KEY tanımlı değil, SEO atlanıyor. Railway Environment Variables'a ekleyin.");
     }
 
-    // Always deduct 1 credit per successful conversion (ADMIN_EMAIL only is unlimited).
-    const isUnlimitedUser = isAdminUser(user);
+    // Always deduct 1 credit per successful conversion.
+    // Unlimited only for ADMIN_EMAIL or Admin Panel auth (test transform) — production users unchanged.
+    const isUnlimitedUser = isAdminUser(user) || adminBypass || !!user._adminTest;
     let creditsAfter = user.credits ?? FREE_CREDITS;
     if (!isUnlimitedUser) {
       const credits = user.credits ?? FREE_CREDITS;
@@ -3315,14 +3366,18 @@ app.post("/api/photoroom/pipeline", async (req, res) => {
       }
     }
 
-    const libResult = await saveEditorImageToLibraryFromBuffer(user, resultBuffer, contentType, bgPrompt, {
-      originalBuffer: buf,
-      seoDescription: seoText || "",
-      config: sessionConfig,
-      metadata: { language: isEnglish ? "en" : "tr" }
-    });
-    if (!libResult.ok) {
-      console.warn("PhotoRoom pipeline: kütüphaneye kayıt başarısız:", libResult.error);
+    let libResult = { ok: false, error: null, id: null, imageUrl: null, originalImageUrl: null };
+    // Admin test transform: do not write into customer library / history.
+    if (!user._adminTest && !adminBypass) {
+      libResult = await saveEditorImageToLibraryFromBuffer(user, resultBuffer, contentType, bgPrompt, {
+        originalBuffer: buf,
+        seoDescription: seoText || "",
+        config: sessionConfig,
+        metadata: { language: isEnglish ? "en" : "tr" }
+      });
+      if (!libResult.ok) {
+        console.warn("PhotoRoom pipeline: kütüphaneye kayıt başarısız:", libResult.error);
+      }
     }
 
     console.log("PhotoRoom pipeline: res.json gönderiliyor (seo uzunluk:", (seoText || "").length, ", credits:", creditsAfter, ")");

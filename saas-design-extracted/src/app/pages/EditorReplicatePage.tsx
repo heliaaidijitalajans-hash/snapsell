@@ -48,10 +48,18 @@ type PipelineError = Error & {
   upgradeUrl?: string;
 };
 
-export function EditorReplicatePage() {
+export function EditorReplicatePage({
+  adminTestMode = false,
+  adminToken = null,
+}: {
+  /** Admin Test Dönüşümü only — bypasses plan/credit UI gates; sends X-Admin-Token when provided. */
+  adminTestMode?: boolean;
+  /** Admin Panel token from /api/admin/login (same as Admin Dashboard). */
+  adminToken?: string | null;
+} = {}) {
   const { user, getAuthHeaders } = useAuth();
   const { t, locale } = useLanguage();
-  const [hasEditor, setHasEditor] = useState<boolean | null>(null);
+  const [hasEditor, setHasEditor] = useState<boolean | null>(adminTestMode ? true : null);
   const [freeEditorUsesRemaining, setFreeEditorUsesRemaining] = useState<number | null>(null);
   const [freeLimitReached, setFreeLimitReached] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -80,11 +88,23 @@ export function EditorReplicatePage() {
   // Giriş yapmış kullanıcı için her zaman Bearer (user) kullan; sayfa yenilenince session ile 3 hak dönmesin
   useEffect(() => {
     let cancelled = false;
+    if (adminTestMode) {
+      setHasEditor(true);
+      setFreeLimitReached(false);
+      setFreeEditorUsesRemaining(null);
+    }
     const fetchStatus = async () => {
-      const headers = await getAuthHeaders();
+      const headers: Record<string, string> = { ...(await getAuthHeaders()) };
+      if (adminTestMode && adminToken) headers["X-Admin-Token"] = adminToken;
       const r = await fetch(`${EDITOR_API_BASE}/api/replicate/status`, { headers });
       const data = await r.json().catch(() => ({}));
       if (cancelled) return;
+      if (adminTestMode) {
+        setHasEditor(true);
+        setFreeEditorUsesRemaining(null);
+        setFreeLimitReached(false);
+        return;
+      }
       if (!r.ok) {
         setHasEditor(false);
         if (r.status === 401) setFreeEditorUsesRemaining(null);
@@ -97,10 +117,15 @@ export function EditorReplicatePage() {
       setFreeEditorUsesRemaining(typeof remaining === "number" ? remaining : null);
     };
     fetchStatus().catch(() => {
-      if (!cancelled) setHasEditor(false);
+      if (cancelled) return;
+      if (adminTestMode) {
+        setHasEditor(true);
+        return;
+      }
+      setHasEditor(false);
     });
     return () => { cancelled = true; };
-  }, [user, getAuthHeaders]);
+  }, [user, getAuthHeaders, adminTestMode, adminToken]);
 
   useEffect(() => {
     return () => {
@@ -127,7 +152,7 @@ export function EditorReplicatePage() {
    */
   const executePipeline = useCallback(
     async (signal: AbortSignal): Promise<void> => {
-      if (!selectedFile || !hasEditor) {
+      if (!selectedFile || (!hasEditor && !adminTestMode)) {
         throw new Error(t("editor.failed"));
       }
       const config: GenerationConfig | null = buildConfig(previewUrl || selectedFile.name);
@@ -137,7 +162,8 @@ export function EditorReplicatePage() {
       setSessionConfig(config);
       setLibraryImageId(null);
 
-      const headers = await getAuthHeaders();
+      const headers: Record<string, string> = { ...(await getAuthHeaders()) };
+      if (adminTestMode && adminToken) headers["X-Admin-Token"] = adminToken;
       const base64 = await new Promise<string>((resolve, reject) => {
         const r = new FileReader();
         r.onload = () => resolve(String(r.result));
@@ -191,7 +217,7 @@ export function EditorReplicatePage() {
       }
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        if (res.status === 402 && (data as any).limitReached) {
+        if (!adminTestMode && res.status === 402 && (data as any).limitReached) {
           setFreeLimitReached(true);
           setHasEditor(false);
           const limitErr = new Error(t("editor.freeLimitReached")) as PipelineError;
@@ -253,11 +279,11 @@ export function EditorReplicatePage() {
             ? `Başlık: ${String(d.seoTitle).trim()}\nAçıklama: ${String(d.seoDescription).trim()}`
             : "";
       if (seoFromApi) setSeoDescription(seoFromApi);
-      if (freeEditorUsesRemaining !== null) {
+      if (!adminTestMode && freeEditorUsesRemaining !== null) {
         setFreeEditorUsesRemaining(Math.max(0, freeEditorUsesRemaining - 1));
       }
     },
-    [selectedFile, hasEditor, buildConfig, previewUrl, getAuthHeaders, locale, freeEditorUsesRemaining, t],
+    [selectedFile, hasEditor, buildConfig, previewUrl, getAuthHeaders, locale, freeEditorUsesRemaining, t, adminTestMode, adminToken],
   );
 
   const handleTransform = useCallback(() => {
@@ -313,7 +339,7 @@ export function EditorReplicatePage() {
     );
   }
 
-  if (!hasEditor) {
+  if (!hasEditor && !adminTestMode) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16">
         <div className="bg-white rounded-xl border border-gray-200 p-8 shadow-sm text-center">
@@ -355,7 +381,7 @@ export function EditorReplicatePage() {
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-gray-900">{t("aiConfig.title")}</h1>
-        {freeEditorUsesRemaining !== null && (
+        {adminTestMode ? null : freeEditorUsesRemaining !== null && (
           <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1.5 rounded-lg">
             {t("editor.freeUsesRemaining").replace("{{count}}", String(freeEditorUsesRemaining))}
           </span>
@@ -474,14 +500,14 @@ export function EditorReplicatePage() {
           {error && (
             <div className="mt-4 p-4 rounded-lg bg-red-50 text-red-700 text-sm">
               {error}
-              {errorBillingUrl && (
+              {!adminTestMode && errorBillingUrl && (
                 <p className="mt-2">
                   <a href={errorBillingUrl} target="_blank" rel="noopener noreferrer" className="underline font-medium">
                     {errorPhotoRoomDashboard ? t("editor.renewPhotoRoom") : t("editor.paymentBalance")}
                   </a>
                 </p>
               )}
-              {errorUpgradeUrl && (
+              {!adminTestMode && errorUpgradeUrl && (
                 <p className="mt-2">
                   <Link to={errorUpgradeUrl} className="underline font-medium text-[#FF5A5F]">
                     {t("editor.goPricing")}
