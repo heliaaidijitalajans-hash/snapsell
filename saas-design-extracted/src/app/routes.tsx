@@ -64,9 +64,6 @@ const AdminAuditPage = lazy(() =>
 const AdminAdministratorsPage = lazy(() =>
   import("./admin/pages/AdministratorsPage").then((m) => ({ default: m.AdministratorsPage }))
 );
-const AdminHeliaPage = lazy(() =>
-  import("./admin/pages/HeliaPage").then((m) => ({ default: m.AdminHeliaPage }))
-);
 
 function PageFallback() {
   return (
@@ -110,7 +107,6 @@ export const router = createBrowserRouter(
         { path: "support", element: <AdminSuspense><AdminSupportPage /></AdminSuspense> },
         { path: "support/:section", element: <AdminSuspense><AdminSupportPage /></AdminSuspense> },
         { path: "announcements", element: <AdminSuspense><AdminAnnouncementsPage /></AdminSuspense> },
-        { path: "helia", element: <AdminSuspense><AdminHeliaPage /></AdminSuspense> },
         { path: "audit", element: <AdminSuspense><AdminAuditPage /></AdminSuspense> },
         { path: "administrators", element: <AdminSuspense><AdminAdministratorsPage /></AdminSuspense> },
         { path: "settings", element: <AdminSuspense><AdminSettingsPage /></AdminSuspense> },

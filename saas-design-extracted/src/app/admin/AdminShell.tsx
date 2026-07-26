@@ -19,7 +19,6 @@ import {
   Megaphone,
   ScrollText,
   UserCog,
-  Sparkles,
 } from "lucide-react";
 import { useAdmin } from "./AdminContext";
 import { useRbac } from "./rbac/RbacContext";
@@ -124,11 +123,6 @@ const NAV: NavItem[] = [
     to: "/admin/announcements",
     label: "Announcement Center",
     icon: Megaphone,
-  },
-  {
-    to: "/admin/helia",
-    label: "Helia AI",
-    icon: Sparkles,
   },
   {
     to: "/admin/audit",

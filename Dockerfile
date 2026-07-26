@@ -10,12 +10,10 @@ RUN npm install --production
 COPY server.js start.js ./
 COPY lib/ ./lib/
 COPY api/ ./api/
-COPY services/ ./services/
 # Expo Go Google OAuth bridge (served by Express at /auth and /api/auth)
 COPY deploy/auth/ ./deploy/auth/
 
 RUN test -d /app/api && test -f /app/lib/lemonsqueezy.js \
-  && test -f /app/services/helia-server.js \
   && test -f /app/deploy/auth/expo-bridge.html
 
 ENV NODE_ENV=production

@@ -114,69 +114,10 @@
     .out.err { color: #f87171; }
     .logout { position: absolute; top: 24px; right: 24px; padding: 8px 16px; background: #334155; color: #94a3b8; border: none; border-radius: 8px; cursor: pointer; text-decoration: none; font-size: 0.9rem; }
     .logout:hover { background: #475569; color: white; }
-    .helia-status {
-      display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;
-    }
-    .helia-status-item {
-      display: flex; align-items: center; gap: 8px;
-      padding: 10px 14px; background: #1a1d29; border: 1px solid #334155; border-radius: 8px;
-      font-size: 0.9rem; color: #cbd5e1;
-    }
-    .helia-dot {
-      width: 8px; height: 8px; border-radius: 50%; background: #64748b; flex-shrink: 0;
-    }
-    .helia-dot.on { background: #34d399; }
-    .helia-dot.off { background: #f87171; }
-    .helia-chat {
-      height: min(420px, 55vh); overflow-y: auto; padding: 16px;
-      background: #1a1d29; border: 1px solid #334155; border-radius: 10px;
-      margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px;
-    }
-    .helia-chat:empty::before {
-      content: "Sohbet burada görünecek…";
-      color: #64748b; font-size: 0.9rem; margin: auto;
-    }
-    .helia-bubble {
-      max-width: 85%; padding: 10px 14px; border-radius: 10px;
-      font-size: 0.9rem; line-height: 1.45; word-break: break-word;
-    }
-    .helia-bubble.system {
-      align-self: flex-start; background: #2d3142; color: #e2e8f0; border: 1px solid #334155;
-    }
-    .helia-bubble.user {
-      align-self: flex-end; background: #6366f1; color: #fff; border: 1px solid #818cf8;
-    }
-    .helia-bubble.error {
-      align-self: flex-start; background: #3f1d1d; color: #fecaca; border: 1px solid #7f1d1d;
-    }
-    .helia-bubble.loading {
-      align-self: flex-start; background: #2d3142; color: #94a3b8; border: 1px solid #334155;
-      font-style: italic;
-    }
-    .helia-compose textarea:disabled { opacity: 0.6; }
     .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
-    .helia-compose {
-      display: flex; gap: 10px; flex-wrap: wrap; align-items: stretch;
-    }
-    .helia-compose textarea {
-      flex: 1; min-width: 200px; min-height: 48px; max-height: 140px; resize: vertical;
-      padding: 12px 14px; border: 1px solid #475569; border-radius: 8px;
-      background: #1a1d29; color: #e2e8f0; font-size: 0.95rem; font-family: inherit;
-    }
-    .helia-compose .helia-actions {
-      display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start;
-    }
-    .btn-ghost {
-      padding: 12px 18px; background: #334155; color: #cbd5e1; border: none;
-      border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.95rem;
-    }
-    .btn-ghost:hover { background: #475569; color: white; }
     @media (max-width: 700px) {
       .add-form { grid-template-columns: 1fr 1fr; }
       th:nth-child(3), td:nth-child(3) { display: none; }
-      .helia-compose { flex-direction: column; }
-      .helia-compose .helia-actions { width: 100%; }
-      .helia-compose .helia-actions button { flex: 1; }
     }
   </style>
 </head>
@@ -200,7 +141,6 @@
         <button type="button" data-tab="users">Kullanıcılar</button>
         <button type="button" data-tab="prices">Fiyatlar</button>
         <button type="button" data-tab="enterprise">Kurumsal Planlar</button>
-        <button type="button" data-tab="helia">Helia AI</button>
       </div>
 
       <div id="tabUsers" class="tab-panel card">
@@ -242,184 +182,8 @@
         <button type="button" class="btn-primary" style="margin-top: 16px;" id="saveEnterpriseBtn">Kurumsal planları kaydet</button>
         <div id="enterpriseOut" class="out"></div>
       </div>
-
-      <div id="tabHelia" class="tab-panel card">
-        <h2>Helia AI</h2>
-        <p class="sub" style="margin-bottom: 16px;">Sohbet istekleri Railway üzerinden gider. API anahtarı yalnızca sunucu ortam değişkenlerinde tutulur.</p>
-        <div class="helia-status">
-          <div class="helia-status-item">
-            <span class="helia-dot" id="heliaConnDot"></span>
-            <span>API bağlantısı: <strong id="heliaConnLabel">—</strong></span>
-          </div>
-          <div class="helia-status-item">
-            <span class="helia-dot" id="heliaKeyDot"></span>
-            <span>API Key: <strong id="heliaKeyLabel">—</strong></span>
-          </div>
-        </div>
-        <div id="heliaChat" class="helia-chat" aria-live="polite"></div>
-        <div class="helia-compose">
-          <textarea id="heliaMessage" placeholder="Helia’ya mesaj yazın…" rows="2"></textarea>
-          <div class="helia-actions">
-            <button type="button" class="btn-primary" id="heliaSendBtn">Gönder</button>
-            <button type="button" class="btn-ghost" id="heliaClearBtn">Temizle</button>
-          </div>
-        </div>
-        <div id="heliaOut" class="out" style="margin-top: 12px;"></div>
-      </div>
     </div>
   </div>
-
-  <script type="module">
-    import HeliaClient from "./services/helia.js";
-
-    // Public-only config (proxy origin). Never put HELIA_API_KEY here.
-    const publicCfg = (window.HELIA_PUBLIC_CONFIG && typeof window.HELIA_PUBLIC_CONFIG === "object")
-      ? window.HELIA_PUBLIC_CONFIG
-      : {};
-    const helia = new HeliaClient({
-      proxyBase: publicCfg.proxyBase || "",
-      timeoutMs: 50000,
-      retries: 2,
-    });
-
-    const chatEl = document.getElementById("heliaChat");
-    const msgEl = document.getElementById("heliaMessage");
-    const sendBtn = document.getElementById("heliaSendBtn");
-    const clearBtn = document.getElementById("heliaClearBtn");
-    const outEl = document.getElementById("heliaOut");
-    const connDot = document.getElementById("heliaConnDot");
-    const connLabel = document.getElementById("heliaConnLabel");
-    const keyDot = document.getElementById("heliaKeyDot");
-    const keyLabel = document.getElementById("heliaKeyLabel");
-
-    const HISTORY_KEY = "snapsell_helia_chat_history_v1";
-    /** @type {{ role: string, text: string }[]} */
-    let history = [];
-
-    function loadHistory() {
-      try {
-        const raw = sessionStorage.getItem(HISTORY_KEY);
-        if (!raw) return;
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) history = parsed.filter(function (m) {
-          return m && (m.role === "user" || m.role === "assistant") && typeof m.text === "string";
-        }).slice(-100);
-      } catch {
-        history = [];
-      }
-    }
-
-    function saveHistory() {
-      try {
-        sessionStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-100)));
-      } catch {
-        /* ignore quota */
-      }
-    }
-
-    function appendBubble(text, role) {
-      const div = document.createElement("div");
-      div.className = "helia-bubble " + (role || "system");
-      div.textContent = text;
-      chatEl.appendChild(div);
-      chatEl.scrollTop = chatEl.scrollHeight;
-      return div;
-    }
-
-    function renderHistory() {
-      chatEl.innerHTML = "";
-      history.forEach(function (m) {
-        appendBubble(m.text, m.role === "user" ? "user" : "system");
-      });
-    }
-
-    function setBusy(busy) {
-      sendBtn.disabled = busy;
-      msgEl.disabled = busy;
-      sendBtn.textContent = busy ? "Gönderiliyor…" : "Gönder";
-    }
-
-    function setStatus(configured, hasKey) {
-      keyDot.className = "helia-dot " + (hasKey ? "on" : "off");
-      keyLabel.textContent = hasKey ? "sunucuda bağlı" : "sunucuda yok";
-      connDot.className = "helia-dot " + (configured ? "on" : "off");
-      connLabel.textContent = configured ? "hazır" : "yapılandırılmadı";
-    }
-
-    async function refreshHeliaStatus() {
-      try {
-        const data = await helia.health();
-        setStatus(Boolean(data.configured), Boolean(data.hasApiKey));
-      } catch (e) {
-        if (e && (e.status === 401 || e.code === "UNAUTHORIZED")) {
-          setStatus(false, false);
-          connLabel.textContent = "oturum gerekli";
-          keyLabel.textContent = "—";
-          return;
-        }
-        setStatus(false, false);
-        connLabel.textContent = "kontrol edilemedi";
-        keyLabel.textContent = "—";
-      }
-    }
-
-    async function sendMessage() {
-      const text = (msgEl.value || "").trim();
-      if (!text || sendBtn.disabled) return;
-
-      outEl.textContent = "";
-      outEl.className = "out";
-
-      history.push({ role: "user", text: text });
-      saveHistory();
-      appendBubble(text, "user");
-      msgEl.value = "";
-
-      const loadingEl = appendBubble("Yanıt bekleniyor…", "loading");
-      setBusy(true);
-
-      try {
-        const result = await helia.chat(text);
-        if (loadingEl && loadingEl.parentNode) loadingEl.parentNode.removeChild(loadingEl);
-        history.push({ role: "assistant", text: result.reply });
-        saveHistory();
-        appendBubble(result.reply, "system");
-        await refreshHeliaStatus();
-      } catch (e) {
-        if (loadingEl && loadingEl.parentNode) loadingEl.parentNode.removeChild(loadingEl);
-        const msg = (e && e.message) || "Bir hata oluştu. Lütfen tekrar deneyin.";
-        appendBubble(msg, "error");
-        outEl.textContent = msg;
-        outEl.className = "out err";
-      } finally {
-        setBusy(false);
-        msgEl.focus();
-      }
-    }
-
-    sendBtn.addEventListener("click", function () {
-      void sendMessage();
-    });
-
-    msgEl.addEventListener("keydown", function (e) {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        void sendMessage();
-      }
-    });
-
-    clearBtn.addEventListener("click", function () {
-      history = [];
-      saveHistory();
-      chatEl.innerHTML = "";
-      outEl.textContent = "";
-      outEl.className = "out";
-    });
-
-    loadHistory();
-    renderHistory();
-    void refreshHeliaStatus();
-  </script>
 
   <script>
 (function () {
