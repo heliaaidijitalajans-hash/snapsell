@@ -497,6 +497,7 @@ function ResultView({
   onNew: () => void;
   t: (key: string) => string;
 }) {
+  const resultSectionRef = useRef<HTMLDivElement>(null);
   const apiOrigin = (EDITOR_API_BASE || APP_BASE_URL).replace(/\/$/, "");
   let displayUrl = outputUrl;
   if (displayUrl.includes("yourdomain.com")) {
@@ -509,6 +510,19 @@ function ResultView({
   if (displayUrl.startsWith("/")) {
     displayUrl = apiOrigin ? `${apiOrigin}${displayUrl}` : `${APP_BASE_URL}${displayUrl}`;
   }
+
+  // Scroll only after the newest result section is mounted/rendered (not when the request starts).
+  useEffect(() => {
+    const el = resultSectionRef.current;
+    if (!el) return;
+    const frame = requestAnimationFrame(() => {
+      el.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [outputUrl]);
 
   return (
     <div className="space-y-6">
@@ -529,7 +543,10 @@ function ResultView({
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border-2 border-[#FF5A5F]/30 p-6 shadow-sm">
+      <div
+        ref={resultSectionRef}
+        className="bg-white rounded-xl border-2 border-[#FF5A5F]/30 p-6 shadow-sm scroll-mt-24"
+      >
         <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
           <span className="w-1 h-5 rounded-full bg-[#FF5A5F]" />
           {t("editor.result")}
