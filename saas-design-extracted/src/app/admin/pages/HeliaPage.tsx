@@ -140,8 +140,12 @@ export function AdminHeliaPage() {
         />
 
         <WorkspaceNote>
-          Yapılandırma: Railway ortam değişkenleri <code className="text-amber-100/90">HELIA_API_KEY</code> ve{" "}
-          <code className="text-amber-100/90">HELIA_BASE_URL</code>. Handle gerekmez.
+          Railway: <code className="text-amber-100/90">HELIA_API_KEY</code> +{" "}
+          <code className="text-amber-100/90">HELIA_BASE_URL=https://www.heliasuit.com</code>.{" "}
+          Not: Helia&apos;nın <code className="text-amber-100/90">/api/brain/ask</code> yolu oturum (login JWT)
+          ister; paneldeki <code className="text-amber-100/90">hl_live_</code> proje anahtarı bu yolda
+          reddedilir. Helia → API Explorer&apos;da Auth = API Key olan Brain yolunu bulun ve Railway&apos;e{" "}
+          <code className="text-amber-100/90">HELIA_CHAT_PATH</code> olarak yazın.
         </WorkspaceNote>
 
         <div className="flex flex-wrap gap-3">

@@ -287,8 +287,8 @@ async function callHeliaChat(input, opts) {
     if (res.status === 401 || res.status === 403 || upstreamCode === "UNAUTHORIZED") {
       friendly =
         upstreamMsg && /session|log in|login/i.test(upstreamMsg)
-          ? "Helia API key rejected for this endpoint (session/login required). Use a project API key that Helia Suite documents for Brain, or ask Helia for the external chat path."
-          : "Helia authentication failed. Check HELIA_API_KEY on Railway.";
+          ? "Helia /api/brain/ask requires a Helia Cloud login session (JWT), not a project hl_live_ API key. In Helia → API Explorer, find a Brain route whose Auth is API Key, set that path as HELIA_CHAT_PATH on Railway, or ask Helia for the external chat endpoint."
+          : "Helia authentication failed. Check HELIA_API_KEY on Railway (must be accepted by the target path).";
     } else if (res.status === 404) {
       friendly = "Helia chat endpoint not found. Check HELIA_BASE_URL / HELIA_CHAT_PATH.";
     } else if (upstreamMsg && res.status < 500) {
