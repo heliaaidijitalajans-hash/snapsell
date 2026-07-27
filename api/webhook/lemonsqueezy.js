@@ -10,6 +10,7 @@ const { createServiceClient } = require("../../lib/supabase");
 const lemon = require("../../lib/lemonsqueezy");
 const { runLemonWebhook } = require("../../lib/lemonWebhookProcess");
 const { ensureLemonUserRow } = require("../../lib/ensureLemonUserRow");
+const { claimUserIdentity } = require("../../lib/identityClaim");
 
 const FREE_CREDITS = 3;
 
@@ -173,6 +174,8 @@ module.exports = async function lemonWebhookHandler(req, res) {
   }
 
   async function updateUserInDb(userId, data) {
+    let targetId = String(userId || "").trim();
+    if (!targetId) return;
     const payload = {};
     if (data.credits != null) payload.credits = data.credits;
     if (data.plan != null) payload.plan = data.plan;
@@ -186,15 +189,36 @@ module.exports = async function lemonWebhookHandler(req, res) {
     }
     if (data.subscription_status != null) payload.subscription_status = data.subscription_status;
     if (Object.keys(payload).length === 0) return;
-    const { data: rows, error } = await supabase.from("users").update(payload).eq("id", userId).select("id");
+    const { data: existing } = await supabase
+      .from("users")
+      .select("id, identity_status, merged_into")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (existing && existing.identity_status === "merged" && existing.merged_into) {
+      targetId = String(existing.merged_into);
+    }
+    const { data: rows, error } = await supabase.from("users").update(payload).eq("id", targetId).select("id");
     if (error) throw new Error(error.message);
     if (!rows || rows.length === 0) {
-      console.warn("[Lemon Vercel] Supabase update: kullanıcı yok id=", userId);
+      console.warn("[Lemon Vercel] Supabase update: kullanıcı yok id=", targetId);
     }
   }
 
   async function ensureUserRow(authUserId, email) {
-    await ensureLemonUserRow(supabase, { getUserById, getUserByEmail, FREE_CREDITS }, authUserId, email);
+    await ensureLemonUserRow(
+      supabase,
+      {
+        getUserById,
+        getUserByEmail,
+        FREE_CREDITS,
+        claimUserIdentity: (sb, uid, em, opts) =>
+          claimUserIdentity(sb, uid, em, {
+            mergeReason: (opts && opts.mergeReason) || "email_claim_v1_lemon",
+          }),
+      },
+      authUserId,
+      email,
+    );
   }
 
   try {

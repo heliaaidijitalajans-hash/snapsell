@@ -11,7 +11,7 @@ import { GoogleSignInButton } from "./GoogleSignInButton";
 export function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { t } = useLanguage();
 
   useEffect(() => {
@@ -48,6 +48,8 @@ export function Layout() {
     return location.pathname.startsWith(href);
   };
 
+  const accountLabel = user?.email?.split("@")[0] || t("nav.myAccount");
+
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow-sm sticky top-0 z-50">
@@ -75,20 +77,28 @@ export function Layout() {
                 <div className="relative group">
                   <button type="button" className="flex items-center space-x-2 text-gray-700 hover:text-[#FF5A5F] transition-colors">
                     <User className="w-6 h-6" />
-                    <span>{user.email?.split("@")[0] || t("nav.myAccount")}</span>
+                    <span>{accountLabel}</span>
                   </button>
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 border border-gray-100">
-                    {userNavigation.map((item) =>
-                      item.external ? (
-                        <a key={item.nameKey} href={item.href} className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-[#FF5A5F] first:rounded-t-lg last:rounded-b-lg">
-                          {t(item.nameKey)}
-                        </a>
-                      ) : (
-                        <Link key={item.nameKey} to={item.href} className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-[#FF5A5F] first:rounded-t-lg last:rounded-b-lg">
-                          {t(item.nameKey)}
-                        </Link>
-                      )
-                    )}
+                  <div className="absolute right-0 mt-2 w-52 bg-white rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 border border-gray-100 z-50">
+                    <div className="px-4 py-2 text-xs text-gray-500 border-b border-gray-100 truncate" title={user.email || ""}>
+                      {user.email}
+                    </div>
+                    {userNavigation.map((item) => (
+                      <Link
+                        key={item.nameKey}
+                        to={item.href}
+                        className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-[#FF5A5F]"
+                      >
+                        {t(item.nameKey)}
+                      </Link>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => void logout()}
+                      className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 rounded-b-lg border-t border-gray-100"
+                    >
+                      {t("nav.logout")}
+                    </button>
                   </div>
                 </div>
               ) : (
@@ -96,25 +106,6 @@ export function Layout() {
                   <GoogleSignInButton variant="navbar" />
                   <Link to="/login" className="text-gray-700 hover:text-[#FF5A5F] transition-colors font-medium">{t("nav.login")}</Link>
                   <Link to="/register" className="px-4 py-2 bg-[#FF5A5F] text-white rounded-lg hover:bg-[#FF5A5F]/90 transition-colors font-medium">{t("nav.register")}</Link>
-                  <div className="relative group">
-                    <button type="button" className="flex items-center space-x-2 text-gray-700 hover:text-[#FF5A5F] transition-colors">
-                      <User className="w-6 h-6" />
-                      <span>{t("nav.myAccount")}</span>
-                    </button>
-                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 border border-gray-100">
-                      {userNavigation.map((item) =>
-                        item.external ? (
-                          <a key={item.nameKey} href={item.href} className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-[#FF5A5F] first:rounded-t-lg last:rounded-b-lg">
-                            {t(item.nameKey)}
-                          </a>
-                        ) : (
-                          <Link key={item.nameKey} to={item.href} className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-[#FF5A5F] first:rounded-t-lg last:rounded-b-lg">
-                            {t(item.nameKey)}
-                          </Link>
-                        )
-                      )}
-                    </div>
-                  </div>
                 </>
               )}
             </div>
@@ -133,25 +124,42 @@ export function Layout() {
                   {t(item.nameKey)}
                 </Link>
               ))}
-              <div className="border-t border-gray-200 pt-2 mt-2 space-y-1 flex flex-wrap items-center gap-2">
+              <div className="border-t border-gray-200 pt-2 mt-2 space-y-1">
                 <div className="w-full px-3 py-2">
                   <LanguageSelector />
                 </div>
-                <div className="px-3 py-2 w-full">
-                  <GoogleSignInButton variant="navbar" />
-                </div>
-                <Link to="/login" className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100" onClick={() => setMobileMenuOpen(false)}>{t("nav.login")}</Link>
-                <Link to="/register" className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100" onClick={() => setMobileMenuOpen(false)}>{t("nav.register")}</Link>
-                {userNavigation.map((item) =>
-                  item.external ? (
-                    <a key={item.nameKey} href={item.href} onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100">
-                      {t(item.nameKey)}
-                    </a>
-                  ) : (
-                    <Link key={item.nameKey} to={item.href} onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100">
-                      {t(item.nameKey)}
-                    </Link>
-                  )
+                {user ? (
+                  <>
+                    <p className="px-3 py-1 text-xs text-gray-500 truncate">{user.email}</p>
+                    {userNavigation.map((item) => (
+                      <Link
+                        key={item.nameKey}
+                        to={item.href}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100"
+                      >
+                        {t(item.nameKey)}
+                      </Link>
+                    ))}
+                    <button
+                      type="button"
+                      className="w-full text-left block px-3 py-2 rounded-md text-red-600 hover:bg-red-50"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        void logout();
+                      }}
+                    >
+                      {t("nav.logout")}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="px-3 py-2 w-full">
+                      <GoogleSignInButton variant="navbar" />
+                    </div>
+                    <Link to="/login" className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100" onClick={() => setMobileMenuOpen(false)}>{t("nav.login")}</Link>
+                    <Link to="/register" className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100" onClick={() => setMobileMenuOpen(false)}>{t("nav.register")}</Link>
+                  </>
                 )}
               </div>
             </div>

@@ -22,6 +22,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     "nav.myAccount": "Hesabım",
     "nav.library": "Kütüphane",
     "nav.accountSettings": "Hesap Ayarları",
+    "nav.logout": "Çıkış yap",
     "nav.language": "Dil",
     // Footer
     "footer.description": "E-ticaret satıcıları için profesyonel ürün görseli düzenleme ve SEO optimizasyonu platformu.",
@@ -513,6 +514,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     "nav.myAccount": "My account",
     "nav.library": "Library",
     "nav.accountSettings": "Account settings",
+    "nav.logout": "Sign out",
     "nav.language": "Language",
     "footer.description": "Professional product image editing and SEO optimization platform for e-commerce sellers.",
     "footer.product": "Product",

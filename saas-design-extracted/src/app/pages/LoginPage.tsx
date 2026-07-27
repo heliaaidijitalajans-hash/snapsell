@@ -33,6 +33,7 @@ export function LoginPage() {
         if (data.session?.access_token) {
           setSuccessInfo(t("auth.signupHasSession"));
           await syncUserRowWithBackend();
+          navigate("/", { replace: true });
         } else if (data.user && !data.session) {
           setSuccessInfo(t("auth.signupCheckEmail"));
         } else {
@@ -42,6 +43,7 @@ export function LoginPage() {
         const { error: loginError } = await signIn({ email, password });
         if (loginError) throw loginError;
         await syncUserRowWithBackend();
+        navigate("/", { replace: true });
       }
     } catch (e: unknown) {
       let msg = "İşlem başarısız.";

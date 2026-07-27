@@ -100,6 +100,7 @@ export async function syncUserRowWithBackend(): Promise<void> {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(text || `Auth sync failed: ${res.status}`);
+    // Profile sync must not block a successful Supabase login / session UI.
+    console.warn("[auth] syncUserRowWithBackend failed:", res.status, text.slice(0, 200));
   }
 }
